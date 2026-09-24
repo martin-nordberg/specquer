@@ -10,8 +10,8 @@ hero:
       text: Architecture
       link: /specifications/architecture/overview
     - theme: alt
-      text: To Do
-      link: /specifications/todo/overview
+      text: References
+      link: /references/overview
 
 features:
   - title: Feature A
