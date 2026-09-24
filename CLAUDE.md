@@ -1,3 +1,19 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project state
+
+`specquer` is fresh `bun init` scaffolding: the only source file is `index.ts` (a hello-world entry point, also the package `module`). There is no application architecture, test suite, or lint config yet — update this file as structure emerges.
+
+## Commands
+
+- Install: `bun install` (Bun version pinned to 1.4.2 via `mise.toml`)
+- Run: `bun run index.ts` (or `bun --hot ./index.ts` for a server with hot reload)
+- Type-check: `bunx tsc --noEmit` (TypeScript 7; `tsconfig.json` is strict with `noUncheckedIndexedAccess`, `verbatimModuleSyntax` — use `import type` for type-only imports)
+- Test: `bun test`; a single file: `bun test path/to/file.test.ts`; a single test by name: `bun test -t "name pattern"`
+
+## Bun conventions
 
 Default to using Bun instead of Node.js.
 
