@@ -4,6 +4,8 @@ import { defineConfig } from 'vitepress'
 export default defineConfig({
   title: "Specquer",
   description: "A tool for spec-driven development",
+  // Published to GitHub Pages at https://martin-nordberg.github.io/specquer/
+  base: "/specquer/",
   vite: {
     // Fixed port; the client dev server owns 5173
     server: { port: 5174, strictPort: true },

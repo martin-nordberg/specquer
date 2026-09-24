@@ -1,15 +1,8 @@
-# specquer
+# Specquer
 
-To install dependencies:
+Specquer is an experiment in spec-driven development for AI-assisted software engineering.
 
-```bash
-bun install
-```
+Specquer focuses on editing software specifications in a structured way that mixes human
+interactive editing and prompted AI agent editing.
 
-To run:
-
-```bash
-bun run index.ts
-```
-
-This project was created using `bun init` in bun v1.4.2. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+STATUS: Barely started
