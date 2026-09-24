@@ -1,0 +1,10 @@
+{
+  "name": "@specquer/shared",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "@hono/zod-validator": "^0.9.1",
+    "hono": "^4.13.9",
+    "zod": "^4.6.5"
+  }
+}

@@ -4,15 +4,14 @@ layout: home
 
 hero:
   name: "Specquer Documentation"
-  text: "A tool for spec-driven development"
-  tagline: My great project tagline
+  tagline: "A tool for spec-driven development"
   actions:
     - theme: brand
-      text: Markdown Examples
-      link: /markdown-examples
+      text: Architecture
+      link: /specifications/architecture/overview
     - theme: alt
-      text: API Examples
-      link: /api-examples
+      text: To Do
+      link: /specifications/todo/overview
 
 features:
   - title: Feature A

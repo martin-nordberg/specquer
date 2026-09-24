@@ -4,22 +4,29 @@ import { defineConfig } from 'vitepress'
 export default defineConfig({
   title: "Specquer",
   description: "A tool for spec-driven development",
+  vite: {
+    // Fixed port; the client dev server owns 5173
+    server: { port: 5174, strictPort: true },
+  },
   themeConfig: {
     // https://vitepress.dev/reference/default-theme-config
     nav: [
       { text: 'Home', link: '/' },
-      { text: 'Examples', link: '/markdown-examples' }
+      { text: 'Specifications', link: '/specifications/architecture/overview' },
     ],
 
-    sidebar: [
-      {
-        text: 'Examples',
-        items: [
-          { text: 'Markdown Examples', link: '/markdown-examples' },
-          { text: 'Runtime API Examples', link: '/api-examples' }
-        ]
-      }
-    ],
+    sidebar: {
+      '/specifications/': [
+        {
+          text: 'Architecture',
+          collapsed: true,
+          items: [
+            {text: 'Overview', link: '/specifications/architecture/overview'},
+            {text: 'Technical Architecture', link: '/specifications/architecture/technical-architecture'},
+          ]
+        },
+      ],
+    },
 
     socialLinks: [
       { icon: 'github', link: 'https://github.com/martin-nordberg/specquer' }

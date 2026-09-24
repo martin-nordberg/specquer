@@ -3,10 +3,20 @@
   "module": "index.ts",
   "type": "module",
   "private": true,
+  "workspaces": [
+    "server",
+    "client",
+    "shared",
+    "documentation"
+  ],
   "devDependencies": {
     "@types/bun": "latest"
   },
   "peerDependencies": {
     "typescript": "^7"
+  },
+  "scripts": {
+    "dev": "bun run --filter @specquer/server --filter @specquer/client dev",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p client"
   }
 }

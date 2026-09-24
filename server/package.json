@@ -1,0 +1,13 @@
+{
+  "name": "@specquer/server",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "@specquer/shared": "workspace:*",
+    "hono": "^4.13.9",
+    "zod": "^4.6.5"
+  },
+  "scripts": {
+    "dev": "bun --hot src/index.ts"
+  }
+}
