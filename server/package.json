@@ -3,6 +3,7 @@
   "type": "module",
   "private": true,
   "dependencies": {
+    "@specquer/agent": "workspace:*",
     "@specquer/shared": "workspace:*",
     "hono": "^4.13.9",
     "zod": "^4.6.5"

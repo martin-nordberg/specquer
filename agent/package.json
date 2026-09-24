@@ -1,0 +1,10 @@
+{
+  "name": "@specquer/agent",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "@specquer/shared": "workspace:*",
+    "ai": "^7.0.114",
+    "zod": "^4.6.5"
+  }
+}
