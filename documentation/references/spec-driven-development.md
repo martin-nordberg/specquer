@@ -12,7 +12,7 @@
 * [Microsoft Blog](https://developer.microsoft.com/blog/spec-driven-development-spec-kit/)
 * [Product Requirements Document](https://www.atlassian.com/agile/product-management/requirements)
 * [Ran the Builder Blog](https://ranthebuilder.cloud/blog/i-tested-three-spec-driven-ai-tools-here-s-my-honest-take/)
-* [Spec-Drive Development AI](https://specdriven.ai/)
+* [Spec-Driven Development AI](https://specdriven.ai/)
 * [Spec Kit Blog](https://github.blog/ai-and-ml/generative-ai/spec-driven-development-with-ai-get-started-with-a-new-open-source-toolkit/)
 * [Wikipedia](https://en.wikipedia.org/wiki/Specification-driven_development)
 

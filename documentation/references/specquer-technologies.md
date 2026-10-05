@@ -3,5 +3,6 @@
 * [Bun](https://bun.com/docs)
 * [Hono](https://hono.dev/docs/)
 * [Mise](https://mise.jdx.dev/)
+* [Remark](https://github.com/remarkjs/remark)
 * [TypeScript](https://www.typescriptlang.org/docs/)
 * [Vercel AI SDK](https://ai-sdk.dev/docs/introduction)
