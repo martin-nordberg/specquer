@@ -7,7 +7,7 @@ export default defineConfig({
   // Published to GitHub Pages at https://martin-nordberg.github.io/specquer/
   site: 'https://martin-nordberg.github.io',
   base: '/specquer',
-  // Fixed port; the client dev server owns 5173
+  // Fixed port; the app server owns 3000
   server: { port: 5174 },
   vite: { server: { strictPort: true } },
   integrations: [
@@ -23,6 +23,13 @@ export default defineConfig({
         {
           label: 'Specifications',
           items: [
+            {
+              label: 'Functionality',
+              collapsed: true,
+              items: [
+                { label: 'Ideas', slug: 'specifications/functionality/ideas' },
+              ],
+            },
             {
               label: 'Architecture',
               collapsed: true,

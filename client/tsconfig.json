@@ -2,12 +2,11 @@
   "extends": "../tsconfig.json",
   "compilerOptions": {
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
-    "types": ["vite/client"],
+    "types": [],
 
-    // Solid compiles JSX itself (via vite-plugin-solid), so TypeScript only type-checks it
-    "jsx": "preserve",
-    "jsxImportSource": "solid-js"
+    // React's automatic JSX runtime; Bun's bundler compiles it when the server imports index.html
+    "jsx": "react-jsx"
   },
-  "include": ["src", "vite.config.ts"],
+  "include": ["src"],
   "exclude": ["node_modules", "dist"]
 }

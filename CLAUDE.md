@@ -10,7 +10,7 @@ The root is a Bun workspace with five packages (`server`, `agent` and `client` h
 
 - `server/` (`@specquer/server`): the Hono back end
 - `agent/` (`@specquer/agent`): the AI functionality, built on LangChain.js (`langchain` with `@langchain/core`; `@langchain/langgraph` comes with `langchain`). Server-side only: `server` depends on it and it depends on `shared` (`server --> agent --> shared`, and `server --> shared` directly). It uses Zod for the shared domain models and for LangChain tool input and structured-output schemas. `client` must never depend on it. See "LangChain rules" below before writing agent code
-- `client/` (`@specquer/client`): the SolidJS front end; uses Zod (usually schemas from `shared`) for client-side input validation
+- `client/` (`@specquer/client`): the React front end, with no build tooling of its own: `server` imports its `index.html` (exported as `@specquer/client/index.html`) and Bun bundles it; uses Zod (usually schemas from `shared`) for client-side input validation
 - `shared/` (`@specquer/shared`): the Hono router (route definitions shared by client and server), with request validation via `@hono/zod-validator`, and Zod schemas. `server`, `agent` and `client` all depend on it; `client` depends on neither `server` nor `agent`.
 - `documentation/` (`@specquer/documentation`): the Astro Starlight docs site, styled with the Exquisitus theme (`starlight-theme-exquisitus`, a Starlight plugin). Config is `documentation/astro.config.mjs` (sidebar, base, port); pages live under `documentation/src/content/docs/` and specs under its `specifications/`. Every page needs a `title` in its frontmatter, which Starlight renders as the H1, so don't add a `# Heading` too. New pages must be added to the `sidebar` in the config by hand. Bun installs workspaces in isolated mode, so packages only see their direct dependencies.
 
@@ -28,11 +28,11 @@ The root is a Bun workspace with five packages (`server`, `agent` and `client` h
 ## Commands
 
 - Install: `bun install` at the root installs all workspaces (Bun version pinned to 1.4.2 via `mise.toml`); add a dependency to one package with `bun add <pkg> --filter @specquer/server`, and link workspaces with `"@specquer/shared": "workspace:*"`. Keep `hono` and `zod` on the same version in every package (LangChain also depends on `zod`; check that `bun.lock` still has a single `zod` version after upgrading either) so the lockfile resolves one copy of each; the shared router and schema types rely on that
-- Dev ports are fixed: 3000 Hono, 5173 client, 5174 docs. The Vite and Astro servers use `strictPort`, so like the Hono server they fail to start if their port is taken rather than moving to another.
-- Dev: `bun run dev` at the root starts the Hono server (`server/src/index.ts`, port 3000, `bun --hot`) and the Vite dev server (port 5173, run under the Bun runtime with `bun --bun vite`). Vite forwards `/api/*` to port 3000, so API routes must live under `/api`.
-- Client build: `bun run --filter @specquer/client build` writes `client/dist`
+- Dev ports are fixed: 3000 server (API and client), 5174 docs. The Astro server uses `strictPort`, so like the Bun server it fails to start if its port is taken rather than moving to another.
+- Dev: `bun run dev` at the root starts one process, `server/src/index.ts` on port 3000 under `bun --hot`. `Bun.serve()` serves the client from its HTML import (bundled on each request, with hot module replacement and React Fast Refresh) and passes every other request to Hono. Keep API routes under `/api` so they never collide with client routes.
+- Release build: `bun run build` at the root runs `bun build --compile --production` in `server` and writes the single executable `server/dist/specquer`, with the client bundled and embedded.
 - Docs: `bun run --filter @specquer/documentation docs:dev` (http://localhost:5174/specquer/, Astro run under Bun via `bun --bun`) (also `docs:build`, `docs:preview`), or `bun run docs:dev` inside `documentation/`. Run outside an interactive terminal (e.g. by an agent), Astro 7's `astro dev` detaches and keeps running; stop it with `bunx --bun astro dev stop` inside `documentation/`
-- Type-check: `bun run typecheck`. This runs three passes: the root `tsconfig.json`, which excludes `client` and `documentation`; `client/tsconfig.json`; and the docs package's `typecheck` script (`astro sync`, which generates the `astro:content` types in `documentation/.astro`, then `tsc` against `documentation/tsconfig.json`, which extends `astro/tsconfigs/strict`). The client config uses Solid JSX (`jsx: preserve`, `jsxImportSource: solid-js`) plus DOM and Vite types. TypeScript 7; the root config is strict with `noUncheckedIndexedAccess`, `verbatimModuleSyntax` — use `import type` for type-only imports.
+- Type-check: `bun run typecheck`. This runs three passes: the root `tsconfig.json`, which excludes `client` and `documentation`; `client/tsconfig.json`; and the docs package's `typecheck` script (`astro sync`, which generates the `astro:content` types in `documentation/.astro`, then `tsc` against `documentation/tsconfig.json`, which extends `astro/tsconfigs/strict`). The client config uses React's automatic JSX runtime (`jsx: react-jsx`) plus DOM types. TypeScript 7; the root config is strict with `noUncheckedIndexedAccess`, `verbatimModuleSyntax` — use `import type` for type-only imports.
 - Test: `bun test`; a single file: `bun test path/to/file.test.ts`; a single test by name: `bun test -t "name pattern"`
 
 ## Bun conventions
@@ -49,7 +49,7 @@ Default to using Bun instead of Node.js.
 
 ## APIs
 
-- The server uses Hono (running on Bun), not `Bun.serve()` routes or `express`. The router lives in `shared`; the client calls it through Hono's typed RPC client (`hc`), typed from `shared` rather than from `server`.
+- The server uses Hono (running on Bun) for the API, not `Bun.serve()` routes or `express`. `Bun.serve()`'s `routes` are used only for the client's HTML entry point; everything else goes to Hono through `fetch: app.fetch`. The router lives in `shared`; the client calls it through Hono's typed RPC client (`hc`), typed from `shared` rather than from `server`.
 - `bun:sqlite` for SQLite. Don't use `better-sqlite3`.
 - `Bun.redis` for Redis. Don't use `ioredis`.
 - `Bun.sql` for Postgres. Don't use `pg` or `postgres.js`.
@@ -71,11 +71,12 @@ test("hello world", () => {
 
 ## Frontend
 
-The client is SolidJS, built with **Vite** (`vite-plugin-solid`). This is the one deliberate exception to "use Bun's bundler": Solid needs its own JSX compiler, which Bun's bundler doesn't provide. Don't write React or use the `Bun.serve()` HTML-import pattern.
+The client is React, bundled by Bun through the `Bun.serve()` HTML-import pattern. There is no Vite in the client (Astro uses Vite internally for the docs, but that is separate).
 
-- Dev: the Vite dev server serves the client with hot reload and proxies API requests to the Hono server (two processes).
-- Build: `vite build` writes `client/dist`, which Hono serves.
-- Release: a single executable from `bun build --compile`, with the built client assets embedded and served by Hono.
+- Dev: `server/src/index.ts` imports `@specquer/client/index.html` and passes it to `Bun.serve()`'s `routes`; with `development` on, Bun bundles the client on each request with hot module replacement and React Fast Refresh. One process, one port (3000), no proxy.
+- Fast Refresh needs `react` to be resolvable from `server`, so `server` lists `react` as a dev dependency (isolated installs; without it Bun silently skips Fast Refresh and falls back to full reloads). Keep it on the client's `react` version.
+- Script and stylesheet paths in `client/index.html` must be relative (`./src/index.tsx`); a root-relative `/src/...` path doesn't resolve.
+- Release: `bun build --compile --production` bundles the client from the HTML import and embeds it in the executable; `--production` also sets `NODE_ENV=production`, which turns `development` off.
 
 See `documentation/src/content/docs/specifications/architecture/technical-architecture.md`.
 

@@ -16,7 +16,8 @@
     "typescript": "^7"
   },
   "scripts": {
-    "dev": "bun run --filter @specquer/server --filter @specquer/client dev",
+    "dev": "bun run --filter @specquer/server dev",
+    "build": "bun run --filter @specquer/server build",
     "typecheck": "tsc --noEmit && tsc --noEmit -p client && bun run --filter @specquer/documentation typecheck"
   }
 }
