@@ -1,9 +1,6 @@
----
-title: References For Specquer Technologies
----
+# References For Specquer Technologies
 
 # Technology Home Pages
-* [Astro/Starlight](https://starlight.astro.build/)
 * [Bun](https://bun.com/docs)
 * [CodeMirror](https://codemirror.net/)
 * [Hono](https://hono.dev/docs/)
@@ -13,6 +10,7 @@ title: References For Specquer Technologies
 * [react-markdown](https://remarkjs.github.io/react-markdown/)
 * [Remark](https://github.com/remarkjs/remark)
 * [TypeScript](https://www.typescriptlang.org/docs/)
+* [VitePress](https://vitepress.dev/)
 * [Zod](https://zod.dev/)
 
 # Useful Technology-Specific Links

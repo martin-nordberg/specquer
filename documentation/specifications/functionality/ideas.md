@@ -1,6 +1,5 @@
----
-title: Ideas
----
+
+# Ideas
 
 ## Context
 
@@ -64,7 +63,7 @@ title: Ideas
 
 4. **Location of the files.** Specquer runs as a Bun server launched from a local file system. Is the documentation root the directory it is launched from, or a configured path? One repository or several?
 5. **MDX.** react-markdown cannot render MDX. Rendering MDX means compiling and running code from the repository, and deciding where its imported components come from. Is MDX rendering required, or could MDX components be shown as inert placeholders at first?
-6. **Frontmatter and headings.** In Starlight, the frontmatter `title` is the page's H1. Should a frontmatter title count as the top-level heading in the section tree?
+6. **Frontmatter and headings.** Some documentation tools (such as Astro Starlight) treat a frontmatter `title` as the page's H1. Should a frontmatter title count as the top-level heading in the section tree?
 
 ### Markdown Database
 

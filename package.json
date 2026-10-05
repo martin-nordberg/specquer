@@ -18,6 +18,6 @@
   "scripts": {
     "dev": "bun run --filter @specquer/server dev",
     "build": "bun run --filter @specquer/server build",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p client && bun run --filter @specquer/documentation typecheck"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p client"
   }
 }
