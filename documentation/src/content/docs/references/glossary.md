@@ -1,4 +1,6 @@
-# Specquer Glossary
+---
+title: Specquer Glossary
+---
 
 ## Acronyms
 

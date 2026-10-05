@@ -1,4 +1,6 @@
-# References on Spec-Driven Development
+---
+title: References on Spec-Driven Development
+---
 
 ## Web Sites
 

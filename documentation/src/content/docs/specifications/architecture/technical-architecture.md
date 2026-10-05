@@ -1,11 +1,13 @@
-# Specquer Technical Architecture
+---
+title: Specquer Technical Architecture
+---
 
-This document records the technology choices for Specquer and the rules that follow from them. For a summary of the system, see the [Architecture Overview](overview.md).
+This document records the technology choices for Specquer and the rules that follow from them. For a summary of the system, see the [Architecture Overview](/specquer/specifications/architecture/overview/).
 
 ## 1. Principles
 
 1. **One language.** All code is TypeScript.
-2. **One runtime.** Bun is the runtime, package manager, test runner and script runner for every package. Third-party tools built for Node (Vite, VitePress) are run under Bun with `bun --bun`.
+2. **One runtime.** Bun is the runtime, package manager, test runner and script runner for every package. Third-party tools built for Node (Vite, Astro) are run under Bun with `bun --bun`.
 3. **One contract.** The client and the server share a single route definition and a single set of schemas. Neither is the source of truth for the other; both depend on the shared package.
 4. **One deliverable.** Specquer ships as a single executable that contains the server and the client.
 
@@ -122,29 +124,32 @@ The client has its own `tsconfig.json`, which extends the root configuration and
 - `jsx: "preserve"` and `jsxImportSource: "solid-js"`, so TypeScript only type-checks the JSX and Vite compiles it
 - DOM libraries and Vite client types in place of Bun types
 
-The root configuration excludes `./client`, so type checking runs in two passes: the root configuration, then `client/tsconfig.json`.
+The root configuration excludes `./client` and `./documentation`, so type checking runs in three passes: the root configuration, then `client/tsconfig.json`, then the documentation package (`astro sync` to generate its content types, then its own `tsconfig.json`, which extends Astro's strict configuration).
 
 ## 8. Documentation
 
 | Aspect | Decision |
 | ------ | -------- |
 | Folder | `./documentation` |
-| Framework | VitePress, run under Bun |
-| Specifications | `./documentation/specifications` |
+| Framework | Astro with Starlight, run under Bun |
+| Theme | Exquisitus (`starlight-theme-exquisitus`), a Starlight plugin |
+| Pages | `./documentation/src/content/docs` |
+| Specifications | `./documentation/src/content/docs/specifications` |
 | Development port | 5174 |
-| Direct dependencies | `vitepress` and `vue` (`vue` is required because installs are isolated; see §3.2) |
+| Direct dependencies | `astro`, `@astrojs/starlight` and `starlight-theme-exquisitus` |
+| Published at | GitHub Pages, under the base path `/specquer` |
 
 ## 9. Development Environment
 
 ### 9.1 Ports
 
-Each development server has a fixed port. A server whose port is taken fails to start instead of moving to another port (Vite and VitePress use `strictPort`).
+Each development server has a fixed port. A server whose port is taken fails to start instead of moving to another port (Vite and Astro use `strictPort`).
 
 | Port | Service |
 | ---- | ------- |
 | 3000 | Back end (Hono) |
 | 5173 | Client development server (Vite) |
-| 5174 | Documentation development server (VitePress) |
+| 5174 | Documentation development server (Astro) |
 
 ### 9.2 Development Workflow
 

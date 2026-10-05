@@ -1,4 +1,6 @@
-# References For Specquer Technologies
+---
+title: References For Specquer Technologies
+---
 
 * [Bun](https://bun.com/docs)
 * [Hono](https://hono.dev/docs/)

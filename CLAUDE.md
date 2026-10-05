@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project state
 
-`specquer` is early scaffolding. The target architecture is in `documentation/specifications/architecture/technical-architecture.md`. There is no test suite or lint config yet — update this file as structure emerges.
+`specquer` is early scaffolding. The target architecture is in `documentation/src/content/docs/specifications/architecture/technical-architecture.md`. There is no test suite or lint config yet — update this file as structure emerges.
 
 The root is a Bun workspace with five packages (`server`, `agent` and `client` have placeholder entry points; `shared` has no source yet):
 
@@ -12,7 +12,7 @@ The root is a Bun workspace with five packages (`server`, `agent` and `client` h
 - `agent/` (`@specquer/agent`): the AI functionality, built on the Vercel AI SDK Core (`ai`). Server-side only: `server` depends on it and it depends on `shared` (`server --> agent --> shared`, and `server --> shared` directly). It uses Zod for the shared domain models and for AI SDK tool input schemas. `client` must never depend on it. Before writing AI SDK code, use the `ai-sdk` skill (`.claude/skills/ai-sdk`, installed with `bunx skills add vercel/ai --skill ai-sdk`, tracked in `skills-lock.json`): it says to check APIs against the version-matched docs in `agent/node_modules/ai/docs/` rather than from memory
 - `client/` (`@specquer/client`): the SolidJS front end; uses Zod (usually schemas from `shared`) for client-side input validation
 - `shared/` (`@specquer/shared`): the Hono router (route definitions shared by client and server), with request validation via `@hono/zod-validator`, and Zod schemas. `server`, `agent` and `client` all depend on it; `client` depends on neither `server` nor `agent`.
-- `documentation/` (`@specquer/documentation`): the VitePress docs site; specs live under `documentation/specifications/`. Bun installs workspaces in isolated mode, so packages only see their direct dependencies. `vue` is therefore a direct dev dependency here; without it, `docs:build` fails under Bun with "Cannot find package '@vue/server-renderer'".
+- `documentation/` (`@specquer/documentation`): the Astro Starlight docs site, styled with the Exquisitus theme (`starlight-theme-exquisitus`, a Starlight plugin). Config is `documentation/astro.config.mjs` (sidebar, base, port); pages live under `documentation/src/content/docs/` and specs under its `specifications/`. Every page needs a `title` in its frontmatter, which Starlight renders as the H1, so don't add a `# Heading` too. New pages must be added to the `sidebar` in the config by hand. Bun installs workspaces in isolated mode, so packages only see their direct dependencies.
 
 ## Overrides to the `ai-sdk` skill
 
@@ -23,16 +23,16 @@ The skill is kept exactly as Vercel publishes it so `bunx skills update ai-sdk` 
 
 ## CI
 
-`.github/workflows/docs.yml` builds the docs site and deploys it to GitHub Pages (https://martin-nordberg.github.io/specquer/) on pushes to `main` that touch `documentation/`, the root `package.json`, `bun.lock` or `mise.toml`. It can also be run by hand. Bun comes from `mise.toml` via `jdx/mise-action`. Because of Pages, VitePress has `base: "/specquer/"`, so site-internal links must be root-relative (`/specifications/...`); VitePress adds the prefix.
+`.github/workflows/docs.yml` builds the docs site and deploys it to GitHub Pages (https://martin-nordberg.github.io/specquer/) on pushes to `main` that touch `documentation/`, the root `package.json`, `bun.lock` or `mise.toml`. It can also be run by hand. Bun comes from `mise.toml` via `jdx/mise-action`. Because of Pages, Astro has `base: "/specquer"`. Astro does not add that prefix to links in Markdown, so site-internal links must include it and use the page URL, not the file name: `/specquer/specifications/architecture/overview/`. The build writes `documentation/dist`.
 
 ## Commands
 
 - Install: `bun install` at the root installs all workspaces (Bun version pinned to 1.4.2 via `mise.toml`); add a dependency to one package with `bun add <pkg> --filter @specquer/server`, and link workspaces with `"@specquer/shared": "workspace:*"`. Keep `hono` and `zod` on the same version in every package (`ai` also uses `zod`, as a peer dependency) so the lockfile resolves one copy of each; the shared router and schema types rely on that
-- Dev ports are fixed: 3000 Hono, 5173 client, 5174 docs. The Vite and VitePress servers use `strictPort`, so like the Hono server they fail to start if their port is taken rather than moving to another.
+- Dev ports are fixed: 3000 Hono, 5173 client, 5174 docs. The Vite and Astro servers use `strictPort`, so like the Hono server they fail to start if their port is taken rather than moving to another.
 - Dev: `bun run dev` at the root starts the Hono server (`server/src/index.ts`, port 3000, `bun --hot`) and the Vite dev server (port 5173, run under the Bun runtime with `bun --bun vite`). Vite forwards `/api/*` to port 3000, so API routes must live under `/api`.
 - Client build: `bun run --filter @specquer/client build` writes `client/dist`
-- Docs: `bun run --filter @specquer/documentation docs:dev` (http://localhost:5174/specquer/, VitePress run under Bun via `bun --bun`) (also `docs:build`, `docs:preview`), or `bun run docs:dev` inside `documentation/`
-- Type-check: `bun run typecheck`. This runs two passes: the root `tsconfig.json`, which excludes `client`, and `client/tsconfig.json`, which uses Solid JSX (`jsx: preserve`, `jsxImportSource: solid-js`) plus DOM and Vite types. TypeScript 7; the root config is strict with `noUncheckedIndexedAccess`, `verbatimModuleSyntax` — use `import type` for type-only imports.
+- Docs: `bun run --filter @specquer/documentation docs:dev` (http://localhost:5174/specquer/, Astro run under Bun via `bun --bun`) (also `docs:build`, `docs:preview`), or `bun run docs:dev` inside `documentation/`. Run outside an interactive terminal (e.g. by an agent), Astro 7's `astro dev` detaches and keeps running; stop it with `bunx --bun astro dev stop` inside `documentation/`
+- Type-check: `bun run typecheck`. This runs three passes: the root `tsconfig.json`, which excludes `client` and `documentation`; `client/tsconfig.json`; and the docs package's `typecheck` script (`astro sync`, which generates the `astro:content` types in `documentation/.astro`, then `tsc` against `documentation/tsconfig.json`, which extends `astro/tsconfigs/strict`). The client config uses Solid JSX (`jsx: preserve`, `jsxImportSource: solid-js`) plus DOM and Vite types. TypeScript 7; the root config is strict with `noUncheckedIndexedAccess`, `verbatimModuleSyntax` — use `import type` for type-only imports.
 - Test: `bun test`; a single file: `bun test path/to/file.test.ts`; a single test by name: `bun test -t "name pattern"`
 
 ## Bun conventions
@@ -77,6 +77,6 @@ The client is SolidJS, built with **Vite** (`vite-plugin-solid`). This is the on
 - Build: `vite build` writes `client/dist`, which Hono serves.
 - Release: a single executable from `bun build --compile`, with the built client assets embedded and served by Hono.
 
-See `documentation/specifications/architecture/technical-architecture.md`.
+See `documentation/src/content/docs/specifications/architecture/technical-architecture.md`.
 
 For more information, read the Bun API docs in `node_modules/bun-types/docs/**.mdx`.
