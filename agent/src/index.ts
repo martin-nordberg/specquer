@@ -1,2 +1,2 @@
-// Placeholder until the first AI SDK features exist
+// Placeholder until the first LangChain features exist
 export {};

@@ -52,7 +52,7 @@ server ─────► agent
 ### 3.2 Dependency Rules
 
 - **Isolated installs.** Bun installs this workspace in isolated mode, so each package can load only the dependencies it declares itself. Any package a package imports, directly or through a tool that expects it next to itself, must be declared in that package's `package.json`.
-- **Single versions.** `hono` and `zod` must resolve to exactly one version across the workspace. The client's type safety depends on the client, server and shared packages all using the same Hono and Zod types, and the agent's tools and domain models depend on the agent using the same Zod types as the shared package. The AI SDK (`ai`) takes `zod` as a peer dependency, so it uses the agent's copy.
+- **Single versions.** `hono` and `zod` must resolve to exactly one version across the workspace. The client's type safety depends on the client, server and shared packages all using the same Hono and Zod types, and the agent's tools and domain models depend on the agent using the same Zod types as the shared package. LangChain.js (`langchain`, `@langchain/core`) declares `zod` as an ordinary dependency with a range (`^3.25.76 || ^4`) that the workspace version satisfies, so it shares the agent's copy; after changing LangChain or Zod versions, check that `bun.lock` still contains a single `zod` version.
 
 ## 4. Shared Package
 
@@ -85,20 +85,21 @@ The router's type is what the client's typed Hono client uses, so the client get
 | Folder | `./agent` |
 | Purpose | All of Specquer's AI functionality |
 | Runs in | The back end process only; it is never bundled into the client |
-| AI library | Vercel AI SDK Core (`ai`) |
+| AI library | LangChain.js (`langchain`, with `@langchain/core`); LangGraph (`@langchain/langgraph`) comes with it for stateful, multi-step workflows |
 | Domain models | Zod schemas from `shared` |
-| Tool schemas | Zod, used to define the input of AI SDK tools |
+| Tool schemas | Zod, used to define the input of LangChain tools and structured output |
 | Used by | `server`, which exposes agent features through API routes |
 
 ### 6.1 Package Rationale
 
 The AI functionality runs on the server and could live inside `./server`. It is kept in its own package to make its AI-centric role explicit and to keep model, prompt and tool code apart from HTTP handling. The server stays responsible for routes, and the agent package for talking to language models.
 
-### 6.2 AI SDK Usage
+### 6.2 LangChain Usage
 
-- Models are reached through AI SDK provider packages (such as `@ai-sdk/anthropic`), not the Vercel AI Gateway. A provider package is added to `agent` only when a feature needs it.
-- AI SDK code is written against the documentation bundled with the installed version (`agent/node_modules/ai/docs/`), not from memory, because the SDK's API changes between major versions.
-- The repository includes the Vercel `ai-sdk` agent skill (`.claude/skills/ai-sdk`, recorded in `skills-lock.json`) to guide AI coding assistants working on this package.
+- The JavaScript implementation is used, in the same Bun process as the server. Python LangChain is not used, so the system keeps one language and one executable.
+- Models are reached through LangChain provider packages (such as `@langchain/anthropic`). A provider package is added to `agent` only when a feature needs it.
+- LangChain code is written against the installed version, using its type definitions and the JavaScript documentation for that major version, not from memory, because the API changes between major versions. Examples written for Python LangChain are not copied, since the two APIs differ.
+- LangSmith tracing is off. `langchain` depends on `langsmith`, which sends traces to LangSmith only when tracing environment variables (such as `LANGSMITH_TRACING`) are set; Specquer does not set them.
 
 ## 7. Front End
 
