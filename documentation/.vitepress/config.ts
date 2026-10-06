@@ -15,6 +15,7 @@ export default defineConfig({
         nav: [
             {text: 'Home', link: '/'},
             {text: 'Specifications', link: '/specifications/overview'},
+            {text: 'Work Items', link: '/work-items/step-001/requirements'},
             {text: 'Notes', link: '/notes/platform-choice'},
         ],
 
@@ -32,7 +33,14 @@ export default defineConfig({
               {
                 text: 'Work Items',
                 items: [
-                  {text: 'Step 001', link: '/work-items/step-001/todo'}
+                  {
+                    text: 'Step 001',
+                    collapsed: false,
+                    items: [
+                      {text: 'Requirements', link: '/work-items/step-001/requirements'},
+                      {text: 'Implementation Plan', link: '/work-items/step-001/implementation-plan'},
+                    ]
+                  }
                 ]
               }
             ],

@@ -2,7 +2,7 @@
 
 _Notes from October 2026._
 
-**Summary:** use **SQLite through Bun's built-in `bun:sqlite`**, as one database file at `.specquer/cache.db`. It is the only one of the top choices that needs no extra dependency and still works inside the single executable, and it covers everything the [Ideas](/specifications/functionality/ideas) specification describes so far. The open questions (especially question 7, on whether `.specquer` is committed) may later add a second store for the parts that must be shared through Git.
+**Summary:** use **SQLite through Bun's built-in `bun:sqlite`**, as one database file at `.specquer/cache.db`. It is the only one of the top choices that needs no extra dependency and still works inside the single executable, and it covers everything the [Ideas](/notes/ideas) specification describes so far. The open questions (especially question 7, on whether `.specquer` is committed) may later add a second store for the parts that must be shared through Git.
 
 ## What the Database Has to Do
 

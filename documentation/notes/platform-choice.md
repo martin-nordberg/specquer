@@ -43,7 +43,7 @@ Specquer depends on Bun far more than Electrobun did (runtime, bundler, single e
 ## How This Maps to Specquer's Specification
 
 - **Points for the current design:**
-  - The [Ideas](/specifications/functionality/ideas) specification already assumes a browser. It calls for "Browser back and forward navigation" and autosaving "when the browser tab loses focus".
+  - The [Ideas](/notes/ideas) specification already assumes a browser. It calls for "Browser back and forward navigation" and autosaving "when the browser tab loses focus".
   - "The root folder is the working directory where the application was launched" describes a CLI tool.
   - Coding agents are listed as users, and an HTTP server suits them.
 - **Points for a desktop shell:**

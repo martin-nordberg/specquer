@@ -2,7 +2,7 @@
 
 _Notes from October 2026._
 
-**Goal:** links between sections of spec documents that are mostly **visible to users**, pointing at **link targets users don't see**. This note lays out the design as independent decisions that can be debated one at a time, then proposes a combination. It expands on open question 4 of the [Ideas](/specifications/functionality/ideas) specification.
+**Goal:** links between sections of spec documents that are mostly **visible to users**, pointing at **link targets users don't see**. This note lays out the design as independent decisions that can be debated one at a time, then proposes a combination. It expands on open question 4 of the [Ideas](/notes/ideas) specification.
 
 Rendering behavior was checked against GitHub's documented rules, since GitHub is where people will most often read these files without Specquer.
 
