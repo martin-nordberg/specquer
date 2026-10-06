@@ -15,6 +15,7 @@ export default defineConfig({
     nav: [
       { text: 'Home', link: '/' },
       { text: 'Specifications', link: '/specifications/architecture/overview' },
+      { text: 'Notes', link: '/notes/platform-choice' },
     ],
 
     sidebar: {
@@ -32,6 +33,16 @@ export default defineConfig({
           items: [
             {text: 'Overview', link: '/specifications/architecture/overview'},
             {text: 'Technical Architecture', link: '/specifications/architecture/technical-architecture'},
+          ]
+        },
+      ],
+      '/notes/': [
+        {
+          text: 'Notes',
+          items: [
+            {text: 'Platform Choice', link: '/notes/platform-choice'},
+            {text: 'Database Choice', link: '/notes/database-choice'},
+            {text: 'Traceability Links', link: '/notes/traceability-links'},
           ]
         },
       ],
