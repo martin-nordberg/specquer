@@ -26,6 +26,12 @@ export default defineConfig({
                     items: [
                         {text: 'Overview', link: '/specifications/overview'},
                         {text: 'Technical Architecture', link: '/specifications/technical-architecture'},
+                        {text: 'Information Architecture', link: '/specifications/info-architecture'},
+                        {text: 'Client Requirements', link: '/specifications/client-requirements'},
+                        {text: 'Server Requirements', link: '/specifications/server-requirements'},
+                        {text: 'Security', link: '/specifications/security'},
+                        {text: 'Markdown Domain Design', link: '/specifications/markdown-domain-design'},
+                        {text: 'UI-State Domain Design', link: '/specifications/uistate-domain-design'},
                     ]
                 }
             ],

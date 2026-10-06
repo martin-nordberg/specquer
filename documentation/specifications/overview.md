@@ -27,3 +27,9 @@ Specquer runs as a Bun web server launched from a local file system.
 
 Details:
 * [Technical Architecture](technical-architecture.md)
+* [Information Architecture](info-architecture.md)
+* [Client Requirements](client-requirements.md)
+* [Server Requirements](server-requirements.md)
+* [Security](security.md)
+* [Markdown Domain Design](markdown-domain-design.md)
+* [UI-State Domain Design](uistate-domain-design.md)

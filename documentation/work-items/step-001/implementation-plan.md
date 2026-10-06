@@ -268,3 +268,23 @@ All decision points are decided: D3, D7 and D14 as described in each, the others
 | Cross-site scripting through rendered Markdown | Arbitrary file writes | No raw HTML rendering, sanitizing if enabled, CSP, token and Origin checks |
 | Deleting folders with hidden files | Lost work | D10 |
 | Autosave overwriting an agent's changes | Lost work | Version check (D8) |
+
+## 9. Implementation Notes
+
+Recorded while implementing the plan (October 2026).
+
+### 9.1 Spike Results (Phase 0)
+
+1. **Tailwind and shadcn under Bun:** works. `server/bunfig.toml` loads `bun-plugin-tailwind` for the development server. The shadcn components were copied by hand into `client/src/components/ui` (D2), using the unified `radix-ui` package, with the `@/` alias in `client/tsconfig.json`, which Bun's bundler also reads.
+2. **Single executable with Tailwind:** works (D1). `server/build.ts` calls `Bun.build()` with `compile` and the Tailwind plugin; `bun run build` produces one executable (about 80 MB) that serves the styled client.
+3. **Milkdown round trip:** Milkdown rewrites unchanged Markdown: `-` bullets become `*` (configurable, now set back to `-`), table separator rows are re-padded, reference-style links become inline links and their definitions disappear, and `___` becomes `***`. Inline HTML anchors such as `<a name="r7k2"></a>` survive, so traceability markers aren't affected. D5 is applied as option (b): Milkdown's output is used only after the user edits in it; option (c) wasn't needed.
+4. **Browser tests under Bun:** as found while planning (D7). Two further findings: happy-dom replaces Bun's `fetch`, `Request` and `Response` when registered globally, which breaks the server tests that `bun test` runs in the same process, so the preload restores Bun's versions; and Playwright's WebKit needs system libraries (`libmanette`) that must be installed with `sudo`.
+5. **CodeMirror in Bun's bundle:** works, as plain CodeMirror 6 with a small wrapper (D4), themed through the palette's CSS custom properties so light and dark mode need no rebuild.
+
+### 9.2 Findings
+
+- **Web Workers aren't bundled.** Bun's HTML bundling leaves `new Worker(new URL("./worker.ts", import.meta.url))` untouched, so the worker loads in development but not in production. The server now builds the preview worker with `Bun.build()` and serves it at `/_specquer/preview-worker.js`; the release build embeds it. The worker build needs the `worker` export condition, because the browser build of `decode-named-character-reference` (used by micromark) uses `document`.
+- **Bun's HTML routes can't set headers.** The page therefore goes through Hono: Bun serves the bundled page at an internal path, and Hono's `/` handler checks the session, fetches the page and adds the Content-Security-Policy. The CSP allows the development server's inline script by its hash.
+- **Two servers on one port.** Without `reusePort: false`, a second Specquer could bind the busy default port and share its connections instead of falling back to a free one. Found by the parallel end-to-end tests.
+- **Development mode and file watchers.** Many development-mode servers at once run out of file watchers (`EMFILE`), so the end-to-end tests run Specquer in production mode.
+- **Dark mode colors** come out slightly different from the values in §4.6 (background `#05101d`, text `#ebeff4`, navigation `#002b63`), and `primary` and `error` take dark text in dark mode, because the module picks whichever text color contrasts more. All pairs pass 4.5:1.
