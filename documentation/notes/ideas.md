@@ -142,12 +142,12 @@ and a selected file open on the right.
 
 5. **Root folder and Git.** Must the working directory be the root of a Git repository, or can it be a subfolder of one? What happens if it is not in a Git repository at all?
 6. **Front matter and MDX in existing files.** Files may still contain YAML front matter, MDX or raw HTML, for example when a project's existing docs are used with Specquer. Are these shown as plain text, rejected, or flagged with a warning?
-7. **Is `.specquer` committed?** Is `.specquer` committed and shared with the team, or ignored by Git? It mixes per-user state (`uistate.yaml`) with a cache that could be shared. If the cache is never committed, fragment identity and traceability links must be rebuildable deterministically from Git history. Should the per-user and shared parts be separated, with Specquer adding the right `.gitignore` entries?
+7. **Is `.specquer` committed?** Is `.specquer` committed and shared with the team, or ignored by Git? It mixes per-user state (`uistate.yaml`) with a cache that could be shared. If the cache is never committed, fragment identity and traceability links must be rebuildable deterministically from Git history. Should the per-user and shared parts be separated, with Specquer adding the right `../../.gitignore` entries?
 8. **Network exposure.** The browser UI can write files in the working directory. Does the server listen only on `localhost`? Can several Specquer instances run at once (in different repositories) on different ports?
 
 ### Markdown Documentation Viewer
 
-9. **Folder pane filtering.** Besides showing only `.md` files, does the folder pane respect `.gitignore`, and hide `.specquer`, `node_modules` and folders with no Markdown files?
+9. **Folder pane filtering.** Besides showing only `.md` files, does the folder pane respect `../../.gitignore`, and hide `.specquer`, `node_modules` and folders with no Markdown files?
 10. **File operations.** Creating specs is in scope. Can files and folders be created, renamed, moved and deleted from the folder pane? Do renames and moves keep fragment identity and traceability links?
 11. **Milkdown round-trip fidelity.** WYSIWYG editors usually rewrite Markdown they did not change: list markers, emphasis characters, line wrapping, table spacing. Opening and saving a file in Milkdown could create noisy Git diffs and break fragment identity. Must WYSIWYG editing preserve the original Markdown text exactly outside the edited parts?
 12. **External changes and conflicts.** Coding agents and other editors change files while they are open in Specquer. Does Specquer watch the file system and reload? If a file changes on disk while it has unsaved edits, which version wins, and is the user told?

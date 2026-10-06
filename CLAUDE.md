@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project state
 
-`specquer` is early scaffolding. The target architecture is in `documentation/specifications/architecture/technical-architecture.md`. There is no test suite or lint config yet — update this file as structure emerges.
+`specquer` is early scaffolding. The target architecture is in `documentation/specifications/technical-architecture.md`. There is no test suite or lint config yet — update this file as structure emerges.
 
 The root is a Bun workspace with five packages (`server`, `agent` and `client` have placeholder entry points; `shared` has no source yet):
 
@@ -78,6 +78,6 @@ The client is React, bundled by Bun through the `Bun.serve()` HTML-import patter
 - Script and stylesheet paths in `client/index.html` must be relative (`./src/index.tsx`); a root-relative `/src/...` path doesn't resolve.
 - Release: `bun build --compile --production` bundles the client from the HTML import and embeds it in the executable; `--production` also sets `NODE_ENV=production`, which turns `development` off.
 
-See `documentation/specifications/architecture/technical-architecture.md`.
+See `documentation/specifications/technical-architecture.md`.
 
 For more information, read the Bun API docs in `node_modules/bun-types/docs/**.mdx`.

@@ -14,8 +14,8 @@ This document records the technology choices for Specquer and the rules that fol
 | Aspect | Decision |
 | ------ | -------- |
 | Language | TypeScript 7 |
-| Runtime | Bun, version pinned in `mise.toml` |
-| Package management | Bun workspaces, one lockfile (`bun.lock`) at the repository root |
+| Runtime | Bun, version pinned in `../../mise.toml` |
+| Package management | Bun workspaces, one lockfile (`../../bun.lock`) at the repository root |
 | Type checking | Strict mode, including `noUncheckedIndexedAccess` and `verbatimModuleSyntax` |
 | Testing | `bun test` |
 
@@ -51,8 +51,8 @@ server ─────► agent
 
 ### 3.2 Dependency Rules
 
-- **Isolated installs.** Bun installs this workspace in isolated mode, so each package can load only the dependencies it declares itself. Any package a package imports, directly or through a tool that expects it next to itself, must be declared in that package's `package.json`.
-- **Single versions.** `hono` and `zod` must resolve to exactly one version across the workspace. The client's type safety depends on the client, server and shared packages all using the same Hono and Zod types, and the agent's tools and domain models depend on the agent using the same Zod types as the shared package. LangChain.js (`langchain`, `@langchain/core`) declares `zod` as an ordinary dependency with a range (`^3.25.76 || ^4`) that the workspace version satisfies, so it shares the agent's copy; after changing LangChain or Zod versions, check that `bun.lock` still contains a single `zod` version.
+- **Isolated installs.** Bun installs this workspace in isolated mode, so each package can load only the dependencies it declares itself. Any package a package imports, directly or through a tool that expects it next to itself, must be declared in that package's `../../package.json`.
+- **Single versions.** `hono` and `zod` must resolve to exactly one version across the workspace. The client's type safety depends on the client, server and shared packages all using the same Hono and Zod types, and the agent's tools and domain models depend on the agent using the same Zod types as the shared package. LangChain.js (`langchain`, `@langchain/core`) declares `zod` as an ordinary dependency with a range (`^3.25.76 || ^4`) that the workspace version satisfies, so it shares the agent's copy; after changing LangChain or Zod versions, check that `../../bun.lock` still contains a single `zod` version.
 - **React in the server.** Bun applies React Fast Refresh to the client only when `react` can be resolved from the server package, so `server` declares `react` as a development dependency, on the same version as `client`.
 
 ## 4. Shared Package
@@ -110,25 +110,25 @@ The AI functionality runs on the server and could live inside `./server`. It is 
 | Framework | React |
 | API client | Hono typed client (`hc`), typed from the router in `shared` |
 | Input validation | Zod, using the schemas from `shared`, so the client and server apply the same rules |
-| Build tool | Bun's bundler, through an HTML import of `client/index.html` in the back end |
+| Build tool | Bun's bundler, through an HTML import of `../../client/index.html` in the back end |
 | Build output | None of its own; the release build embeds the bundled client in the executable |
 | Development server | The back end (`Bun.serve()`), port 3000, with hot module replacement and React Fast Refresh |
 | API during development | Same process and origin as the client; no proxy |
 
 ### 7.1 Build Tool Rationale
 
-Bun's bundler compiles React JSX and TypeScript itself, so the client needs no separate build tool. The back end imports `client/index.html` and passes it to `Bun.serve()` as a route. During development Bun bundles the client on each request, with hot module replacement and React Fast Refresh. For a release, `bun build --compile` bundles the client from the same import and embeds it in the executable, which satisfies the single-deliverable principle without extra build steps. Requests that do not match a client route go to Hono.
+Bun's bundler compiles React JSX and TypeScript itself, so the client needs no separate build tool. The back end imports `../../client/index.html` and passes it to `Bun.serve()` as a route. During development Bun bundles the client on each request, with hot module replacement and React Fast Refresh. For a release, `bun build --compile` bundles the client from the same import and embeds it in the executable, which satisfies the single-deliverable principle without extra build steps. Requests that do not match a client route go to Hono.
 
 The trade-off is a smaller plugin ecosystem than Vite's: Bun's frontend plugins are configured in `bunfig.toml`, and the `bun build` CLI does not yet support them.
 
 ### 7.2 Type Checking
 
-The client has its own `tsconfig.json`, which extends the root configuration and changes these settings:
+The client has its own `../../tsconfig.json`, which extends the root configuration and changes these settings:
 
 - `jsx: "react-jsx"` (React's automatic JSX runtime); TypeScript only type-checks the JSX and Bun's bundler compiles it
 - DOM libraries in place of Bun types
 
-The root configuration excludes `./client`, so type checking runs in two passes: the root configuration, then `client/tsconfig.json`.
+The root configuration excludes `./client`, so type checking runs in two passes: the root configuration, then `../../client/tsconfig.json`.
 
 ## 8. Documentation
 
