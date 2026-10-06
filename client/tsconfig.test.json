@@ -1,0 +1,9 @@
+{
+  // Client tests: the client's settings plus Bun's types (for bun:test)
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["bun"]
+  },
+  "include": ["src", "test"],
+  "exclude": ["node_modules", "dist"]
+}

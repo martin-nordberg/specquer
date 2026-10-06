@@ -19,6 +19,8 @@
   "scripts": {
     "dev": "bun run --filter @specquer/server dev",
     "build": "bun run --filter @specquer/server build",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p client"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p client && tsc --noEmit -p client/tsconfig.test.json",
+    "test": "bun test",
+    "test:e2e": "bun --bun x playwright test"
   }
 }

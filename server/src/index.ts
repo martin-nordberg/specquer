@@ -41,6 +41,9 @@ function serve(listenPort: number) {
   return Bun.serve({
     hostname: LOOPBACK_HOST,
     port: listenPort,
+    // Documented as the default, but without it a second Specquer can bind the same port and
+    // share its connections instead of falling back to a free one
+    reusePort: false,
     development,
     routes: { [internalPagePath]: client },
     fetch: app.fetch,

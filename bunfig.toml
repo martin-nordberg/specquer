@@ -1,0 +1,6 @@
+[test]
+# A DOM for the client's component tests (it keeps Bun's own fetch, Request and Response)
+preload = ["./client/test/register-dom.ts", "./client/test/testing-library.ts"]
+# Playwright's end-to-end specs run with `bun run test:e2e`, not `bun test` (decision D7);
+# the docs site's dependencies may contain test files of their own
+pathIgnorePatterns = ["e2e/**", "documentation/**"]

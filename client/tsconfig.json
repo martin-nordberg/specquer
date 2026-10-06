@@ -5,8 +5,12 @@
     "types": [],
 
     // React's automatic JSX runtime; Bun's bundler compiles it when the server imports index.html
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+
+    // shadcn's import alias; Bun's bundler reads the same setting
+    "paths": { "@/*": ["./src/*"] }
   },
   "include": ["src"],
-  "exclude": ["node_modules", "dist"]
+  // Tests run under Bun and are checked with tsconfig.test.json
+  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.test.tsx"]
 }

@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { setCookie } from "hono/cookie";
 import { type ApiHandlers, createApiRouter } from "@specquer/shared/api";
 import { FileService } from "./files.ts";
+import { PREVIEW_WORKER_PATH, previewWorkerScript } from "./preview-worker.ts";
 import {
   type SecurityConfig,
   apiGuard,
@@ -82,6 +83,15 @@ export function createApp(config: AppConfig) {
       "Referrer-Policy": "no-referrer",
     });
   });
+
+  // Public client code, like the rest of the bundle
+  app.get(PREVIEW_WORKER_PATH, async (c) =>
+    c.body(await previewWorkerScript(), 200, {
+      "Content-Type": "text/javascript; charset=utf-8",
+      "X-Content-Type-Options": "nosniff",
+      "Cache-Control": config.development ? "no-store" : "no-cache",
+    }),
+  );
 
   app.route("/", createApiRouter(createHandlers(files, uiState)));
 
