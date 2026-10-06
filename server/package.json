@@ -10,10 +10,12 @@
     "zod": "^4.6.5"
   },
   "scripts": {
-    "dev": "bun --hot src/index.ts",
-    "build": "bun build --compile --production src/index.ts --outfile dist/specquer"
+    "dev": "bun --hot src/index.ts .. --port 3000",
+    "build": "bun build.ts"
   },
   "devDependencies": {
-    "react": "^19.3.0"
+    "bun-plugin-tailwind": "^0.1.2",
+    "react": "^19.3.0",
+    "tailwindcss": "^4.3.3"
   }
 }

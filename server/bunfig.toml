@@ -1,0 +1,3 @@
+# Bun's dev server bundles the client from its HTML import; Tailwind runs as a bundler plugin
+[serve.static]
+plugins = ["bun-plugin-tailwind"]
