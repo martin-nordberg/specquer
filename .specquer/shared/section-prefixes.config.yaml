@@ -1,0 +1,6 @@
+prefixes:
+  "documentation/notes/": NOTE
+  "documentation/notes/ideas.md": IDEA
+  "documentation/specifications/": SPEC
+  "documentation/references/": REF
+  "documentation/work-items/": WORK
