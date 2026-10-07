@@ -6,6 +6,8 @@ export default defineConfig({
     description: "A tool for spec-driven development",
     // Published to GitHub Pages at https://martin-nordberg.github.io/specquer/
     base: "/specquer/",
+    // Head links don't get the base prefix. The file is docsFaviconSvg from client/src/theme/logo.ts.
+    head: [['link', {rel: 'icon', type: 'image/svg+xml', href: '/specquer/favicon.svg'}]],
     vite: {
         // Fixed port; the client dev server owns 5173
         server: {port: 5174, strictPort: true},
@@ -15,7 +17,7 @@ export default defineConfig({
         nav: [
             {text: 'Home', link: '/'},
             {text: 'Specifications', link: '/specifications/overview'},
-            {text: 'Work Items', link: '/work-items/step-001/requirements'},
+            {text: 'Work Items', link: '/work-items/step-001-doc-editing/requirements'},
             {text: 'Notes', link: '/notes/platform-choice'},
         ],
 
@@ -25,10 +27,10 @@ export default defineConfig({
                     text: 'Specifications',
                     items: [
                         {text: 'Overview', link: '/specifications/overview'},
-                        {text: 'Technical Architecture', link: '/specifications/technical-architecture'},
-                        {text: 'Information Architecture', link: '/specifications/info-architecture'},
                         {text: 'Client Requirements', link: '/specifications/client-requirements'},
+                        {text: 'Information Architecture', link: '/specifications/info-architecture'},
                         {text: 'Server Requirements', link: '/specifications/server-requirements'},
+                        {text: 'Technical Architecture', link: '/specifications/technical-architecture'},
                         {text: 'Security', link: '/specifications/security'},
                         {text: 'Markdown Domain Design', link: '/specifications/markdown-domain-design'},
                         {text: 'UI-State Domain Design', link: '/specifications/uistate-domain-design'},
@@ -40,12 +42,12 @@ export default defineConfig({
                 text: 'Work Items',
                 items: [
                   {
-                    text: 'Step 001',
-                    collapsed: false,
+                    text: '001-Document Editing',
+                    collapsed: true,
                     items: [
-                      {text: 'Requirements', link: '/work-items/step-001/requirements'},
-                      {text: 'Implementation Plan', link: '/work-items/step-001/implementation-plan'},
-                      {text: 'New File and Folder', link: '/work-items/step-001/new-file-folder'},
+                      {text: 'Requirements', link: '/work-items/step-001-doc-editing/requirements'},
+                      {text: 'Implementation Plan', link: '/work-items/step-001-doc-editing/implementation-plan'},
+                      {text: 'New File and Folder', link: '/work-items/step-001-doc-editing/new-file-folder'},
                     ]
                   }
                 ]

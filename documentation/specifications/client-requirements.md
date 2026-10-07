@@ -1,6 +1,6 @@
 # Specquer Client Requirements
 
-Requirements for the browser user interface (`client/`). They come from [Step 001](/work-items/step-001/requirements), its [implementation plan](/work-items/step-001/implementation-plan) and [New File and Folder](/work-items/step-001/new-file-folder). The screen layout is in [Information Architecture](info-architecture.md).
+Requirements for the browser user interface (`client/`). They come from [Step 001](/work-items/step-001-doc-editing/requirements), its [implementation plan](/work-items/step-001-doc-editing/implementation-plan) and [New File and Folder](/work-items/step-001-doc-editing/new-file-folder). The screen layout is in [Information Architecture](info-architecture.md).
 
 ## 1. General
 
@@ -96,3 +96,14 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 2. The text color on each fill is chosen automatically (whichever of the mode's light and dark text contrasts more) and the fill's lightness is nudged, keeping its hue, until the pair reaches WCAG AA (4.5:1). A unit test checks every pair in both modes.
 3. Dark mode is derived in OKLCH: a very dark background and a near-white text color with the hue of `text`, and a darker navigation color. The fills keep their colors, with their text chosen as above.
 4. The user switches between light and dark mode with the button in the header. Until they do, the mode follows the browser's preference; their choice is saved in the UI state.
+5. The pencil colors of the logo (§9) and the grays of the docs site's favicon are also defined in `palette.ts`, as `logoColors`. A unit test checks that the docs favicon's § reaches 4.5:1 on its tile in both modes.
+
+## 9. Icons
+
+The logo is a section sign (§), for specifications, drawn as two S-shaped strokes that share one closed "o" in the middle. It is drawn in SVG on a 32×32 grid, as paths rather than text, so it doesn't depend on fonts. All variants come from one module, `client/src/theme/logo.ts`.
+
+| Icon | Design | Where |
+| ---- | ------ | ----- |
+| Favicon | A light § on a rounded tile in the navigation color | The app's browser tab. It is added at startup as a `data:` URI, which the Content-Security-Policy's `img-src` allows (see [Security](security.md) §7). |
+| App icon | A page with a folded corner and a § in the navigation color, with a pencil whose tip touches the §'s lower curve | Left of "Specquer" in the header, 24 pixels, with empty alternative text since the name follows it |
+| Docs favicon | The favicon's §, light on a dark gray tile, or dark on a very light gray tile when the browser is in dark mode | The documentation site's browser tab (`documentation/public/favicon.svg`); a unit test checks the file matches `logo.ts` |

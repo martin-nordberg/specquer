@@ -133,6 +133,7 @@ The AI functionality runs on the server and could live inside `./server`. It is 
 | Styling | Tailwind CSS (v4), through `bun-plugin-tailwind` |
 | Components | shadcn components (Radix UI, `lucide-react` icons) in `client/src/components/ui`, imported with the `@/` alias |
 | Colors | One module, `client/src/theme/palette.ts`, derives both modes from the light-mode colors (OKLCH, `culori`) |
+| Icons | The favicon and app icon are SVG, generated from one module, `client/src/theme/logo.ts`, in the palette's colors |
 | Text editing | CodeMirror 6, with a small wrapper of its own (`@codemirror/lang-markdown`, `@codemirror/lang-yaml`) |
 | WYSIWYG editing | Milkdown (`@milkdown/kit`, CommonMark and GFM presets) |
 | Markdown preview | The `shared` pipeline (unified, remark-parse, remark-gfm, remark-frontmatter, remark-rehype, rehype-raw, rehype-sanitize), run in a Web Worker and rendered with `hast-util-to-jsx-runtime` |
@@ -173,6 +174,7 @@ Parsing Markdown is most of the cost of a preview render (about 80 ms of 100 ms 
 | Framework | VitePress, run under Bun |
 | Specifications | `./documentation/specifications` |
 | Development port | 5174 |
+| Favicon | `documentation/public/favicon.svg`, a gray variant of the app's favicon generated from `client/src/theme/logo.ts`, linked in the VitePress `head` config with the `/specquer/` base written out |
 | Direct dependencies | `vitepress` and `vue` (`vue` is required because installs are isolated; see §3.2) |
 
 ## 9. Development Environment

@@ -21,6 +21,25 @@ export const baseColors = {
 
 export type BaseColors = typeof baseColors;
 
+/**
+ * The logo's own colors (the favicon and the app icon). Its tile, page and § use
+ * `baseColors.navigation` and `baseColors.background`; these are the pencil's.
+ */
+export const logoColors = {
+  pencilBody: "#f5b301",
+  pencilShade: "#e09a00",
+  pencilWood: "#f3d6a4",
+  pencilLead: "#26303f",
+  pencilFerrule: "#c8ced8",
+  pencilEraser: "#ec7f86",
+  pencilOutline: "#1b2a44",
+  /** The docs site's favicon: a dark gray tile in light mode, a very light gray one in dark mode */
+  docsTileLight: "#3b3f45",
+  docsMarkLight: "#f4f5f6",
+  docsTileDark: "#e3e5e8",
+  docsMarkDark: "#25282d",
+};
+
 /** WCAG AA for normal text. */
 export const MIN_CONTRAST = 4.5;
 

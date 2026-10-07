@@ -1,6 +1,6 @@
 # Specquer Server Requirements
 
-Requirements for the back end (`server/`). They come from [Step 001](/work-items/step-001/requirements) and its [implementation plan](/work-items/step-001/implementation-plan). Security is specified separately in [Security](security.md).
+Requirements for the back end (`server/`). They come from [Step 001](/work-items/step-001-doc-editing/requirements) and its [implementation plan](/work-items/step-001-doc-editing/implementation-plan). Security is specified separately in [Security](security.md).
 
 ## 1. Command Line
 

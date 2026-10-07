@@ -31,7 +31,7 @@ Specquer has one view: a header and two panes side by side.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│ Specquer                                                    [theme]  │ header (navigation color)
+│ [icon] Specquer                                             [theme]  │ header (navigation color)
 ├──────────────┬───────────────────────────────────────────────────────┤
 │ ▾ docs       │ docs › specs › login.md ▾     Saved  [Text|Split|…]   │ file path, status, view type
 │   ▸ specs    ├───────────────────────────────────────────────────────┤
@@ -47,7 +47,7 @@ Specquer has one view: a header and two panes side by side.
 
 | Region | Contents |
 | ------ | -------- |
-| Header | Application name; light/dark switch |
+| Header | App icon and application name; light/dark switch |
 | Left pane | Folder tree; context menu on each folder (New file, New folder, Rename, Delete), each file (Rename, Delete) and the empty space below the last entry (New file, New folder in the root) |
 | Right pane, row 1 | File path breadcrumb (a drop-down of recent files once there are any), save status, view-type switch |
 | Right pane, row 2 | Front matter editor with a drag bar below it |

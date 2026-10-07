@@ -21,9 +21,12 @@ import { FrontmatterEditor, initialFrontmatterHeight } from "@/components/Frontm
 import { SplitPane } from "@/components/SplitPane";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import type { Api } from "@/lib/api";
+import { appIconSvg, svgDataUri } from "@/theme/logo";
 import { applyTheme, useSystemTheme } from "@/theme/theme";
 import { AUTOSAVE_INTERVAL, DocumentStore, type SaveStatus } from "./document-store";
 import { UiStateStore } from "./ui-state-store";
+
+const appIconUri = svgDataUri(appIconSvg);
 
 const statusText: Record<SaveStatus, string> = {
   saved: "Saved",
@@ -243,7 +246,10 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
   return (
     <div className="flex h-full flex-col">
       <header className="flex h-11 shrink-0 items-center justify-between bg-navigation px-4 text-navigation-foreground">
-        <span className="font-semibold tracking-wide">Specquer</span>
+        <span className="flex items-center gap-2 font-semibold tracking-wide">
+          <img src={appIconUri} alt="" className="size-6" />
+          Specquer
+        </span>
         <ThemeToggle theme={theme} onChange={(next) => uiStore.update((s) => setTheme(s, next))} />
       </header>
       <main className="min-h-0 flex-1">

@@ -70,7 +70,7 @@ frame-ancestors 'none'
 
 - `script-src` allows only the server's own scripts plus SHA-256 hashes of the page's inline scripts (in development, Bun's dev server adds one), computed from the page as served.
 - `style-src` allows inline styles, which CodeMirror, Milkdown and the palette inject.
-- `img-src` allows remote `https:` images, which specs commonly use. This lets a spec's author learn when it is previewed; it doesn't expose any data.
+- `img-src` allows remote `https:` images, which specs commonly use. This lets a spec's author learn when it is previewed; it doesn't expose any data. `data:` is allowed because the favicon and the app icon are `data:` URIs.
 - In development, `connect-src` also allows the hot-reload WebSocket.
 - The page also gets `Referrer-Policy: no-referrer` and `Cache-Control: no-store`.
 

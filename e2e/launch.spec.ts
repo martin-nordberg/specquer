@@ -23,3 +23,16 @@ test("the page has a Content-Security-Policy", async ({ page, specquer }) => {
   const response = await page.request.get(`${specquer.origin}/`);
   expect(response.headers()["content-security-policy"]).toContain("script-src 'self'");
 });
+
+test("the favicon and the app icon load under the Content-Security-Policy", async ({ page, specquer }) => {
+  const violations: string[] = [];
+  page.on("console", (message) => {
+    if (message.text().includes("Content Security Policy")) violations.push(message.text());
+  });
+  await launch(page, specquer);
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute("href", /^data:image\/svg\+xml/);
+  const icon = page.locator("header img");
+  await expect(icon).toBeVisible();
+  expect(await icon.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
+  expect(violations).toEqual([]);
+});
