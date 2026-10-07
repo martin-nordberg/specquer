@@ -9,6 +9,7 @@
 * [React](https://react.dev/)
 * [react-markdown](https://remarkjs.github.io/react-markdown/)
 * [Remark](https://github.com/remarkjs/remark)
+* [Sidemark](https://sidemark.org/specification.html)
 * [TypeScript](https://www.typescriptlang.org/docs/)
 * [VitePress](https://vitepress.dev/)
 * [Zod](https://zod.dev/)
