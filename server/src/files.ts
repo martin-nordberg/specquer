@@ -119,6 +119,17 @@ export class FileService {
   }
 
   async getTree(): Promise<Tree> {
+    const { files, walked } = await this.markdownFiles();
+    const truncated = files.length > MAX_TREE_FILES || walked.entries > MAX_WALK_ENTRIES;
+    return { root: buildTree(files.slice(0, MAX_TREE_FILES), walked.emptyFolders), truncated };
+  }
+
+  /** Every Markdown file the tree would show, sorted, without the tree's size limit. */
+  async listMarkdownFiles(): Promise<string[]> {
+    return (await this.markdownFiles()).files;
+  }
+
+  private async markdownFiles(): Promise<{ files: string[]; walked: WalkResult }> {
     const walked: WalkResult = { files: [], emptyFolders: [], entries: 0 };
     const gitFiles = await gitMarkdownFiles(this.root);
     if (gitFiles === null) await this.walk("", walked, true);
@@ -141,8 +152,7 @@ export class FileService {
       files.push(check.path);
     }
     files.sort();
-    const truncated = files.length > MAX_TREE_FILES || walked.entries > MAX_WALK_ENTRIES;
-    return { root: buildTree(files.slice(0, MAX_TREE_FILES), walked.emptyFolders), truncated };
+    return { files, walked };
   }
 
   /**
@@ -170,6 +180,16 @@ export class FileService {
     return holdsFiles;
   }
 
+  /** A file's modification time and size, or `undefined` if it isn't a file. */
+  async fileStamp(path: string): Promise<{ mtimeMs: number; size: number } | undefined> {
+    try {
+      const info = await stat(this.absolute(path));
+      return info.isFile() ? { mtimeMs: info.mtimeMs, size: info.size } : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
   async readFile(path: string): Promise<FileContent> {
     const bytes = await Bun.file(await this.existingFile(path)).bytes();
     let text: string;
@@ -192,10 +212,10 @@ export class FileService {
   }
 
   /**
-   * Creates an empty Markdown file or an empty folder in `parent`. Returns the new path, or
-   * `null` if the name is taken.
+   * Creates a Markdown file (empty, or with `content`) or an empty folder in `parent`. Returns
+   * the new path, or `null` if the name is taken.
    */
-  async create(parent: string, name: string, kind: "file" | "folder"): Promise<string | null> {
+  async create(parent: string, name: string, kind: "file" | "folder", content = ""): Promise<string | null> {
     const path = joinPath(parent, name);
     if (kind === "file" && !isMarkdownFile(path)) {
       throw new ApiError(400, "invalid", `The name must end with '${MARKDOWN_EXTENSION}'.`);
@@ -203,7 +223,7 @@ export class FileService {
     const target = join(await this.existingFolder(parent), name);
     try {
       if (kind === "folder") await mkdir(target);
-      else await writeFile(target, "", { flag: "wx" });
+      else await writeFile(target, content, { flag: "wx" });
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === "EEXIST") return null;
       throw err;

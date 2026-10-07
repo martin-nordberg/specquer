@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import type { Element, Root, RootContent } from "hast";
 import { markdownToHast } from "./preview.ts";
 
@@ -47,4 +47,37 @@ test("strips dangerous HTML", () => {
   expect(img?.properties.onError).toBeUndefined();
   expect(img?.properties.onerror).toBeUndefined();
   expect(find(tree, "a")[0]?.properties.href).toBeUndefined();
+});
+
+describe("section anchors", () => {
+  const DOC = "tz4a98xxat96iws9zmbrgj3a";
+  const marked = (tree: Root) =>
+    find(tree, "a")
+      .filter((a) => a.properties.dataSectionAnchor !== undefined)
+      .map((a) => `${a.properties.dataSectionAnchor}:${a.properties.id}`);
+
+  test("marks the root, heading and list item anchors", () => {
+    const tree = markdownToHast(
+      `<a id="RQ-00001" data-document-id="${DOC}"></a>\n\n<a id="RQ-00002"></a>\n# Title\n\nSetext <a id="X"></a>\n\n* <a id="RQ-00003"></a> one\n- [ ] <a id="RQ-00004"></a> task\n\n> <a id="RQ-00005"></a>\n> # quoted\n`,
+    );
+    expect(marked(tree)).toEqual([
+      "root:user-content-RQ-00001",
+      "heading:user-content-RQ-00002",
+      "item:user-content-RQ-00003",
+      "item:user-content-RQ-00004",
+    ]);
+  });
+
+  test("moves a heading's anchor into the heading", () => {
+    const tree = markdownToHast(`<a id="RQ-00001" data-document-id="${DOC}"></a>\n\n<a id="RQ-00002"></a>\n\n## Title\n`);
+    const [h2] = find(tree, "h2");
+    expect(find(h2!, "a")[0]?.properties.id).toBe("user-content-RQ-00002");
+    expect(text(h2!)).toBe(" Title");
+    expect(find(tree, "p")).toHaveLength(1);
+  });
+
+  test("a legacy first anchor directly before a heading is the heading's", () => {
+    const tree = markdownToHast('<a id="RQ-00001"></a>\n# Title\n');
+    expect(marked(tree)).toEqual(["heading:user-content-RQ-00001"]);
+  });
 });

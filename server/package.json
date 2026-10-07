@@ -3,10 +3,12 @@
   "type": "module",
   "private": true,
   "dependencies": {
+    "@paralleldrive/cuid2": "^3.3.0",
     "@specquer/agent": "workspace:*",
     "@specquer/client": "workspace:*",
     "@specquer/shared": "workspace:*",
     "hono": "^4.13.9",
+    "yaml": "^2.9.1",
     "zod": "^4.6.5"
   },
   "scripts": {

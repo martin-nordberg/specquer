@@ -24,7 +24,7 @@ export async function tempRoot(files: Record<string, string> = {}, options: { gi
 }
 
 export function testApp(root: string, page = "<!doctype html><script>inline()</script>") {
-  const app = createApp({
+  const { app, sections } = createApp({
     root,
     token: TEST_TOKEN,
     port: () => TEST_PORT,
@@ -45,5 +45,5 @@ export function testApp(root: string, page = "<!doctype html><script>inline()</s
       },
       body: init.body === undefined ? undefined : JSON.stringify(init.body),
     });
-  return { app, request };
+  return { app, sections, request };
 }

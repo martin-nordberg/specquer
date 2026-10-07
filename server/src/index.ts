@@ -29,7 +29,7 @@ try {
 
 const development = process.env.NODE_ENV !== "production";
 let port = 0;
-const app = createApp({
+const { app, sections } = createApp({
   root,
   token,
   development,
@@ -58,6 +58,9 @@ try {
   server = serve(0);
 }
 port = server.port ?? 0;
+
+// Bring the section index up to date in the background; this writes nothing
+sections.scan().catch((err) => console.error(err));
 
 const url = `http://${LOOPBACK_HOST}:${port}/?token=${token}`;
 console.log(`Specquer is serving ${root}\nOpen ${url}`);

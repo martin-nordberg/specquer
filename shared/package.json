@@ -23,6 +23,7 @@
     "./api": "./src/api/index.ts",
     "./paths": "./src/paths/index.ts",
     "./markdown": "./src/markdown/index.ts",
-    "./uistate": "./src/uistate/index.ts"
+    "./uistate": "./src/uistate/index.ts",
+    "./sections": "./src/sections/index.ts"
   }
 }

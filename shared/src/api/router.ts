@@ -2,17 +2,23 @@ import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { ZodType } from "zod";
+import type { BodyEdit } from "../markdown/sections.ts";
 import { type UiState, type UiStatePatch, uiStatePatchSchema } from "../uistate/uistate.ts";
 import {
+  type AnchorFolderResult,
   type ApiErrorBody,
   type DeletePreview,
   type FileContent,
+  type SectionInfo,
+  type SectionSearchResult,
   type Tree,
+  anchorFolderSchema,
   createSchema,
   entryQuerySchema,
   fileQuerySchema,
   renameSchema,
   saveFileSchema,
+  sectionSearchSchema,
 } from "./schemas.ts";
 
 /**
@@ -31,7 +37,14 @@ export class ApiError extends Error {
   }
 }
 
-export type SaveResult = { ok: true; version: string } | { ok: false; reason: "conflict"; version: string };
+/**
+ * A save's outcome. Saving a sectioned file may add or correct its anchors; `edits` then holds
+ * the changes, relative to the body (the text without front matter, with `\n` line endings)
+ * that was sent.
+ */
+export type SaveResult =
+  | { ok: true; version: string; edits?: BodyEdit[] }
+  | { ok: false; reason: "conflict"; version: string };
 
 export type CreateResult = { ok: true; path: string } | { ok: false; reason: "exists" };
 
@@ -47,6 +60,9 @@ export interface ApiHandlers {
   deleteEntry(path: string): Promise<UiState>;
   getUiState(): Promise<UiState>;
   patchUiState(patch: UiStatePatch): Promise<UiState>;
+  getSections(path: string): Promise<SectionInfo[]>;
+  searchSections(query: string, limit: number, path?: string): Promise<SectionSearchResult[]>;
+  anchorFolder(folder: string, dryRun: boolean): Promise<AnchorFolderResult>;
 }
 
 /** Validation errors use the same JSON shape as other errors. */
@@ -77,7 +93,7 @@ export function createApiRouter(handlers: ApiHandlers) {
       const { text, baseVersion } = c.req.valid("json");
       const result = await handlers.saveFile(c.req.valid("query").path, text, baseVersion);
       if (!result.ok) return c.json({ error: "conflict", version: result.version }, 409);
-      return c.json({ version: result.version }, 200);
+      return c.json({ version: result.version, ...(result.edits === undefined ? {} : { edits: result.edits }) }, 200);
     })
     .post("/create", validate("json", createSchema), async (c) => {
       const { parent, name, kind } = c.req.valid("json");
@@ -110,6 +126,17 @@ export function createApiRouter(handlers: ApiHandlers) {
     .get("/uistate", async (c) => c.json(await handlers.getUiState()))
     .patch("/uistate", validate("json", uiStatePatchSchema), async (c) => {
       return c.json(await handlers.patchUiState(c.req.valid("json")));
+    })
+    .get("/sections", validate("query", fileQuerySchema), async (c) => {
+      return c.json({ sections: await handlers.getSections(c.req.valid("query").path) });
+    })
+    .get("/sections/search", validate("query", sectionSearchSchema), async (c) => {
+      const { q, limit, path } = c.req.valid("query");
+      return c.json({ results: await handlers.searchSections(q, limit, path) });
+    })
+    .post("/sections/anchor", validate("json", anchorFolderSchema), async (c) => {
+      const { folder, dryRun } = c.req.valid("json");
+      return c.json(await handlers.anchorFolder(folder, dryRun));
     });
 }
 
