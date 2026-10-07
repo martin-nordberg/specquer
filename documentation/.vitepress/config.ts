@@ -34,6 +34,7 @@ export default defineConfig({
                         {text: 'Security', link: '/specifications/security'},
                         {text: 'Markdown Domain Design', link: '/specifications/markdown-domain-design'},
                         {text: 'UI-State Domain Design', link: '/specifications/uistate-domain-design'},
+                        {text: 'Sections Domain Design', link: '/specifications/sections-domain-design'},
                     ]
                 }
             ],

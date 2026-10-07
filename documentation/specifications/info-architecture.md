@@ -13,9 +13,16 @@ This document describes what Specquer works with and how its screen is organized
 | Front matter | The YAML between the `---` lines at the top of a file. Free-form; there is no schema. |
 | Body | The Markdown after the front matter, structured by nested headings (`#`, `##`, `###` and so on). |
 | UI state | Per-user settings in `.specquer/user/uistate.yaml`: theme, pane width, expanded folders, recent files, the open file and per-file view settings. See [UI-State Domain Design](uistate-domain-design.md). |
+| Section | A whole spec file (the root section), a top-level heading with its content, or an item of a sectioned list. Sectioned files are chosen by `.specquer/shared/section-prefixes.config.yaml`. See [Sections Domain Design](sections-domain-design.md). |
+| Section anchor and ID | An invisible HTML anchor that marks a section with a permanent ID such as `REQ-00257`, used in links to the section. The root anchor also carries the document ID. |
+| Shared data | The section configuration and data files in `.specquer/shared/`, committed to Git: `documents.yaml` and, per prefix, `sections.yaml`. |
 
 ```
 root folder
+├── .specquer/shared/        section configuration and data, committed
+│   ├── section-prefixes.config.yaml
+│   ├── documents.yaml
+│   └── REQ/sections.yaml
 ├── .specquer/user/          per-user state, ignored by Git
 │   ├── .gitignore           *
 │   └── uistate.yaml
@@ -48,15 +55,15 @@ Specquer has one view: a header and two panes side by side.
 | Region | Contents |
 | ------ | -------- |
 | Header | App icon and application name; light/dark switch |
-| Left pane | Folder tree; context menu on each folder (New file, New folder, Rename, Delete), each file (Rename, Delete) and the empty space below the last entry (New file, New folder in the root) |
+| Left pane | Folder tree; context menu on each folder (New file, New folder, Add section anchors, Rename, Delete), each file (Rename, Delete) and the empty space below the last entry (New file, New folder, Add section anchors in the root) |
 | Right pane, row 1 | File path breadcrumb (a drop-down of recent files once there are any), save status, view-type switch |
 | Right pane, row 2 | Front matter editor with a drag bar below it |
 | Right pane, row 3 | Markdown content in one of four views |
-| Dialogs | New file, new folder, rename, delete, and the conflict dialog when a file changed on disk |
+| Dialogs | New file, new folder, rename, delete, add section anchors, and the conflict dialog when a file changed on disk |
 
 ## 3. Navigation
 
-- **Opening a file:** single-click it in the tree, pick it from the recent-files drop-down, or click a link to it in the preview. Only one file is open at a time; there are no tabs.
+- **Opening a file:** single-click it in the tree, pick it from the recent-files drop-down, or click a link to it in the preview; a link to a section scrolls the preview to it. Only one file is open at a time; there are no tabs.
 - **Recent files:** the last ten files opened, most recent first, not counting the open one. They persist across restarts.
 - **Restart:** Specquer reopens the file that was open last, with its view type, and restores expanded folders, pane width and theme.
 - **Browser back and forward** don't navigate between files.
@@ -67,7 +74,7 @@ Specquer has one view: a header and two panes side by side.
 | ---- | ------------ | -------- |
 | Text (default) | CodeMirror with Markdown highlighting | Yes |
 | Split | CodeMirror on the left, preview on the right | Text side |
-| Preview | Rendered, sanitized HTML | No |
+| Preview | Rendered, sanitized HTML, with badges for section anchors | No |
 | WYSIWYG | Milkdown rich-text editor | Yes |
 
 The view type is remembered per file. All views edit the same in-memory copy of the file, so switching views never loses changes.

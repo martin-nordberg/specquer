@@ -33,3 +33,4 @@ Details:
 * [Security](security.md)
 * [Markdown Domain Design](markdown-domain-design.md)
 * [UI-State Domain Design](uistate-domain-design.md)
+* [Sections Domain Design](sections-domain-design.md)

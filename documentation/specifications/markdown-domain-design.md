@@ -4,13 +4,14 @@ The Markdown domain is the code that works on the content of spec files, as oppo
 
 ## 1. Scope
 
-| Now (Step 001) | Later |
-| -------------- | ----- |
+| Now (Steps 001 and 002) | Later |
+| ----------------------- | ----- |
 | Splitting a file into front matter and body, and joining them | The heading and section tree (for collapsible sections and summaries) |
-| Checking front matter for YAML syntax errors | Traceability anchors and links between sections |
-| The preview pipeline (Markdown to a sanitized HTML syntax tree) | Rewriting the Markdown syntax tree (renames, link updates) |
+| Checking front matter for YAML syntax errors | Rewriting the Markdown syntax tree (renames, link updates) |
+| The preview pipeline (Markdown to a sanitized HTML syntax tree) | |
+| Finding section anchors and the edits that add them (`sections.ts`, see [Sections Domain Design](sections-domain-design.md)) | |
 
-Building the section tree was left for a later step (decision D13); the pipeline is the place to add it.
+Building the section tree was left for a later step (Step 001 decision D13); the pipeline is the place to add it.
 
 ## 2. Front Matter
 
@@ -48,17 +49,19 @@ The pipeline is a frozen unified processor (decision D3):
 | 5 | `rehype-raw` | Parse raw HTML into real elements |
 | 6 | `rehype-sanitize` | Remove anything not allowed (decision D15) |
 | 7 | Fragment links | Rewrite `#id` links to `#user-content-id` |
+| 8 | Section anchors | Mark the top-level section anchors (`data-section-anchor`, with the section's kind) and move a heading's anchor into the heading, so the preview can show badges |
 
 - **Sanitize schema:** GitHub's default schema, plus `data-*` attributes on `a` and `span` for traceability anchors (`<a name="r7k2" data-status="draft"></a>`). `id` and `name` values get the `user-content-` prefix against DOM clobbering, so step 7 rewrites in-page links to match. See [Security](security.md) §6.
-- **Where it runs:** in the client's Web Worker (`client/src/preview/preview-worker.ts`), which returns the hast tree; the main thread renders it with `hast-util-to-jsx-runtime` and a component map. The map's `a` component opens links to other workspace `.md` files in Specquer. If the worker can't start, the client calls `markdownToHast` on the main thread.
+- **Where it runs:** in the client's Web Worker (`client/src/preview/preview-worker.ts`), which returns the hast tree; the main thread renders it with `hast-util-to-jsx-runtime` and a component map. The map's `a` component opens links to other workspace `.md` files in Specquer, and renders a marked section anchor as the anchor followed by a badge. If the worker can't start, the client calls `markdownToHast` on the main thread.
 - **Output is data:** the tree is plain objects, so it can cross the worker boundary and could be produced on the server too.
 
 ## 4. Editors and the Domain
 
 - The client keeps one copy of the open file: front matter (or `null`) and body, both with `\n` line endings, plus the layout from `splitFrontmatter`.
 - The file text for saving is `fromLf(joinFrontmatter(frontmatter, body, layout), eol)`. It is written only if it differs from the text last read or saved, so an unedited file is never rewritten.
-- Milkdown (WYSIWYG) serializes Markdown its own way (list markers, table padding, reference links become inline links). Its output replaces the body only after the user edits in it (decision D5).
+- Milkdown (WYSIWYG) serializes Markdown its own way (list markers, table padding, reference links become inline links). Its output replaces the body only after the user edits in it (decision D5). Raw HTML, including section anchors, survives its round trip unchanged.
+- Saving a sectioned file may return edits that add anchors; the client applies them to the body (see [Sections Domain Design](sections-domain-design.md) §7).
 
 ## 5. Tests
 
-`shared/src/markdown/frontmatter.test.ts` checks the round trip for LF, CRLF, BOM, empty and blank blocks, unterminated blocks, mixed line endings and closing lines at the end of the file. `preview.test.ts` checks GFM output, that front matter is left out, the traceability anchors, and that scripts, event handlers, iframes and `javascript:` links are removed.
+`shared/src/markdown/frontmatter.test.ts` checks the round trip for LF, CRLF, BOM, empty and blank blocks, unterminated blocks, mixed line endings and closing lines at the end of the file. `preview.test.ts` checks GFM output, that front matter is left out, the traceability anchors, the section anchors, and that scripts, event handlers, iframes and `javascript:` links are removed. `sections.test.ts` checks finding and adding section anchors.

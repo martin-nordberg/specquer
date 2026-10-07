@@ -1,6 +1,6 @@
 # Specquer Client Requirements
 
-Requirements for the browser user interface (`client/`). They come from [Step 001](/work-items/step-001-doc-editing/requirements), its [implementation plan](/work-items/step-001-doc-editing/implementation-plan) and [New File and Folder](/work-items/step-001-doc-editing/new-file-folder). The screen layout is in [Information Architecture](info-architecture.md).
+Requirements for the browser user interface (`client/`). They come from [Step 001](/work-items/step-001-doc-editing/requirements), its [implementation plan](/work-items/step-001-doc-editing/implementation-plan), [New File and Folder](/work-items/step-001-doc-editing/new-file-folder) and [Step 002](/work-items/step-002-sections/requirements) (sections). The screen layout is in [Information Architecture](info-architecture.md).
 
 ## 1. General
 
@@ -19,7 +19,7 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 2. Folders come before files; names sort naturally, ignoring case.
 3. Clicking a folder expands or collapses it. Expanded folders persist in the UI state.
 4. Single-clicking a file opens it in the file pane. The open file is highlighted with the navigation color.
-5. Right-clicking a folder or file opens a context menu with **Rename…** and **Delete…**. For a folder, the menu starts with **New file…** and **New folder…**. Right-clicking the empty space below the last entry (or in an empty tree) offers **New file…** and **New folder…** for the root folder.
+5. Right-clicking a folder or file opens a context menu with **Rename…** and **Delete…**. For a folder, the menu starts with **New file…**, **New folder…** and **Add section anchors…**. Right-clicking the empty space below the last entry (or in an empty tree) offers the same three for the root folder.
 
 ### 3.1 Rename
 
@@ -36,7 +36,7 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 2. For a file, the extension (`.md`) is shown after the text box and added to the name; a folder's name has no extension.
 3. Invalid names and names already used in the folder keep the dialog open with the reason, as for rename (§3.1, items 4 and 5).
 4. After creating the entry, the folder it was created in (unless it is the root) is expanded and the tree is reloaded, so the new entry shows.
-5. A new file is created empty and opened in the file pane (saving the previously open file first, as for any file switch).
+5. A new file is created empty, or with its root section anchor if it is sectioned, and opened in the file pane (saving the previously open file first, as for any file switch).
 
 ### 3.3 Delete
 
@@ -44,6 +44,12 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 2. For a folder, the dialog lists every file that will be deleted, including files the tree doesn't show, and how many of them the tree doesn't show.
 3. The dialog names the files that aren't committed to Git and can't be recovered. If the root isn't in a Git repository, it says so.
 4. Deleting the open file, or a folder containing it, closes it. The UI state drops every entry for deleted paths.
+
+### 3.4 Add Section Anchors
+
+1. The open file is saved first.
+2. A modal dialog says how many sectioned files in the folder will change and lists them, with **Add anchors** and **Cancel** buttons; when none would change it says so and offers only **Close**.
+3. Adding the anchors rewrites those files (see [Server Requirements](server-requirements.md) §6). If the open file was among them, it is reloaded.
 
 ## 4. File Path
 
@@ -65,9 +71,16 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 2. The view type is persisted per file; files open in Text the first time.
 3. One in-memory copy of the file is shared by all views; switching views keeps unsaved changes.
 4. The preview is produced by the shared pipeline in a Web Worker and rendered with `hast-util-to-jsx-runtime`. In the split view it updates about 250 ms after typing stops; results for outdated text are dropped.
-5. In the preview, links to other `.md` files in the workspace open them in Specquer, in-page links scroll, and other links open in a new tab.
+5. In the preview, links to other `.md` files in the workspace open them in Specquer, in-page links scroll, and other links open in a new tab. A link to a section of another document (`other.md#REQ-00012`) opens it and, in the preview, scrolls to the section.
 6. Raw HTML in the preview is sanitized (see [Security](security.md) §6).
 7. Opening a file in WYSIWYG without editing it never changes the file; Milkdown's output is used only after the user changes something (Milkdown rewrites some Markdown, such as list markers, tables and reference links).
+
+### 6.1 Sections
+
+1. In the preview and split views, a badge stands for each section anchor: at the start of a heading, between a list item's marker and its content, and at the top for the root section. The anchor itself stays invisible. The badge is the favicon (§9).
+2. Hovering or focusing a badge shows a tooltip with the section ID, the document path and the section's CUID2. Badges can be reached with the keyboard. Clicking one copies the section ID to the clipboard and confirms it in the tooltip.
+3. The WYSIWYG view shows anchors as badges too (a heading's badge on the line above it) and saves them unchanged.
+4. In the text editor, typing `#` in a Markdown link target (`](#` or `](path#`) offers completion of section IDs, each with its heading text and document. Choosing one inserts the path to its document relative to the open file (nothing for the same file) and the ID.
 
 ## 7. Saving
 
@@ -77,7 +90,8 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
    - every 60 seconds while there are unsaved changes.
 2. A file is only written if its text differs from what was last read or saved. Line endings (LF or CRLF), a byte-order mark and the front matter layout are preserved.
 3. The save status shows "Saved", "Unsaved changes", "Saving…", "Not saved: changed on disk" or "Save failed" (with the reason as a tooltip).
-4. If the file changed on disk since it was opened, saving doesn't overwrite it. A dialog offers **Reload from disk** (discarding the user's changes) and **Keep my version** (overwriting the file on disk). Autosave pauses until the user chooses, and another file can't be opened meanwhile.
+4. Saving a sectioned file may add or correct section anchors. The editors show them at once: the text editor inserts them without moving the cursor or losing text typed during the save, and undo doesn't remove them. They don't count as unsaved changes. The WYSIWYG view reloads its content.
+5. If the file changed on disk since it was opened, saving doesn't overwrite it. A dialog offers **Reload from disk** (discarding the user's changes) and **Keep my version** (overwriting the file on disk). Autosave pauses until the user chooses, and another file can't be opened meanwhile.
 
 ## 8. Theme
 

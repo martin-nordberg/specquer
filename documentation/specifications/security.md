@@ -43,9 +43,10 @@ The rules below are implemented in `server/src/security.ts`, `server/src/files.t
 - Every path the API receives is validated by the shared path rules: relative to the root, `/`-separated, no `..`, no absolute or drive paths, no backslashes or control characters, and no `.git` or `.specquer` segment.
 - The server resolves the path against the root and checks the **real** path (after following symbolic links) stays inside the root. For rename and delete, which act on the entry itself, the real path of its folder must be inside the root, so a symbolic link is renamed or deleted, never its target.
 - Reading and writing are limited to existing `.md` files that are UTF-8 text.
-- Creating is limited to an empty `.md` file or an empty folder, named by the same name rules, inside an existing folder whose real path is inside the root. It never overwrites: an existing file, folder or symbolic link of that name answers `409`.
+- Creating is limited to an `.md` file (empty, or holding only its root section anchor) or an empty folder, named by the same name rules, inside an existing folder whose real path is inside the root. It never overwrites: an existing file, folder or symbolic link of that name answers `409`.
 - Rename changes only the name within the same folder; the new name is validated the same way and a file must keep its extension.
 - The root folder itself can't be renamed or deleted.
+- `.specquer/` stays out of reach of the file API. The server itself reads `.specquer/shared/section-prefixes.config.yaml` and writes the section data files, `.specquer/shared/documents.yaml` and `.specquer/shared/<prefix>/sections.yaml`, at fixed paths: a prefix is a folder name only if it matches `[A-Z][A-Z0-9]{1,4}`, so it can't name another folder.
 
 ## 6. Rendering Untrusted Markdown
 
@@ -54,7 +55,8 @@ Spec files may contain raw HTML (traceability anchors such as `<a name="r7k2" da
 - The preview pipeline parses raw HTML with `rehype-raw` and then sanitizes it with `rehype-sanitize`, using GitHub's list of allowed tags and attributes plus `data-*` attributes on `a` and `span`. Scripts, event handlers, `iframe`, `object`, `style` and `javascript:` URLs are removed.
 - The sanitizer prefixes `id` and `name` values with `user-content-` against DOM clobbering, as GitHub does; in-page links (`#id`) are rewritten to match.
 - The preview is rendered to React elements, never with `innerHTML`.
-- Milkdown (the WYSIWYG view) shows raw HTML as text and doesn't render it.
+- Milkdown (the WYSIWYG view) shows raw HTML as text and doesn't render it. Only section anchors are shown differently, as a badge image Specquer draws itself; their attributes are never put into the page as HTML.
+- Section badges show the section ID and paths as text, never as HTML.
 - Links to other `.md` files open them in Specquer; other links open in a new tab with `rel="noopener noreferrer"`.
 
 ## 7. Content-Security-Policy
@@ -77,6 +79,7 @@ frame-ancestors 'none'
 ## 8. Protecting the User's Work
 
 - **Saves check the version.** The client sends the content hash of the version its edits are based on. If the file changed on disk since (a coding agent, another editor or another tab), the server answers `409` and doesn't write; the user chooses between reloading from disk and keeping their version.
-- **Atomic writes.** Files and `uistate.yaml` are written to a temporary file in the same folder and renamed over the original, so a crash never leaves a half-written file.
+- **Atomic writes.** Files, `uistate.yaml` and the section data files are written to a temporary file in the same folder and renamed over the original, so a crash never leaves a half-written file.
+- **Section anchors change files only when the user does.** Viewing a file and the background scan never write. Anchors are added when a sectioned file is saved or created, and by **Add section anchors**, which lists the files it will change and asks first. Only files the configuration names are sectioned.
 - **Delete preview.** Before deleting, the dialog lists every file that will be deleted, including files the tree doesn't show, and names the files not committed to Git (new, modified or ignored). Outside a Git repository it warns that nothing can be recovered.
 - **Per-user state stays out of Git.** `.specquer/user/` gets a `.gitignore` containing `*` when Specquer creates it.

@@ -25,7 +25,7 @@ The repository is a Bun workspace with five packages.
 
 | Folder | Package | Purpose |
 | ------ | ------- | ------- |
-| `./shared` | `@specquer/shared` | API contract (routes, request validation, schemas), workspace paths, the Markdown domain and the UI-state domain |
+| `./shared` | `@specquer/shared` | API contract (routes, request validation, schemas), workspace paths, section IDs, the Markdown domain and the UI-state domain |
 | `./server` | `@specquer/server` | Back end: implements the API and serves the client |
 | `./agent` | `@specquer/agent` | AI functionality, used by the back end |
 | `./client` | `@specquer/client` | Front end: browser user interface |
@@ -64,7 +64,8 @@ The shared package holds everything both sides need. It must run unchanged in th
 | ------ | ------ | -------- |
 | API | `@specquer/shared/api` | Hono router (`createApiRouter`) with every route, Zod request schemas, response types |
 | Paths | `@specquer/shared/paths` | Workspace path and name validation (relative, `/`-separated, no `..`, no `.git` or `.specquer`) |
-| Markdown | `@specquer/shared/markdown` | Front matter split and join, YAML syntax check (`yaml` package), the preview pipeline; see [Markdown Domain Design](markdown-domain-design.md) |
+| Markdown | `@specquer/shared/markdown` | Front matter split and join, YAML syntax check (`yaml` package), the preview pipeline, finding and adding section anchors; see [Markdown Domain Design](markdown-domain-design.md) and [Sections Domain Design](sections-domain-design.md) |
+| Sections | `@specquer/shared/sections` | Section ID format: parse and format |
 | UI state | `@specquer/shared/uistate` | Zod schema, defaults and pure update functions; see [UI-State Domain Design](uistate-domain-design.md) |
 
 | Aspect | Decision |
@@ -87,6 +88,7 @@ The router's type is what the client's typed Hono client uses, so the client get
 | API | Mounts the router from `shared`, with handlers for the file-system service and the UI-state store |
 | Schemas | Zod, from `shared` |
 | UI state | `.specquer/user/uistate.yaml` under the root folder, read and written with `Bun.YAML` |
+| Sections | `SectionIndex` (`server/src/sections/`): an in-memory index of the sectioned files and the data files in `.specquer/shared/`, which the `yaml` package reads and writes (it keeps key order and writes one flow mapping per line); document IDs and section UIDs are CUID2s (`@paralleldrive/cuid2`); see [Sections Domain Design](sections-domain-design.md) |
 | Security | Session token, Host and Origin checks, Content-Security-Policy; see [Security](security.md) |
 | AI features | Delegated to `agent` (not used yet) |
 | Development port | 3000 |
@@ -134,8 +136,8 @@ The AI functionality runs on the server and could live inside `./server`. It is 
 | Components | shadcn components (Radix UI, `lucide-react` icons) in `client/src/components/ui`, imported with the `@/` alias |
 | Colors | One module, `client/src/theme/palette.ts`, derives both modes from the light-mode colors (OKLCH, `culori`) |
 | Icons | The favicon and app icon are SVG, generated from one module, `client/src/theme/logo.ts`, in the palette's colors |
-| Text editing | CodeMirror 6, with a small wrapper of its own (`@codemirror/lang-markdown`, `@codemirror/lang-yaml`) |
-| WYSIWYG editing | Milkdown (`@milkdown/kit`, CommonMark and GFM presets) |
+| Text editing | CodeMirror 6, with a small wrapper of its own (`@codemirror/lang-markdown`, `@codemirror/lang-yaml`; `@codemirror/autocomplete` for section link completion, `@codemirror/merge`'s `diff` for applying outside changes minimally) |
+| WYSIWYG editing | Milkdown (`@milkdown/kit`, CommonMark and GFM presets), with a node view that shows section anchors as badges |
 | Markdown preview | The `shared` pipeline (unified, remark-parse, remark-gfm, remark-frontmatter, remark-rehype, rehype-raw, rehype-sanitize), run in a Web Worker and rendered with `hast-util-to-jsx-runtime` |
 | API client | Hono typed client (`hc`), typed from the router in `shared` |
 | Input validation | Zod and the validation functions from `shared`, so the client and server apply the same rules |

@@ -1,6 +1,6 @@
 # Specquer Server Requirements
 
-Requirements for the back end (`server/`). They come from [Step 001](/work-items/step-001-doc-editing/requirements) and its [implementation plan](/work-items/step-001-doc-editing/implementation-plan). Security is specified separately in [Security](security.md).
+Requirements for the back end (`server/`). They come from [Step 001](/work-items/step-001-doc-editing/requirements) and its [implementation plan](/work-items/step-001-doc-editing/implementation-plan), and [Step 002](/work-items/step-002-sections/requirements) (sections). Security is specified separately in [Security](security.md).
 
 ## 1. Command Line
 
@@ -31,21 +31,22 @@ specquer [root] [--port <n>] [--no-open]
 4. Outside a Git work tree, the server walks the folders itself; no ignore rules apply then.
 5. The tree is loaded in one request. It holds at most 10,000 files, and walks of the file system stop after 100,000 entries; beyond either limit it is cut off and marked as truncated.
 6. Folders come before files; names sort naturally, ignoring case.
+7. Each tree load also starts a background scan of the sectioned files (§7), which writes nothing.
 
 ## 4. Files
 
 | Route | Behavior |
 | ----- | -------- |
 | `GET /api/file?path=` | Returns the file's text and its **version** (SHA-256 of its bytes). |
-| `PUT /api/file?path=` | Body `{ text, baseVersion }`. Writes the text if the file's current version equals `baseVersion`; otherwise answers `409` with the current version and writes nothing. Returns the new version. |
-| `POST /api/create` | Body `{ parent, name, kind }` (`kind` is `file` or `folder`; `parent` is `""` for the root). Creates an empty `.md` file or an empty folder in `parent`, which must be an existing folder. `409` if the name is taken. Answers `201` with the new path. |
+| `PUT /api/file?path=` | Body `{ text, baseVersion }`. Writes the text if the file's current version equals `baseVersion`; otherwise answers `409` with the current version and writes nothing. Returns the new version. For a sectioned file, the anchors are added and corrected first (§7) and the response also carries `edits`, relative to the body sent. |
+| `POST /api/create` | Body `{ parent, name, kind }` (`kind` is `file` or `folder`; `parent` is `""` for the root). Creates an `.md` file or an empty folder in `parent`, which must be an existing folder. A new file is empty, or holds its root anchor if it is sectioned. `409` if the name is taken. Answers `201` with the new path. |
 | `POST /api/rename` | Body `{ path, newName }`. Renames a file or folder within its folder. `409` if the name is taken. Returns the new path and the updated UI state. |
 | `GET /api/entry/delete-preview?path=` | Lists the files a delete would remove (up to 500, with the total count) and those not committed to Git, or `null` outside Git. |
 | `DELETE /api/entry?path=` | Deletes a file or a folder with everything in it. Returns the updated UI state. |
 
 1. All paths are workspace paths, validated and confined to the root as specified in [Security](security.md) §5. Invalid paths answer `400`, missing entries `404`, paths leading outside the root `403`.
-2. Only existing `.md` files can be read or written; `PUT /api/file` doesn't create files. New files are created empty through `POST /api/create`, whose name must end in `.md`, and never replace an existing file or folder. Files must be UTF-8; others answer `415`. A byte-order mark is kept.
-3. The server deals in whole file text, byte for byte: splitting into front matter and body happens in the client, so line endings and the trailing newline are preserved.
+2. Only existing `.md` files can be read or written; `PUT /api/file` doesn't create files. New files are created through `POST /api/create`, whose name must end in `.md`, and never replace an existing file or folder. Files must be UTF-8; others answer `415`. A byte-order mark is kept.
+3. The server deals in whole file text, byte for byte: splitting into front matter and body happens in the client, so line endings and the trailing newline are preserved. The one exception is a sectioned file, whose anchors the server adds and corrects (§7), keeping its line endings, front matter and byte-order mark.
 4. Writes are atomic: the text is written to a temporary file in the same folder, given the original's permissions, and renamed over the original.
 5. A file can only be renamed to a name with the same extension. A case-only rename works on case-insensitive file systems.
 6. "Not committed" means new, modified, deleted or ignored according to `git status --porcelain --untracked-files=all --ignored=matching`.
@@ -67,7 +68,26 @@ specquer [root] [--port <n>] [--no-open]
 
 The model is specified in [UI-State Domain Design](uistate-domain-design.md).
 
-## 6. Other Routes
+## 6. Sections
+
+| Route | Behavior |
+| ----- | -------- |
+| `GET /api/sections?path=` | The sections of one document, for badge tooltips: ID, UID (`null` for a duplicate), kind, title and heading level. |
+| `GET /api/sections/search?q=&limit=&path=` | Sections whose ID or title starts with (or else contains) `q`, across documents or in the document at `path`, for link completion; at most `limit` (default 50, at most 200). |
+| `POST /api/sections/anchor` | Body `{ folder, dryRun }`. **Add section anchors**: returns the sectioned files under the folder whose anchors would change, and unless `dryRun` changes them. |
+
+## 7. Section Anchors and Data Files
+
+1. Which files are sectioned, and the prefix for their new sections, comes from `.specquer/shared/section-prefixes.config.yaml`; without it no file is sectioned.
+2. The server keeps an index of the sectioned files and of `.specquer/shared/documents.yaml` and `.specquer/shared/<prefix>/sections.yaml`. It is brought up to date in the background at startup and after each tree load, by reading only files whose modification time or size changed. This never writes a file.
+3. Section IDs are allocated on the server only, one update at a time, so two tabs can never get the same number. Numbers are never reused.
+4. Documents and data files are written only when the user changes something: saving, creating, renaming or deleting through the API, and **Add section anchors**. The data files then hold the whole reconciled state.
+5. Renames and deletes update the paths in `documents.yaml`, and drop the documents (and their sections) that are gone or no longer match the configuration.
+6. Data files are written atomically and only when their content changes; damaged or conflicted data files never stop the server.
+
+The model, recognition rules, data files and conflict rules are specified in [Sections Domain Design](sections-domain-design.md).
+
+## 8. Other Routes
 
 | Route | Behavior |
 | ----- | -------- |

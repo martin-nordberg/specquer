@@ -291,9 +291,10 @@ Taken while planning; each is _Proposed_ and the work proceeds on it unless chan
   using modification times; no file watching in this step. Noticing changes never writes files
   (question 6). Re-checking a file when its tab is reactivated is dropped along with inserting
   anchors on open (requirements: viewing never changes a file).
-- **D6. WYSIWYG.** _Proposed:_ decided by spike 1. If badges can't be shown, the WYSIWYG view
-  keeps working (anchors survive edits, §9.1) but shows the anchors as raw HTML, is labelled
-  experimental, and warns before the first edit of a sectioned file.
+- **D6. WYSIWYG.** _Decided by spike 1:_ badges can be shown. A Milkdown node view for raw HTML
+  nodes shows a section anchor's open tag as the badge and hides its closing tag; Milkdown still
+  writes the HTML back unchanged, so the view needs no experimental label or warning. A heading's
+  anchor shows as a badge on the line above the heading (§10).
 - **D7. Copy link.** _Decided:_ dropped for now (question 7). A copied link doesn't know where it
   will be pasted, and a root-relative link works on GitHub but not on the VitePress site. The
   badge copies the section ID only; completion in the editor inserts proper relative paths.
@@ -390,3 +391,30 @@ Taken while planning; each is _Proposed_ and the work proceeds on it unless chan
    `@codemirror/autocomplete` 6.20.3 is already installed as a dependency of
    `@codemirror/lang-markdown` and becomes a direct dependency of `client`; `@codemirror/merge`
    is added for `diff`.
+
+## 10. Implementation Status
+
+All phases were carried out in October 2026. What differs from the plan, or was learned doing it:
+
+1. **Spikes.** Badges in Milkdown work (D6). Mapping server edits through typing during a slow
+   save is covered by `client/src/app/edits.test.ts`, `document-store.test.ts` and
+   `e2e/sections.spec.ts`. CUID2 works in the compiled executable: the release build creates
+   sectioned files with document IDs.
+2. **Recognition.** The parser skips a byte-order mark and counts offsets without it, so
+   `findSections` parses the body without it and shifts the offsets. An ATX heading's anchor gets
+   a blank line above it when the line above isn't blank, or it would join that paragraph and the
+   heading would get a new anchor on every save.
+3. **Allocation.** New numbers follow the highest number known, including IDs typed into the
+   text being saved (a typed `REQ-00040` makes the next new section `REQ-00041`).
+4. **Data files** aren't created while they would be empty, so a repository without sectioned
+   files gets none.
+5. **WYSIWYG after a save.** When a save adds anchors, the WYSIWYG editor reloads its content
+   (it can't apply outside changes in place), which moves its cursor to the start. The text
+   editor keeps its cursor.
+6. **Undo.** Anchors added on save are outside the undo history, but CodeMirror groups typing
+   less than half a second apart into one undo step, so undoing right after typing a heading
+   can remove the heading text and leave its anchor; the next save keeps that anchor.
+7. **Completion** uses a language-data source (so Markdown's HTML tag completion still works),
+   created once per editor: CodeMirror restarts completion whenever a source's identity changes.
+8. **Tests.** End-to-end tests ran on Chrome; WebKit wasn't installed on the machine used.
+
