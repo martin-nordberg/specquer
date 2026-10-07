@@ -122,6 +122,26 @@ function anchorAt(children: PhrasingContent[], index: number): FoundAnchor | und
   return anchor;
 }
 
+/**
+ * The section ID of an anchor's open tag, as raw HTML (`<a id="REQ-00001" …>`), or `undefined`
+ * when the tag isn't an anchor or its ID isn't a section ID.
+ */
+export function anchorTagSectionId(html: string): string | undefined {
+  const match = OPEN_TAG.exec(html.trim());
+  if (match === null) return undefined;
+  for (const attribute of (match[1] ?? "").matchAll(ATTRIBUTE)) {
+    if (attribute[1]!.toLowerCase() !== "id") continue;
+    const value = attribute[2] ?? attribute[3] ?? attribute[4] ?? "";
+    return isSectionId(value) ? value : undefined;
+  }
+  return undefined;
+}
+
+/** Whether raw HTML is an anchor's closing tag. */
+export function isAnchorCloseTag(html: string): boolean {
+  return CLOSE_TAG.test(html.trim());
+}
+
 /** The anchor of a paragraph that holds nothing else (whitespace aside). */
 function soleAnchor(node: RootContent | undefined): FoundAnchor | undefined {
   if (node?.type !== "paragraph") return undefined;

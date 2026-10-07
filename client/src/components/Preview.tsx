@@ -2,7 +2,10 @@ import type { Root } from "hast";
 import { toJsxRuntime } from "hast-util-to-jsx-runtime";
 import { type ComponentProps, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
+import type { SectionInfo } from "@specquer/shared/api";
+import { CLOBBER_PREFIX } from "@specquer/shared/markdown";
 import { isMarkdownFile, normalizePath, parentPath } from "@specquer/shared/paths";
+import { SectionBadge } from "@/components/SectionBadge";
 import { type PreviewRenderer, createPreviewRenderer } from "@/preview/renderer";
 import { cn } from "@/lib/utils";
 
@@ -40,19 +43,31 @@ export function resolveDocumentLink(href: string, currentFile: string): { path: 
   }
 }
 
+/** A request to scroll the preview to a section; `request` changes for each new request. */
+export interface ScrollTarget {
+  sectionId: string;
+  request: number;
+}
+
 export interface PreviewProps {
   markdown: string;
   currentFile: string;
-  onOpenFile: (path: string) => void;
+  /** Opens another document; `hash` is the link's fragment (a section ID), if any. */
+  onOpenFile: (path: string, hash?: string) => void;
+  /** Loads a document's sections, for the badges' tooltips. */
+  loadSections?: (path: string) => Promise<SectionInfo[]>;
+  scrollTarget?: ScrollTarget;
   /** Delay before rendering changes; 0 renders at once. */
   debounce?: number;
   className?: string;
 }
 
-export function Preview({ markdown, currentFile, onOpenFile, debounce = 0, className }: PreviewProps) {
+export function Preview({ markdown, currentFile, onOpenFile, loadSections, scrollTarget, debounce = 0, className }: PreviewProps) {
   const [tree, setTree] = useState<Root | null>(null);
   const [error, setError] = useState<string | null>(null);
   const latest = useRef(0);
+  const container = useRef<HTMLDivElement>(null);
+  const scrolled = useRef<number | null>(null);
 
   useEffect(() => {
     const request = ++latest.current;
@@ -77,8 +92,17 @@ export function Preview({ markdown, currentFile, onOpenFile, debounce = 0, class
 
   const content = useMemo(() => {
     if (tree === null) return null;
-    const Link = ({ href, children, ...props }: ComponentProps<"a"> & { node?: unknown }) => {
+    const Link = ({ href, children, ...props }: ComponentProps<"a"> & { node?: unknown; "data-section-anchor"?: string }) => {
       delete props.node;
+      if (props["data-section-anchor"] !== undefined && typeof props.id === "string") {
+        // The anchor stays (invisible) as the scroll target; the badge stands for it
+        return (
+          <>
+            <a {...props} />
+            <SectionBadge sectionId={props.id.slice(CLOBBER_PREFIX.length)} path={currentFile} loadSections={loadSections} />
+          </>
+        );
+      }
       if (href === undefined) return <a {...props}>{children}</a>;
       if (href.startsWith("#")) return <a href={href} {...props}>{children}</a>;
       const target = resolveDocumentLink(href, currentFile);
@@ -89,7 +113,7 @@ export function Preview({ markdown, currentFile, onOpenFile, debounce = 0, class
             {...props}
             onClick={(event) => {
               event.preventDefault();
-              onOpenFile(target.path);
+              onOpenFile(target.path, target.hash === "" ? undefined : decodeURIComponent(target.hash));
             }}
           >
             {children}
@@ -103,10 +127,19 @@ export function Preview({ markdown, currentFile, onOpenFile, debounce = 0, class
       );
     };
     return toJsxRuntime(tree, { Fragment, jsx, jsxs, components: { a: Link } }) as ReactNode;
-  }, [tree, currentFile, onOpenFile]);
+  }, [tree, currentFile, onOpenFile, loadSections]);
+
+  // Scroll to a requested section once it has been rendered
+  useEffect(() => {
+    if (scrollTarget === undefined || scrolled.current === scrollTarget.request || content === null) return;
+    const target = container.current?.querySelector(`[id="${CLOBBER_PREFIX}${scrollTarget.sectionId}"]`);
+    if (target === null || target === undefined) return;
+    scrolled.current = scrollTarget.request;
+    target.scrollIntoView({ block: "start" });
+  }, [content, scrollTarget]);
 
   return (
-    <div className={cn("h-full overflow-auto", className)} data-testid="preview">
+    <div ref={container} className={cn("h-full overflow-auto", className)} data-testid="preview">
       {error !== null && <p className="text-error-text p-4">Preview failed: {error}</p>}
       <article className="markdown px-6 py-4">{content}</article>
     </div>

@@ -90,3 +90,10 @@
 .milkdown li[data-item-type="task"]::before { content: "☐"; @apply mr-2 -ml-5; }
 .milkdown li[data-item-type="task"][data-checked="true"]::before { content: "☑"; }
 .milkdown li[data-item-type="task"] > p { @apply inline; }
+
+/* Section badges, standing for section anchors in the preview and the WYSIWYG view */
+.section-badge {
+  @apply mr-1.5 inline-flex size-[1.1em] shrink-0 cursor-pointer rounded-[0.2em] align-[-0.15em] outline-none focus-visible:ring-2 focus-visible:ring-ring/50;
+  & img { @apply size-full; }
+}
+.markdown .section-badge { text-decoration: none; }

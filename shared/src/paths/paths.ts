@@ -96,6 +96,18 @@ export function renamedPath(path: string, from: string, to: string): string | un
   return undefined;
 }
 
+/**
+ * The relative link from one file to another (`../b/c.md`), or "" when they are the same file.
+ */
+export function relativePath(fromFile: string, toFile: string): string {
+  if (fromFile === toFile) return "";
+  const from = pathSegments(parentPath(fromFile));
+  const to = pathSegments(toFile);
+  let common = 0;
+  while (common < from.length && common < to.length - 1 && from[common] === to[common]) common++;
+  return [...from.slice(common).map(() => ".."), ...to.slice(common)].join("/");
+}
+
 /** A Zod schema for workspace paths; it outputs the normalized path. */
 export const workspacePathSchema = z.string().transform((value, ctx) => {
   const check = checkPath(value);

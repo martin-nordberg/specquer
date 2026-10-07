@@ -107,3 +107,33 @@ describe("DocumentStore", () => {
     expect(store.hasUnsavedChanges).toBe(true);
   });
 });
+
+describe("anchors added on save", () => {
+  test("are applied to the body, through typing during the save, and aren't unsaved changes", async () => {
+    const files: Record<string, string> = { "a.md": "---\nx: 1\n---\n# A\n" };
+    let release: () => void = () => {};
+    const api = {
+      readFile: async (path: string) => ({ path, text: files[path]!, version: "1" }),
+      saveFile: async (path: string, text: string): Promise<SaveOutcome> => {
+        await new Promise<void>((resolve) => (release = resolve));
+        const insert = '<a id="RQ-00001"></a>\n\n';
+        files[path] = text.replace("---\n# A", `---\n${insert}# A`);
+        return { kind: "saved", version: "2", edits: [{ from: 0, to: 0, insert }] };
+      },
+    } as unknown as Api;
+    const store = new DocumentStore(api);
+    await store.open("a.md");
+    store.setBody("# A\ntext\n");
+    const saving = store.save();
+    store.setBody("# A\ntext typed meanwhile\n");
+    release();
+    expect(await saving).toBe("saved");
+    const document = store.get().document!;
+    expect(document.body).toBe('<a id="RQ-00001"></a>\n\n# A\ntext typed meanwhile\n');
+    expect(document.externalEdits).toBe(1);
+    expect(store.get().status).toBe("unsaved");
+    // Without the extra typing, nothing is left to save
+    store.setBody('<a id="RQ-00001"></a>\n\n# A\ntext\n');
+    expect(await store.save()).toBe("clean");
+  });
+});

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { type FoundSection, anchorEdits, applyEdits, findSections, rootAnchorText } from "./sections.ts";
+import { type FoundSection, anchorEdits, anchorTagSectionId, applyEdits, findSections, isAnchorCloseTag, rootAnchorText } from "./sections.ts";
 
 const DOC = "tz4a98xxat96iws9zmbrgj3a";
 
@@ -170,4 +170,13 @@ describe("anchorEdits", () => {
       expect(anchorEdits(once, sections, { ids: new Map(), documentId: DOC })).toEqual([]);
     }
   });
+});
+
+test("anchorTagSectionId", () => {
+  expect(anchorTagSectionId('<a id="REQ-00001">')).toBe("REQ-00001");
+  expect(anchorTagSectionId("<a id='REQ-00001' data-document-id=\"x\">")).toBe("REQ-00001");
+  expect(anchorTagSectionId('<a id="intro">')).toBeUndefined();
+  expect(anchorTagSectionId('<a name="REQ-00001">')).toBeUndefined();
+  expect(anchorTagSectionId("</a>")).toBeUndefined();
+  expect(isAnchorCloseTag("</a>")).toBe(true);
 });

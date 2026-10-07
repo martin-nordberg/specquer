@@ -1,9 +1,12 @@
 import { Columns2, Eye, FileCode, PenLine } from "lucide-react";
+import { useMemo, useRef } from "react";
+import type { SectionInfo } from "@specquer/shared/api";
 import type { ViewType } from "@specquer/shared/uistate";
 import { cn } from "@/lib/utils";
 import { CodeEditor, lineWrapping } from "./CodeEditor";
 import { MilkdownEditor } from "./MilkdownEditor";
-import { PREVIEW_DEBOUNCE, Preview } from "./Preview";
+import { PREVIEW_DEBOUNCE, Preview, type ScrollTarget } from "./Preview";
+import { type SectionSearch, sectionCompletion } from "./section-completion";
 
 const views: Array<{ type: ViewType; label: string; icon: typeof Eye }> = [
   { type: "text", label: "Text", icon: FileCode },
@@ -39,14 +42,52 @@ export interface ContentViewProps {
   viewType: ViewType;
   body: string;
   path: string;
+  /** Increases when anchors added on save change the body; the WYSIWYG view then reloads. */
+  externalEdits: number;
   onChange: (body: string) => void;
-  onOpenFile: (path: string) => void;
+  onOpenFile: (path: string, hash?: string) => void;
+  loadSections?: (path: string) => Promise<SectionInfo[]>;
+  searchSections?: SectionSearch;
+  scrollTarget?: ScrollTarget;
 }
 
 /** The Markdown body in the chosen view. All views edit the same in-memory text. */
-export function ContentView({ viewType, body, path, onChange, onOpenFile }: ContentViewProps) {
-  const editor = (
-    <CodeEditor value={body} onChange={onChange} language="markdown" ariaLabel="Markdown content" extensions={[lineWrapping]} />
+export function ContentView({
+  viewType,
+  body,
+  path,
+  externalEdits,
+  onChange,
+  onOpenFile,
+  loadSections,
+  searchSections,
+  scrollTarget,
+}: ContentViewProps) {
+  const pathRef = useRef(path);
+  pathRef.current = path;
+  const searchRef = useRef(searchSections);
+  searchRef.current = searchSections;
+  // Created once: the editor reads its extensions only when it is created
+  const extensions = useMemo(
+    () => [
+      lineWrapping,
+      sectionCompletion(
+        (query, target) => searchRef.current?.(query, target) ?? Promise.resolve([]),
+        () => pathRef.current,
+      ),
+    ],
+    [],
+  );
+  const editor = <CodeEditor value={body} onChange={onChange} language="markdown" ariaLabel="Markdown content" extensions={extensions} />;
+  const preview = (debounce: number) => (
+    <Preview
+      markdown={body}
+      currentFile={path}
+      onOpenFile={onOpenFile}
+      loadSections={loadSections}
+      scrollTarget={scrollTarget}
+      debounce={debounce}
+    />
   );
   switch (viewType) {
     case "text":
@@ -55,12 +96,12 @@ export function ContentView({ viewType, body, path, onChange, onOpenFile }: Cont
       return (
         <div className="grid h-full min-h-0 grid-cols-2">
           <div className="min-h-0 min-w-0 border-r">{editor}</div>
-          <Preview markdown={body} currentFile={path} onOpenFile={onOpenFile} debounce={PREVIEW_DEBOUNCE} />
+          {preview(PREVIEW_DEBOUNCE)}
         </div>
       );
     case "preview":
-      return <Preview markdown={body} currentFile={path} onOpenFile={onOpenFile} />;
+      return preview(0);
     case "wysiwyg":
-      return <MilkdownEditor value={body} onChange={onChange} />;
+      return <MilkdownEditor key={externalEdits} value={body} onChange={onChange} />;
   }
 }

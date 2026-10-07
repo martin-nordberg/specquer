@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, FilePlus, FileText, Folder, FolderOpen, FolderPlus, Pencil, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, FilePlus, FileText, Folder, FolderOpen, FolderPlus, Pencil, Section, Trash2 } from "lucide-react";
 import type { TreeFolder, TreeNode } from "@specquer/shared/api";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { cn } from "@/lib/utils";
@@ -12,6 +12,8 @@ export interface FileTreeProps {
   onOpenFile: (path: string) => void;
   onNewFile: (folder: TreeFolder) => void;
   onNewFolder: (folder: TreeFolder) => void;
+  /** **Add section anchors…** for a folder. */
+  onAddAnchors?: (folder: TreeFolder) => void;
   onRename: (node: TreeNode) => void;
   onDelete: (node: TreeNode) => void;
 }
@@ -41,7 +43,12 @@ export function FileTree(props: FileTreeProps) {
   );
 }
 
-function NewEntryItems({ folder, onNewFile, onNewFolder }: Pick<FileTreeProps, "onNewFile" | "onNewFolder"> & { folder: TreeFolder }) {
+function NewEntryItems({
+  folder,
+  onNewFile,
+  onNewFolder,
+  onAddAnchors,
+}: Pick<FileTreeProps, "onNewFile" | "onNewFolder" | "onAddAnchors"> & { folder: TreeFolder }) {
   return (
     <>
       <ContextMenuItem onSelect={() => onNewFile(folder)}>
@@ -50,6 +57,11 @@ function NewEntryItems({ folder, onNewFile, onNewFolder }: Pick<FileTreeProps, "
       <ContextMenuItem onSelect={() => onNewFolder(folder)}>
         <FolderPlus /> New folder…
       </ContextMenuItem>
+      {onAddAnchors !== undefined && (
+        <ContextMenuItem onSelect={() => onAddAnchors(folder)}>
+          <Section /> Add section anchors…
+        </ContextMenuItem>
+      )}
     </>
   );
 }

@@ -1,5 +1,6 @@
 import {
   type FrontmatterLayout,
+  applyEdits,
   detectEol,
   fromLf,
   joinFrontmatter,
@@ -7,6 +8,7 @@ import {
   toLf,
 } from "@specquer/shared/markdown";
 import type { Api } from "@/lib/api";
+import { rebaseEdits } from "./edits";
 
 /**
  * The open file: one in-memory copy, split into front matter and body, shared by all editors.
@@ -21,6 +23,11 @@ export interface OpenDocument {
   openedWithFrontmatter: boolean;
   /** Increases when the content is replaced from outside the editors (a reload), so they remount. */
   revision: number;
+  /**
+   * Increases when the body is changed from outside the editors without a reload: anchors the
+   * server added on save. The text editor applies such changes in place.
+   */
+  externalEdits: number;
 }
 
 export type SaveStatus = "saved" | "unsaved" | "saving" | "conflict" | "error";
@@ -82,6 +89,7 @@ export class DocumentStore {
         body: toLf(split.body),
         openedWithFrontmatter: split.frontmatter !== null,
         revision,
+        externalEdits: 0,
       },
       status: "saved",
       conflict: null,
@@ -117,6 +125,7 @@ export class DocumentStore {
   private change(update: Partial<OpenDocument>): void {
     const document = this.state.document;
     if (document === null) return;
+    if (Object.entries(update).every(([key, value]) => document[key as keyof OpenDocument] === value)) return;
     this.edited = true;
     this.set({ document: { ...document, ...update }, status: this.state.conflict ? "conflict" : "unsaved" });
   }
@@ -125,8 +134,12 @@ export class DocumentStore {
   text(): string {
     const document = this.state.document;
     if (document === null || this.layout === null) return this.savedText;
-    const layout = { ...this.layout, eol: "\n" as const };
-    return fromLf(joinFrontmatter(document.frontmatter, document.body, layout), this.eol);
+    return this.textFor(document.frontmatter, document.body);
+  }
+
+  private textFor(frontmatter: string | null, body: string): string {
+    const layout = { ...this.layout!, eol: "\n" as const };
+    return fromLf(joinFrontmatter(frontmatter, body, layout), this.eol);
   }
 
   /**
@@ -159,10 +172,19 @@ export class DocumentStore {
         this.set({ status: "conflict", conflict: { theirVersion: outcome.version } });
         return "conflict";
       }
-      this.savedText = text;
       this.version = outcome.version;
+      const edits = outcome.edits ?? [];
+      if (edits.length === 0) this.savedText = text;
+      else {
+        // The server added anchors: what it wrote is saved, and the editors get the anchors,
+        // mapped through anything typed while the request was under way
+        this.savedText = this.textFor(document.frontmatter, applyEdits(document.body, edits));
+        const current = this.state.document!;
+        const body = rebaseEdits(document.body, current.body, edits);
+        this.set({ document: { ...current, body, externalEdits: current.externalEdits + 1 } });
+      }
       // Edits made while the request was under way are still unsaved
-      this.edited = this.text() !== text;
+      this.edited = this.text() !== this.savedText;
       this.set({ status: this.edited ? "unsaved" : "saved", error: null });
       return "saved";
     } catch (err) {

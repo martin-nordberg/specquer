@@ -2,16 +2,19 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirro
 import { markdown } from "@codemirror/lang-markdown";
 import { yaml } from "@codemirror/lang-yaml";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
-import { EditorState, type Extension } from "@codemirror/state";
+import { EditorState, type Extension, Transaction } from "@codemirror/state";
 import { EditorView, keymap, placeholder as placeholderExtension } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 import { useEffect, useRef } from "react";
+import { changesBetween } from "@/app/edits";
 import { cn } from "@/lib/utils";
 
 /**
  * A small wrapper around CodeMirror 6 (decision D4). The editor owns its document while mounted:
- * `value` sets the initial content and later replaces it only when it differs from what the
- * editor last reported, so typing never round-trips through React.
+ * `value` sets the initial content and later changes it only when it differs from what the
+ * editor last reported, so typing never round-trips through React. Such outside changes (anchors
+ * added on save) are applied as the minimal edits, so the selection is mapped and the cursor
+ * stays put, and they stay out of the undo history: undo never removes an assigned anchor.
  */
 
 // Colors come from the palette's CSS custom properties, so light and dark mode need no rebuild
@@ -104,7 +107,10 @@ export function CodeEditor({ value, onChange, language, ariaLabel, placeholder, 
     const current = view.current;
     if (current === null || value === reported.current) return;
     reported.current = value;
-    current.dispatch({ changes: { from: 0, to: current.state.doc.length, insert: value } });
+    current.dispatch({
+      changes: changesBetween(current.state.doc.toString(), value),
+      annotations: Transaction.addToHistory.of(false),
+    });
   }, [value]);
 
   return <div ref={host} className={cn("h-full overflow-hidden", className)} data-language={language} />;

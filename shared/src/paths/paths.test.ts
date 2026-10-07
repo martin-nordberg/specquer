@@ -7,6 +7,7 @@ import {
   isSameOrInside,
   markdownPathSchema,
   parentPath,
+  relativePath,
   renamedPath,
 } from "./paths.ts";
 
@@ -59,4 +60,13 @@ test("path helpers", () => {
   expect(isSameOrInside("x", "")).toBe(true);
   expect(renamedPath("a/b/c.md", "a/b", "a/z")).toBe("a/z/c.md");
   expect(renamedPath("a/bc.md", "a/b", "a/z")).toBeUndefined();
+});
+
+test("relativePath", () => {
+  expect(relativePath("a/b/c.md", "a/b/c.md")).toBe("");
+  expect(relativePath("a/b/c.md", "a/b/d.md")).toBe("d.md");
+  expect(relativePath("a/b/c.md", "a/x/d.md")).toBe("../x/d.md");
+  expect(relativePath("c.md", "a/d.md")).toBe("a/d.md");
+  expect(relativePath("a/b/c.md", "d.md")).toBe("../../d.md");
+  expect(relativePath("a/c.md", "a/b/d.md")).toBe("b/d.md");
 });

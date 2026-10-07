@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import type { Tree, TreeNode } from "@specquer/shared/api";
+import type { Tree, TreeFolder, TreeNode } from "@specquer/shared/api";
 import { isSameOrInside, renamedPath } from "@specquer/shared/paths";
 import {
   type UiState,
@@ -12,12 +12,14 @@ import {
   setTreePaneFraction,
   setViewType,
 } from "@specquer/shared/uistate";
+import { AnchorDialog } from "@/components/AnchorDialog";
 import { ConflictDialog } from "@/components/ConflictDialog";
 import { ContentView, ViewSwitcher } from "@/components/ContentView";
 import { CreateDialog, type CreateRequest, DeleteDialog, RenameDialog } from "@/components/EntryDialogs";
 import { FilePath } from "@/components/FilePath";
 import { FileTree } from "@/components/FileTree";
 import { FrontmatterEditor, initialFrontmatterHeight } from "@/components/FrontmatterEditor";
+import type { ScrollTarget } from "@/components/Preview";
 import { SplitPane } from "@/components/SplitPane";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import type { Api } from "@/lib/api";
@@ -61,6 +63,8 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
   const [creating, setCreating] = useState<CreateRequest | null>(null);
   const [renaming, setRenaming] = useState<TreeNode | null>(null);
   const [deleting, setDeleting] = useState<TreeNode | null>(null);
+  const [anchoring, setAnchoring] = useState<TreeFolder | null>(null);
+  const [scrollTarget, setScrollTarget] = useState<(ScrollTarget & { path: string }) | undefined>(undefined);
   const [openError, setOpenError] = useState<string | null>(null);
 
   const systemTheme = useSystemTheme();
@@ -69,9 +73,13 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
 
   const refreshTree = useCallback(async () => setTree(await api.getTree()), [api]);
 
-  /** Saves the current file, then opens another. Stays put if the save didn't succeed. */
+  /**
+   * Saves the current file, then opens another. Stays put if the save didn't succeed. With a
+   * section ID, the preview then scrolls to that section.
+   */
   const open = useCallback(
-    async (path: string) => {
+    async (path: string, sectionId?: string) => {
+      if (sectionId !== undefined) setScrollTarget({ path, sectionId, request: Date.now() });
       if (docStore.get().document?.path === path) return;
       const saved = await docStore.save();
       if (saved === "conflict" || saved === "error") return;
@@ -178,7 +186,35 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
   const document_ = doc.document;
   const fileState = document_ === null ? null : fileUiState(ui, document_.path);
   const expanded = useMemo(() => new Set(ui.expandedFolders), [ui.expandedFolders]);
-  const openFromUi = useCallback((path: string) => void open(path), [open]);
+  const openFromUi = useCallback((path: string, sectionId?: string) => void open(path, sectionId), [open]);
+  const searchSections = useCallback((query: string, path?: string) => api.searchSections(query, { path }), [api]);
+
+  /** The dry run of **Add section anchors**, after saving the open file. */
+  const anchorChanges = useCallback(
+    async (folder: string) => {
+      const saved = await docStore.save();
+      if (saved === "conflict" || saved === "error") throw new Error("Save or resolve the open file's changes first.");
+      return (await api.anchorFolder(folder, true)).files;
+    },
+    [api, docStore],
+  );
+
+  const addAnchors = useCallback(
+    async (folder: string): Promise<string | null> => {
+      try {
+        const saved = await docStore.save();
+        if (saved === "conflict" || saved === "error") return "Save or resolve the open file's changes first.";
+        const { files } = await api.anchorFolder(folder, false);
+        const current = docStore.get().document?.path;
+        // The open file was saved first, so reloading it loses nothing
+        if (current !== undefined && files.includes(current) && !docStore.hasUnsavedChanges) await docStore.reloadTheirs();
+        return null;
+      } catch (err) {
+        return (err as Error).message;
+      }
+    },
+    [api, docStore],
+  );
 
   const left = (
     <nav aria-label="Folders" className="flex h-full flex-col overflow-auto">
@@ -190,6 +226,7 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
         onOpenFile={openFromUi}
         onNewFile={(folder) => setCreating({ parent: folder, kind: "file" })}
         onNewFolder={(folder) => setCreating({ parent: folder, kind: "folder" })}
+        onAddAnchors={setAnchoring}
         onRename={setRenaming}
         onDelete={setDeleting}
       />
@@ -230,8 +267,12 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
             viewType={fileState.viewType}
             body={document_.body}
             path={document_.path}
+            externalEdits={document_.externalEdits}
             onChange={(body) => docStore.setBody(body)}
             onOpenFile={openFromUi}
+            loadSections={api.getSections}
+            searchSections={searchSections}
+            scrollTarget={scrollTarget?.path === document_.path ? scrollTarget : undefined}
           />
         </div>
         <ConflictDialog
@@ -263,6 +304,7 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
       <CreateDialog request={creating} onClose={() => setCreating(null)} onCreate={create} />
       <RenameDialog node={renaming} onClose={() => setRenaming(null)} onRename={rename} />
       <DeleteDialog node={deleting} onClose={() => setDeleting(null)} loadPreview={api.deletePreview} onDelete={remove} />
+      <AnchorDialog folder={anchoring} onClose={() => setAnchoring(null)} loadChanges={anchorChanges} onRun={addAnchors} />
     </div>
   );
 }

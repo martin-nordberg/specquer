@@ -1,5 +1,15 @@
 import { hc } from "hono/client";
-import type { ApiErrorBody, ApiRouter, DeletePreview, FileContent, Tree } from "@specquer/shared/api";
+import type {
+  AnchorFolderResult,
+  ApiErrorBody,
+  ApiRouter,
+  DeletePreview,
+  FileContent,
+  SectionInfo,
+  SectionSearchResult,
+  Tree,
+} from "@specquer/shared/api";
+import type { BodyEdit } from "@specquer/shared/markdown";
 import type { UiState, UiStatePatch } from "@specquer/shared/uistate";
 
 /**
@@ -45,7 +55,8 @@ async function json<T>(res: JsonResponse): Promise<T> {
   return (await res.json()) as T;
 }
 
-export type SaveOutcome = { kind: "saved"; version: string } | { kind: "conflict"; version: string };
+/** A save's outcome; `edits` are the anchors the server added, relative to the body sent. */
+export type SaveOutcome = { kind: "saved"; version: string; edits?: BodyEdit[] } | { kind: "conflict"; version: string };
 
 export type CreateOutcome = { kind: "created"; path: string } | { kind: "exists"; message: string };
 
@@ -62,6 +73,9 @@ export interface Api {
   deleteEntry(path: string): Promise<UiState>;
   getUiState(): Promise<UiState>;
   patchUiState(patch: UiStatePatch, options?: { keepalive?: boolean }): Promise<UiState>;
+  getSections(path: string): Promise<SectionInfo[]>;
+  searchSections(query: string, options?: { path?: string; limit?: number }): Promise<SectionSearchResult[]>;
+  anchorFolder(folder: string, dryRun: boolean): Promise<AnchorFolderResult>;
 }
 
 export const httpApi: Api = {
@@ -78,8 +92,8 @@ export const httpApi: Api = {
       const body = (await res.json()) as { version: string };
       return { kind: "conflict", version: body.version };
     }
-    const body = await json<{ version: string }>(res);
-    return { kind: "saved", version: body.version };
+    const body = await json<{ version: string; edits?: BodyEdit[] }>(res);
+    return { kind: "saved", version: body.version, ...(body.edits === undefined ? {} : { edits: body.edits }) };
   },
   async create(parent, name, kind) {
     const res = await client.api.create.$post({ json: { parent, name, kind } });
@@ -110,5 +124,15 @@ export const httpApi: Api = {
   },
   async patchUiState(patch, options) {
     return json<UiState>(await client.api.uistate.$patch({ json: patch }, { init: { keepalive: options?.keepalive === true } }));
+  },
+  async getSections(path) {
+    return (await json<{ sections: SectionInfo[] }>(await client.api.sections.$get({ query: { path } }))).sections;
+  },
+  async searchSections(q, options) {
+    const query = { q, ...(options?.path === undefined ? {} : { path: options.path }), ...(options?.limit === undefined ? {} : { limit: String(options.limit) }) };
+    return (await json<{ results: SectionSearchResult[] }>(await client.api.sections.search.$get({ query }))).results;
+  },
+  async anchorFolder(folder, dryRun) {
+    return json<AnchorFolderResult>(await client.api.sections.anchor.$post({ json: { folder, dryRun } }));
   },
 };
