@@ -10,7 +10,8 @@ kinds of committed data files in `.specquer/shared/` (documents and, per prefix,
 an in-memory index of all sections, inserts and corrects anchors when a file is saved, created or
 covered by an explicit **Add section anchors** command, and resolves duplicates and moved files.
 The client shows the anchors as badges in the preview, applies anchors inserted on save without
-disturbing the cursor, and helps write links to sections with completion and a copy action.
+disturbing the cursor, copies a section's ID from its badge, and helps write links to sections
+with completion.
 
 The work is split into seven phases. Phase 0 settles the riskiest questions with spikes; three of
 the planned checks were already done while planning (§9). Section 6 lists the decisions taken
@@ -34,7 +35,7 @@ Step 002 takes precedence over Step 001 and the specifications where they confli
 - **Markdown:** `shared/src/markdown/` has front matter split and join and the preview pipeline (remark-parse, remark-gfm, remark-frontmatter, remark-rehype, rehype-raw, rehype-sanitize). The sanitizer prefixes `id` and `name` with `user-content-` and allows `data-*` on `<a>`, so `<a id="REQ-00001" data-document-id="…">` survives as `<a id="user-content-REQ-00001" data-document-id="…">`. There is no section tree yet (Step 001 decision D13).
 - **Files:** `server/src/files.ts` lists Markdown files through `git ls-files` (or a walk outside Git), reads, saves with a version check, creates, renames and deletes. `server/src/uistate-store.ts` shows the pattern for a YAML store updated one request at a time.
 - **Client:** `DocumentStore` keeps the open file as front matter and body; `CodeEditor` replaces its whole document when its `value` changes from outside, which loses the cursor; the preview renders hast through `hast-util-to-jsx-runtime` with a component map.
-- **Repository:** `.specquer/shared/section-prefixes.config.yaml` exists, with `"**/*": REQ` as its first key, and the Step 002 documents already contain hand-written `SEC-` anchors.
+- **Repository:** `.specquer/shared/section-prefixes.config.yaml` exists, with keys for the folders of `documentation/` and no `"**/*"` key, and the Step 002 documents already contain hand-written `WORK-` anchors.
 
 ## 4. Proposed Design
 
@@ -53,7 +54,8 @@ out the same number.
 
 Sections are found in the body (the file without front matter, with `\n` line endings) from the
 mdast tree of `remark-parse` with GFM. An **anchor** is an inline `html` node `<a id="…" …>`
-followed by `</a>`, whose `id` matches the section ID format. Verified while planning (§9.1):
+followed by `</a>`, in one of the places below. If its `id` isn't in the section ID format (blank
+included), it is a **placeholder** and gets a new ID. Verified while planning (§9.1):
 
 | Section | Recognized as |
 |---|---|
@@ -63,14 +65,15 @@ followed by `</a>`, whose `id` matches the section ID format. Verified while pla
 | Heading, inline form | An anchor as the first inline node of a top-level ATX heading (`# <a id="X"></a> Title`). Specquer doesn't write this form, but Milkdown produces it from a one-line setext heading (§9.1) |
 | List item | An anchor as the first inline node of the first paragraph of an item of a top-level list. In a task item it follows the box, and the paragraph's position includes the box, so the insertion point is taken from the first inline node |
 
-Anchors in code, block quotes and nested lists are ignored and never changed. Other `<a id>` tags
-(IDs not in the section ID format, or `name` attributes such as the traceability note's) are left
-alone.
+Anchors in code, block quotes and nested lists are ignored and never changed, and so are
+`<a id>` tags anywhere else and `<a name>` tags such as the traceability note's. In a section
+anchor's place, though, any `<a id>` is a section anchor or a placeholder, so a custom anchor such
+as `<a id="intro"></a>` before a heading in a sectioned file gets a section ID.
 
 ```ts
 interface FoundSection {
   kind: "root" | "heading" | "item";
-  id: string | null;            // null: no anchor yet
+  id: string | null;            // null: no anchor yet, or a placeholder
   documentId?: string;          // root only
   title: string;                // heading text, first words of the item, or the file name
   insertAt: number;             // body offset where a missing anchor goes
@@ -82,7 +85,8 @@ interface BodyEdit { from: number; to: number; insert: string }
 anchorEdits(body: string, plan: AnchorPlan): BodyEdit[]  // plan: new IDs, replacements, document ID
 ```
 
-Edits are insertions (missing anchors, `data-document-id`) and replacements (renumbered IDs).
+Edits are insertions (missing anchors, `data-document-id`) and replacements (placeholders,
+renumbered IDs).
 Formats: root `<a id="X" data-document-id="C"></a>` plus a blank line; ATX heading `<a id="X"></a>`
 on the line before; setext heading `<a id="X"></a> ` at the start of its first line; list item
 `<a id="X"></a> ` before the content.
@@ -108,9 +112,9 @@ sections:
 - One entry per line (flow mappings), new entries appended, so Git merges conflict only where both
   branches appended. The `yaml` package writes this layout and keeps key order; the server adds it
   as a dependency (D4).
-- Written atomically, as `uistate.yaml` is. Read with the same "invalid content falls back,
-  never stops the server" rule; an unreadable file is reported in the log and rebuilt from the
-  documents.
+- Written atomically, as `uistate.yaml` is, and only by a change the user makes (§4.4). Read with
+  the same "invalid content falls back, never stops the server" rule; an unreadable file is
+  reported in the log and rebuilt in memory from the documents, and written with the next change.
 - `lastSequence` makes numbers permanent. A merge conflict on it is resolved by the server taking
   the highest value it can find (stored, in `sections.yaml`, in the documents).
 
@@ -122,11 +126,19 @@ sectioned document its path, document ID, sections and modification time.
 - **Scan:** at startup (in the background, after the server is listening), after each tree load
   (`GET /api/tree`, which the client calls after its own changes and when it opens), and before
   **Add section anchors**. Files whose modification time hasn't changed aren't parsed again. Files
-  come from the same listing as the tree, filtered by the prefix configuration.
+  come from the same listing as the tree, filtered by the prefix configuration. A scan updates
+  the index only and writes no file, documents or data files alike, so opening Specquer on a fresh
+  clone or after a branch switch leaves `git status` clean.
 - **Reconcile:** the rules in the requirements' Conflict Resolution sections, as a pure function
   from (data files, scanned documents) to (new data files, per-document fix plans). Fix plans
   (new document IDs, renumbered sections) wait in the index until the document is saved or
-  covered by **Add section anchors**.
+  covered by **Add section anchors**. The new data files wait too: save, create, rename, delete
+  and **Add section anchors** write them whole, including fixes the scan found for other
+  documents. Beyond the requirements' rules, reconciliation drops documents that no longer match
+  the configuration (and their sections), keeps the ID and CUID2 of a section found in another
+  document than recorded (it was moved) and updates its `documentId`, and renumbers IDs whose
+  prefix isn't known: neither a configuration value nor a prefix with a `sections.yaml`, so a
+  prefix removed from the configuration doesn't renumber IDs already assigned with it.
 - **Allocate:** `nextId(prefix)` returns one more than the highest known number and records it
   in `lastSequence` at once, so an ID is never handed out twice even if the save then fails.
 - Updates run one at a time, as in `UiStateStore`.
@@ -167,7 +179,9 @@ All are defined in `shared` like the existing routes, with Zod schemas.
 - **Applying save edits.** `DocumentStore` keeps the body it sent. When a save returns edits, it
   builds them as a CodeMirror `ChangeSet` against the sent body, maps it through the user's
   changes made since (also a `ChangeSet`, from a diff of sent and current body) and applies the
-  result. The text written becomes `savedText`, so the inserted anchors are not unsaved changes.
+  result outside the undo history (`addToHistory: false`), so undo never removes an assigned
+  anchor (which the next save would replace with a new number). The text written becomes
+  `savedText`, so the inserted anchors are not unsaved changes.
 - **Editors.** `CodeEditor` stops replacing its whole document when `value` changes from outside:
   it applies the minimal changes (from `@codemirror/merge`'s `diff`), so the selection is mapped
   and the cursor stays where it was. The preview simply re-renders; Milkdown per D6.
@@ -175,8 +189,9 @@ All are defined in `shared` like the existing routes, with Zod schemas.
   heading as its first child. The preview's component map renders an empty `<a>` whose `id` is
   `user-content-<section ID>` as a badge (`SectionBadge`), keeping the anchor itself for
   scrolling. The badge is a focusable button showing the favicon image (`faviconSvg`), with a
-  Radix tooltip (section ID, document path, CUID2 from `GET /api/sections`) and a menu with
-  **Copy section ID** and **Copy link** (D7).
+  Radix tooltip (section ID, document path, CUID2 from `GET /api/sections`). Clicking it (or
+  Enter) copies the section ID and briefly confirms it in the tooltip. There is no **Copy link**
+  (D7).
 - **Completion.** A CodeMirror completion source on the body editor recognizes a link target
   ending in `#` plus a partial ID (`](path#RE`). With a path, it offers that document's sections;
   without one, sections of all documents, inserting the relative path for other documents. The
@@ -209,8 +224,8 @@ Each phase lists its tasks and what "done" means. Tests are written within each 
   digits).
 - `findSections` and `anchorEdits` per §4.2, with tests for every row of the table, task items,
   nested lists, code blocks, block quotes, front matter, CRLF files (through the existing
-  `toLf`/`fromLf`), legacy root anchors (D3), and the Milkdown form with a blank line between
-  anchor and heading.
+  `toLf`/`fromLf`), legacy root anchors (D3), placeholders (blank and non-format IDs, in every
+  position), and the Milkdown form with a blank line between anchor and heading.
 - *Done when* applying `anchorEdits` and finding sections again is stable (a second run produces
   no edits).
 
@@ -220,9 +235,10 @@ Each phase lists its tasks and what "done" means. Tests are written within each 
 - `documents.yaml` and `<prefix>/sections.yaml` read and append-only write (§4.3), with the `yaml`
   package.
 - `SectionIndex`: scan, modification-time cache, reconcile (pure, with a table of tests for every
-  conflict rule, including moved files, copies and merge leftovers), allocation.
-- *Done when* the reconciliation tests pass and a scan of this repository's documents produces the
-  data files without touching any document.
+  conflict rule, including moved files, copies, merge leftovers, sections moved between
+  documents, documents that no longer match the configuration and unknown prefixes), allocation.
+- *Done when* the reconciliation tests pass and a scan of this repository's documents builds the
+  index without writing any file.
 
 ### Phase 3 - Server Integration and API
 
@@ -236,7 +252,7 @@ Each phase lists its tasks and what "done" means. Tests are written within each 
 ### Phase 4 - Client: Saving and Badges
 
 - `DocumentStore` and `CodeEditor` changes from §4.7 (Phase 0 spike 2).
-- `rehypeSectionAnchors` step and `SectionBadge` (tooltip, copy menu, keyboard focus).
+- `rehypeSectionAnchors` step and `SectionBadge` (tooltip, copy on click, keyboard focus).
 - WYSIWYG per D6.
 - *Done when* component tests cover the badge and end-to-end tests show anchors appearing on save
   with the cursor in place, and badges in the preview and split views.
@@ -272,17 +288,15 @@ Taken while planning; each is _Proposed_ and the work proceeds on it unless chan
   the data files, since it can write one flow mapping per line and keep key order; `Bun.YAML`
   stays for `uistate.yaml`.
 - **D5. When the index notices external changes.** _Proposed:_ at startup and on each tree load,
-  using modification times; no file watching in this step. Re-checking a file when its tab is
-  reactivated is dropped along with inserting anchors on open (requirements: viewing never
-  changes a file).
+  using modification times; no file watching in this step. Noticing changes never writes files
+  (question 6). Re-checking a file when its tab is reactivated is dropped along with inserting
+  anchors on open (requirements: viewing never changes a file).
 - **D6. WYSIWYG.** _Proposed:_ decided by spike 1. If badges can't be shown, the WYSIWYG view
   keeps working (anchors survive edits, §9.1) but shows the anchors as raw HTML, is labelled
   experimental, and warns before the first edit of a sectioned file.
-- **D7. What "Copy link" copies.** A copied link doesn't know where it will be pasted, so a path
-  relative to the open file can't be right. _Proposed:_ the section's workspace path from the root
-  with a leading `/` (`/documentation/specifications/overview.md#SPEC-00012`), which GitHub
-  resolves from the repository root when the root folder is the repository; the preview learns to
-  resolve root-relative links. Completion in the editor inserts proper relative paths.
+- **D7. Copy link.** _Decided:_ dropped for now (question 7). A copied link doesn't know where it
+  will be pasted, and a root-relative link works on GitHub but not on the VitePress site. The
+  badge copies the section ID only; completion in the editor inserts proper relative paths.
 - **D8. Titles in completion.** _Proposed:_ the heading text for heading sections, the first eight
   words of a list item, and the file name for a root section; kept in memory only.
 
@@ -293,17 +307,55 @@ Taken while planning; each is _Proposed_ and the work proceeds on it unless chan
    there are left alone. Is that the intent, rather than "sectioning a list doesn't section its
    sub-lists"?
    A: Yes, items nested inside another list are never sections
-3. **This repository's configuration.** `.specquer/shared/section-prefixes.config.yaml` starts
+2. **This repository's configuration.** `.specquer/shared/section-prefixes.config.yaml` starts
    with `"**/*": REQ`, so once Step 002 is in use every Markdown file in the repository, including
    `README.md` and `CLAUDE.md`, gets anchors when it is saved. Should the configuration be limited
    to `documentation/` before Specquer is used on this repository?
    A: Fixed the file to remove **/*
-5. **Existing hand-written IDs.** The Step 002 documents use the `SEC` prefix, while the
+3. **Existing hand-written IDs.** The Step 002 documents use the `SEC` prefix, while the
    configuration gives `documentation/work-items/` the `WORK` prefix. The plan keeps existing IDs
    (an ID never changes once assigned) and gives new sections `WORK` IDs, so these files will mix
    prefixes. Is that acceptable, or should `documentation/work-items/step-002-sections/` map to
    `SEC`?
    A: Changed to WORK
+4. **Hand-typed IDs and permanent numbers.** To section a list, the user types an anchor with any
+   ID in the format. If they type a number that belonged to a deleted section (say `WORK-00003`),
+   the rule "a section ID in a document but not in `sections.yaml` gets an entry" accepts it, and
+   a retired number is used again. The server can't tell a typed ID from one that arrived by a
+   merge from another branch. Should one placeholder be reserved to mean "assign me a number"
+   (sequence `00000`, or `<a id="new"></a>`), with every other ID taken as real? A `00000`
+   placeholder would collide with the existing root anchor `WORK-00000` in the requirements.
+   A: let's use id="(anything that does not match the section ID format, including blank)"
+5. **Prefixes not in the configuration.** Should a typed ID with an unconfigured prefix (a typo
+   such as `XYZ-00001`, or the old `SEC-` IDs) create `.specquer/shared/XYZ/sections.yaml`, or be
+   renumbered with the file's own prefix?
+   A: Let's renumber unknown prefix anchors
+6. **The background scan writes committed files.** Viewing never changes a document, but the scan
+   at startup and on tree loads rewrites `documents.yaml` and `sections.yaml`. So a fresh clone or
+   a branch switch followed by simply opening Specquer leaves `git status` dirty, and a branch
+   switch can remove entries. Is that acceptable, or should the scan update only the in-memory
+   index, with the data files written only on save, create, rename, delete and **Add section
+   anchors**?
+   A: OK, let's make it a policy to not revise document files on disk unless they are opened and
+   changed in some way.
+7. **Copy link and the docs site** (D7). A root-relative link such as
+   `/documentation/specifications/overview.md#SPEC-00012` works on GitHub, but VitePress reads
+   `/documentation/...` as a site path under `/specquer/`, where it doesn't exist. Should **Copy
+   link** copy a path relative to the open file (wrong if pasted into another folder), copy only
+   the ID, or offer both?
+   A: Let's scrap the copy link idea entirely since it has complexity beyond its value for now at least.
+8. **Undo after a save.** If the anchors inserted on save go into the editor's undo history, undo
+    removes them, and the next save gives those sections new numbers, retiring the old ones.
+    _Proposed:_ apply server edits outside the undo history (`addToHistory: false`).
+    A: As proposed
+9. **Files that stop matching the configuration** (a key removed or changed). Should their
+    documents and sections be dropped from the data files while the anchors stay in the files, or
+    kept?
+    A: Drop non-matching documents and their sections from the YAML data.
+10. **Sections moved between documents.** A heading cut from one document and pasted into another
+    takes its anchor along. The plan assumes the section keeps its ID and its `documentId` is
+    updated. Should the requirements' Section Conflict Resolution state this rule?
+    A: Yes, that is the desired behavior, newly enabled with the documentId idea.
 
 ## 8. Risks
 
@@ -314,8 +366,8 @@ Taken while planning; each is _Proposed_ and the work proceeds on it unless chan
 | Merges of `.specquer/shared/` | Conflicts in appended entries and `lastSequence`; duplicate IDs | One entry per line; highest-number rule; duplicate rules renumber on next save |
 | A renumbered duplicate breaks links made on the other branch | A link leads to the wrong section or nowhere | The occurrence recorded in `sections.yaml` keeps its ID; link checking is future work |
 | Large repositories | Slow startup scan | Background scan, modification-time cache; SQLite later if needed |
-| Saving changes more than the user typed | Surprise diffs | Only anchors change, only in sectioned files; the command asks first; viewing never writes |
-| A broad configuration (`"**/*"`) | Anchors in files that aren't specs | Open question 2; no built-in default |
+| Saving changes more than the user typed | Surprise diffs | Only anchors change, only in sectioned files; the command asks first; viewing and scanning never write |
+| A broad configuration (`"**/*"`) | Anchors in files that aren't specs | Question 2; no built-in default |
 
 ## 9. Implementation Notes
 
