@@ -49,6 +49,14 @@ export default defineConfig({
                       {text: 'Implementation Plan', link: '/work-items/step-001-doc-editing/implementation-plan'},
                       {text: 'New File and Folder', link: '/work-items/step-001-doc-editing/new-file-folder'},
                     ]
+                  },
+                  {
+                    text: '002-Sections',
+                    collapsed: false,
+                    items: [
+                      {text: 'Requirements', link: '/work-items/step-002-sections/requirements'},
+                      {text: 'Implementation Plan', link: '/work-items/step-002-sections/implementation-plan'},
+                    ]
                   }
                 ]
               }

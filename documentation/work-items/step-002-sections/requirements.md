@@ -1,33 +1,46 @@
-<a id="SEC-00000"></a>
+<a id="WORK-00000"></a>
 
-<a id="SEC-00001"></a>
+<a id="WORK-00001"></a>
 # Sections
 
-<a id="SEC-00002"></a>
+_Step 002 requirements. The [implementation plan](implementation-plan.md) records the design and
+the decisions taken while planning._
+
+<a id="WORK-00002"></a>
 ## Definitions
 
 **Section** - One of the following:
 
-* An entire Markdown file (aka a root section)
-* A Markdown heading plus all the content following it up to but excluding the next
-  heading at an equal or higher level (i.e. same or fewer "#" in the heading definition).
-* One item from a bulleted list (aka a bulleted item section).
+* An entire Markdown file (a **root section**).
+* A Markdown heading plus all the content following it, up to but excluding the next heading at an
+  equal or higher level (the same or fewer `#` characters). Only headings at the top level of the
+  file count; headings inside block quotes or lists don't.
+* One item of a list (a **list item section**). Bulleted, numbered and task lists can all be
+  sectioned. Items of nested lists are never sections.
 
-Note: Root and heading sections are added automaticly (below). Bulleted item sections are added
-only when directed by a user. Once the items in a list are made sections, all items in the 
-list are automatically kept as sections.
+Root and heading sections are added automatically (see Section Anchor Insertion). List item
+sections are added only when the user directs it, and once a list's items are sections, all items
+in that list are kept as sections.
 
-**Section Anchor** - An HTML anchor tag placed just before a section.
+Sections are found by parsing the Markdown, not by matching lines: a heading or an anchor inside a
+code block is not a section. Setext headings (text underlined with `===` or `---`) are headings.
 
-A root section anchor appears as the first text in a file (after the frontmatter if any), 
-preferably with a blank line after it.
+Because headings are hierarchical, a level 1 section can contain sections at levels 2, 3, 4 and
+so on, and the root section of a file contains all of its sections. Section IDs make no attempt to
+encode this hierarchy, which changes as documents are edited.
+
+**Section Anchor** - An HTML anchor tag that marks a section and carries its section ID.
+
+A root section anchor is the first content of a file, after the front matter if there is any,
+followed by a blank line. It also carries the document's ID (see Document Data):
 ```
-<a id="REQ-00234"></a>
+<a id="REQ-00234" data-document-id="tz4a98xxat96iws9zmbrgj3a"></a>
 
 ... visible file content ...
 ```
 
-A heading section anchor appears on the line before the heading:
+A heading section anchor is on its own line before the heading. A blank line between the two is
+allowed (the WYSIWYG editor adds one):
 ```
 <a id="REQ-00257"></a>
 ## Some Level 2 Subsection
@@ -35,50 +48,71 @@ A heading section anchor appears on the line before the heading:
 Content included in the section.
 ```
 
-A bulleted item section anchor goes between the bullet character and the item content:
+A setext heading would absorb a line directly above it into its text, so its anchor starts the
+heading's first line instead:
+```
+<a id="REQ-00258"></a> Some Setext Heading
+==========================================
+```
+
+An anchor at the start of a heading's text (`## <a id="REQ-00259"></a> Title`) is also recognized,
+since the WYSIWYG editor can produce that form.
+
+A list item section anchor goes between the list marker (and the task box, if any) and the item's
+content:
 ```
 * <a id="REQ-00752"></a> Some requirement here.
+1. <a id="REQ-00753"></a> A numbered requirement.
+- [ ] <a id="REQ-00754"></a> A requirement still to do.
 ```
 
-**Section ID** - A unique ID for the section used in its anchor tag and for links
-of various kinds. A section ID consists of a prefix followed by a dash and then
-a sequentially generated, zero-padded five digit number. The prefix consists of A-Z followed
-by 1 to 4 upper case characters or numbers. E.g. "REQ" or "P5VV3", but not "Req", 
-"VERYLONG", "S", or "1WAY".
+**Section ID** - A unique ID for the section, used in its anchor and in links to it. It is a
+prefix, a dash and a sequence number of at least five digits, zero-padded
+(`^[A-Z][A-Z0-9]{1,4}-[0-9]{5,}$`). The prefix is an upper-case letter followed by 1 to 4
+upper-case letters or digits: "REQ" or "P5VV3", but not "Req", "VERYLONG", "S" or "1WAY". Numbers
+past 99999 simply have more digits.
 
-Note: Because headings are hierarchical, a level 1 section could encompass sections
-at levels 2, 3, 4, ... etc. The root section of a document always encompases all the subsections
-within the document. Section IDs make no effort to encode the changeable hierarchy.
+Section IDs are never reused: once assigned, a number is not assigned again for the same prefix,
+even after its section is deleted, so an old link never leads to a different section. A section ID
+never changes once assigned, except to resolve a duplicate (see Conflict Resolution).
 
-<a id="SEC-00003"></a>
+Section IDs appear in a heading's text only if a user types them there.
+
+<a id="WORK-00003"></a>
 ## Purpose of Sections
 
 The following functionality will be built upon sections as Specquer evolves:
 
-* <a id="SEC-00004"></a> Sections serve as targets of links from elsewhere in the documentation.
-* <a id="SEC-00005"></a> In particular, sections are the source and sink for requirements traceability links.
-* <a id="SEC-00006"></a> Sections can have sidecar review comment threads attached to them.
-* <a id="SEC-00007"></a> Specquer automates hierarchical summarization of documents section by section.
-* <a id="SEC-00008"></a> Sections have attached metadata like status, priority, owner, etc.
-* <a id="SEC-00009"></a> Sections have a role when document change history is displayed in a granular way.
+* <a id="WORK-00004"></a> Sections serve as targets of links from elsewhere in the documentation.
+* <a id="WORK-00005"></a> In particular, sections are the source and sink for requirements traceability links.
+* <a id="WORK-00006"></a> Sections can have sidecar review comment threads attached to them.
+* <a id="WORK-00007"></a> Specquer automates hierarchical summarization of documents section by section.
+* <a id="WORK-00008"></a> Sections have attached metadata like status, priority, owner, etc.
+* <a id="WORK-00009"></a> Sections have a role when document change history is displayed in a granular way.
 
-<a id="SEC-00010"></a>
+<a id="WORK-00010"></a>
 ## Functionality for This Work Item
 
-* Read and write configuration metadata related to documents and sections.
+* Read and write the configuration and data files for documents and sections.
 * Automatically add and maintain section anchors.
-* In Specquer editors give extra support to creating a link to a section.
-* (Section attributes, summarization, review comment threads, and change
-  history are out of scope, left for future work.)
+* Help the user create links to sections in Specquer's editors.
+* Out of scope, left for future work: section attributes, summarization, review comment threads,
+  change history, a user interface for turning a list into sections, and SQLite.
 
-<a id="SEC-00011"></a>
-## Specquer Configuration File
+<a id="WORK-00011"></a>
+## Configuration
+
+All of Specquer's shared files live in `.specquer/shared/`, which is committed to Git (unlike
+`.specquer/user/`).
 
 ### Prefixes
 
-File .specquer/shared/section-prefixes.config.yaml contains the following prefix configuration:
-* Key: a glob for a folder or .md file
-* For each key, the prefix to use in new files that match that glob
+`.specquer/shared/section-prefixes.config.yaml` says which files are sectioned and which prefix
+their new sections get:
+
+* Key: a glob matching workspace paths (relative to the root folder). A key ending in `/` matches
+  that folder and everything in it.
+* Value: the prefix for new sections in files that match.
 
 Example:
 ```yaml
@@ -91,243 +125,138 @@ prefixes:
   "documentation/work-items/": WORK
 ```
 
-Globs are checked in reverse order. In other words they are expected to be listed
-in order from least specific to most specific. 
+Keys are checked from the last to the first, so they are listed from least to most specific.
 
-If the configuration file is missing or a file name matches none of the keys given, 
-then the default prefix is "REQ".
+Only Markdown files that match at least one key are sectioned. If the configuration file is
+missing, no file is sectioned. There is no built-in `"**/*"` default; a user who wants every file
+sectioned adds that key.
 
-<a id="SEC-00012"></a>
-## Document Data Files
+New sections use the prefix for the file's current path. A file moved to a folder with another
+prefix keeps its existing section IDs, and its new sections get the new prefix, so one file can
+mix prefixes.
 
-For each .md document in the working directory, file .specquer/shared/documents.yaml
-contains the following:
-* Key: A CUID2 unique ID (the document ID)
-* Value:
-  - file path relative to the root working directory
-  - (other attributes in the future)
+<a id="WORK-00012"></a>
+## Document Data
 
-## Section Data Files
+`.specquer/shared/documents.yaml` lists every sectioned document:
 
-For each distinct prefix, file `.specquer/shared/<prefix>/sections.yaml` contains the following data for each 
-section:
-* Key: A CUID2 unique ID
-* Value:
-  - id - the anchor ID, e.g. REQ-00023; this becomes a reverse mapping from unique ID to ID
-  - documentId - the CUID2 identity of the file containing this section 
-  - (other attributes in the future)
+* Key: a CUID2 (the **document ID**).
+* Value: the file's workspace path (and other attributes in the future).
 
-Notes:
-* An implementation detail will be whether to load these YAML files into a SQLite cache.
-* The server will want to track the maximum ID sequence number for each prefix for use when
-  assigning new section IDs.
-* A new server technology dependency is implied for CUID2.
-* New entries are always appended to the end of this file so that conflicts can be
-  resolved by assuming the entry appearing earlier in the file is the oldest and precedent entry.
+The document ID is also stored in the file itself, in the root anchor's `data-document-id`
+attribute, so a document keeps its identity when it is moved or renamed outside Specquer.
 
-<a id="SEC-00013"></a>
+## Section Data
+
+For each prefix, `.specquer/shared/<prefix>/sections.yaml` holds:
+
+* The highest sequence number ever assigned for the prefix, so numbers are never reused.
+* For each section:
+  - Key: a CUID2 (the section's unique ID).
+  - `id`: the section ID, such as REQ-00023.
+  - `documentId`: the ID of the document containing the section.
+  - (Other attributes in the future.)
+
+New entries are always appended to the end of the file, so when entries conflict, the one earlier
+in the file is taken to be the older one and wins.
+
+The server keeps an in-memory index of these files and of the sections found in the documents.
+
+<a id="WORK-00013"></a>
 ## Section Anchor Insertion
 
-<a id="SEC-00014"></a>
+<a id="WORK-00014"></a>
 ### Timing
 
-Specquery automatically inserts and corrects section anchor tags at the following times:
-* When a file is opened, before it is displayed.
-* Before a file is saved.
-* When the browser tab showing a file has been reactivated and the file has been changed externally.
-* Asynchronously in the background, every Markdown file under the root working directory.
+Viewing a file never changes it. Specquer inserts and corrects section anchors:
 
-<a id="SEC-00015"></a>
+* When a file is saved, before it is written.
+* When a sectioned file is created with **New file**: it starts with its root anchor.
+* When the user runs **Add section anchors** on a folder, for every sectioned file in it. This is
+  the only way files that aren't open get anchors. Specquer shows how many files will change and
+  asks first.
+
+Specquer also reads every sectioned file in the background, at startup and when files may have
+changed outside it, to bring the data files up to date. This reading never changes a document.
+
+The editor shows the anchors inserted on save at once, without losing the cursor position or
+treating them as unsaved changes.
+
+<a id="WORK-00015"></a>
 ### ID Generation
 
-Whenever a new section is identified, the server increments the last known ID sequence number
-for the prefix and prepends the prefix and dash. The server also generates a corresponding CUID2
-ID value to aid in conflict resolution.
+For each new section the server takes the next sequence number for the prefix and generates a
+CUID2 for its entry in `sections.yaml`. The next number is one more than the highest of: the
+stored highest number, the numbers in `sections.yaml`, and the numbers found in the documents.
 
-<a id="SEC-00017"></a>
+Anchors are inserted for root sections and top-level headings that lack one. A list is sectioned
+when the user has typed a section anchor into at least one of its items; the user picks any ID in
+the section ID format (it is renumbered if it is already taken). Specquer then adds anchors to the
+list's other items.
+
+Insertion keeps each file's line endings and byte-order mark, as saving does.
+
+<a id="WORK-00017"></a>
 ### Document Conflict Resolution
 
-Whenever external changes are possible, Specquer looks for and resolves conflicts:
-* A document not in the documents.yaml file.
-  - The document is added to the YAML file with a new CUID2.
-  - All its sections are added or updated in `<prefix>/sections.yaml`
-* A nonexistent document in documents.yaml.
-  - The entry for the obsolete document is removed.
-* Note: At this time no effort is made to detect a file that has been extenrally
-  moved or renamed, perhaps with minor changes. Future work may cover this more subtle option.
- 
+Whenever external changes are possible, Specquer resolves conflicts between the documents and
+`documents.yaml`:
+
+* A sectioned document with no document ID in its root anchor: it gets the ID recorded for its
+  path, or a new CUID2, which is added to `documents.yaml`.
+* A document whose ID is recorded for another path that no longer holds that document: the
+  document was moved or renamed, and its path is updated.
+* The same document ID in more than one file (a copy): the file at the recorded path keeps it, or
+  the first file by path if none is at the recorded path. The others get new document IDs.
+* A document ID in `documents.yaml` that no file holds any more: the entry is removed, along with
+  its sections' entries.
+
 ### Section Conflict Resolution
-* Same section ID used in multiple places in one document.
-  - The first occurrence is kept, later occurrences are revised with new
-    section IDs.
-  - Note: Future revisions will look to distinguish which is the oldest.
-* Same section ID used in multiple documents.
-  - If the section ID is present once in `<prefix>/sections.yaml`, all other
-    uses of the same section ID are revised to use new section IDs.
-  - If the section ID appears multiple times in `<prefix>/sections.yaml`,
-    then the first is kept and subsequent occurrences are revised along
-    with any brand new occurrences not in `<prefix>/sections.yaml`.
-* Section ID in a document not stored in the `<prefix>/sections.yaml` file.
-  - Update `<prefix>/sections.yaml` accordingly
-* Section ID in `<prefix>/sections.yaml` no longer appears in any document.
-  - Remove the entry from `<prefix>/sections.yaml`
 
-<a id="SEC-00018"></a>
-## User Interface Additions 
+* The same section ID used more than once in one document: the first occurrence keeps it, and
+  later occurrences get new IDs.
+* The same section ID used in more than one document: the occurrence in the document that
+  `sections.yaml` records for it keeps the ID (the earliest such entry, if there are several), or
+  the first by path if none is there. The others get new IDs.
+* A section ID in a document but not in `sections.yaml`: an entry is added.
+* A section ID in `sections.yaml` that no document contains any more: the entry is removed.
 
-<a id="SEC-00019"></a>
+Fixes that change a document are made when it is next saved or when **Add section anchors**
+covers it. Until then the index records the duplicates.
+
+<a id="WORK-00018"></a>
+## User Interface Additions
+
+<a id="WORK-00019"></a>
 ### Badges
-* In preview and split pane views, a badge is displayed to the left of each section heading
-  or between the bullet and content of a bulleted item section.
-* Huge TBD: Can Milkdown editing also be customized to display these badges and not display
-  section anchor tags? This may need some experimentation. If not, it may spell the
-  end of WYSIWYG editing.
-* The badge appears on screen as the same image as the application's SVG favicon.
-* Hovering a badge shows a tooltip containing the section's data (for now just the section's
-  CUID2 value; more will come in the future).
+
+* In the preview and split views, a badge appears at the start of each section heading, between
+  the list marker and the content of a list item section, and at the top for the root section.
+  It replaces the anchor, which stays invisible.
+* The badge is the application's favicon (the § on its blue tile).
+* Hovering or focusing a badge shows a tooltip with the section ID and the document path, and the
+  section's CUID2 as secondary detail. Badges can be reached with the keyboard.
+* Clicking a badge offers **Copy section ID** and **Copy link**.
+* WYSIWYG editing must keep anchors intact. Whether it can show badges in place of the anchors is
+  settled by a spike at the start of the work; if it can't, the WYSIWYG view is marked
+  experimental and warns before editing a sectioned file.
+
+### Links to Sections
+
+* In the text editor, typing `#` inside a Markdown link target offers completion of section IDs,
+  each shown with its heading text and document. Choosing one inserts the path to its document
+  (relative to the open file, or nothing for the same file) and the ID.
+* Following a link to a section of another document in the preview opens that document and
+  scrolls to the section.
 
 ## Changes to Existing Functionality
-* When a file or folder is renamed, documents.yaml is updated with the new path(s).
-* When a file or folder is deleted, documents.yaml and `<prefix>/sections.yaml` files are
-  updated to remove obsolete entries.
+
+* When a file or folder is renamed, `documents.yaml` is updated with the new paths.
+* When a file or folder is deleted, `documents.yaml` and the `sections.yaml` files drop the
+  obsolete entries.
+* **New file** creates a sectioned file with its root anchor instead of empty.
 
 ## Documentation Updates
-* Link this document to the VitePress navigation.
-* Update documents in documentation/specifications to include these changes.
 
-<a id="SEC-00020"></a>
-## Feedback
-
-Review comments on the requirements above, with what Step 001 already built in mind.
-
-1. **Front matter comes first.** A root section anchor can't be "the first text in a file" when
-   the file has front matter: the `---` block must be on the first line or it stops being front
-   matter. The root anchor should go directly after the front matter block.
-2. **Only real Markdown structure counts.** Headings, list items and anchors must be found by
-   parsing the Markdown (the `shared` pipeline), not by matching lines. Otherwise a `#` line or an
-   `<a id>` inside a fenced code block becomes a section, as the examples in this document would.
-   This also settles setext headings (`===` underlines), which are headings, and HTML `<h2>`
-   tags, which aren't.
-3. **Opening a file changes it.** Inserting anchors when a file is opened, or in a background pass
-   over every Markdown file, writes to files the user only looked at. That means Git changes in
-   files like `README.md`, `CHANGELOG.md`, `CLAUDE.md` or vendored docs, and edits racing with a
-   coding agent that is working on the same file. The background pass is the biggest risk, since
-   it touches every Markdown file under the root at once (see Q3).
-4. **The editor and the file must stay in step.** Step 001's save sends the text and the version
-   it was based on; the server writes it unchanged. If the server inserts anchors while saving,
-   the client's copy no longer matches the file, and the next save fails the version check.
-   The save response needs to return the text as written (or the client inserts anchors itself
-   with IDs it got from the server), and the editor has to apply it without moving the cursor.
-5. **Reactivated tabs.** Step 001 only notices external changes when it saves. Re-checking a file
-   when its tab becomes visible again is new behavior: a version check on `visibilitychange`,
-   with the same conflict dialog when there are unsaved edits.
-6. **What "first" means for duplicates.** For "same section ID used in multiple documents", the
-   occurrence to keep should be the one in the document `sections.yaml` records for that ID
-   (its `documentId`), not whichever is found first. For duplicates within `sections.yaml`
-   (which only a Git merge can produce), "first" needs a defined order, such as file order of the
-   YAML or the document's path.
-7. **Git merges.** `.specquer/shared/` is meant to be committed. Two branches that both add
-   sections will both use the next sequence numbers, and both append to the same YAML files, so
-   merges conflict in the data files and produce duplicate IDs in the documents. The duplicate
-   rules repair the IDs afterwards, but links made on either branch may then point at the
-   renumbered section. Writing the YAML files sorted, one entry per key, keeps merge conflicts
-   small. The highest sequence number per prefix should be recomputed from the documents (the
-   maximum of the stored and the scanned value) rather than trusted from the stored file alone.
-8. **The CUID2s aren't in the documents.** A section's CUID2 is stored only in `sections.yaml`,
-   keyed by the anchor ID, so it can't tell two copies of the same anchor apart, and it is lost
-   when a file is renamed outside Specquer. The same applies to the document CUID2, which is
-   matched only by path. It would help to say what the CUID2s are for in this step (see Q6).
-9. **Anchors and the preview.** The preview's sanitizer keeps `id` attributes on `<a>` but
-   prefixes them with `user-content-` (against DOM clobbering, decision D15 in Step 001), and it
-   rewrites only same-page `#id` links. Links to a section in another file
-   (`other.md#SEC-00004`) need the same treatment, and the badges have to find anchors under the
-   prefixed name.
-10. **Milkdown.** Besides showing badges (the TBD under Badges), WYSIWYG editing must not drop or
-    escape the anchors when it serializes Markdown. Step 001 only writes Milkdown's output after
-    the user edits in it, but any edit there would still rewrite the whole body. This needs the
-    same spike as the badges, before the rest of the work depends on it.
-11. **Badges.** A tooltip that only appears on hover can't be reached by keyboard; the badge
-    should also be focusable. The CUID2 is the one value a user can't use for anything; the
-    section ID itself (with a copy-link action) would be more useful (see Q11).
-12. **Section links.** "Extra support for creating a link to a section" is in scope, but no
-    requirement says what it is: completion of section IDs while typing a link, a "copy link"
-    action on the badge, a picker, or link checking (see Q10).
-13. **Other existing functionality.** Creating a file or folder (Step 001's New File) should add
-    the document and its root anchor at once. Renaming a folder changes the prefix that new files
-    in it would get, but should never change existing IDs.
-14. **Sequence numbers.** Zero-padded to five digits caps a prefix at 99,999 sections. The
-    requirements should say what happens after that (allow more digits).
-15. **Format details.** The section ID pattern is `^[A-Z][A-Z0-9]{1,4}-[0-9]{5}$` as written.
-    "Globs" such as `documentation/notes/` are folder paths, so the rule for a key ending in `/`
-    (the folder and everything in it) should be stated. Anchor insertion must keep each file's
-    line endings and byte-order mark, as saving does today.
-16. **Typos.** "automaticly", "encompases", "extenrally", "Specquery". The headings "Prefixes",
-    "Section Data Files", "Section Conflict Resolution" and "Changes to Existing Functionality"
-    have no anchors yet, and SEC-00016 is unused.
-17. **`<prefix>` breaks the docs build.** Outside code spans, `<prefix>` in paths such as
-    `.specquer/shared/<prefix>/sections.yaml` is read as an unclosed HTML tag. VitePress stops the
-    build with "Element is missing end tag", and Specquer's preview drops it as unknown HTML.
-    Putting the paths in backticks fixes both. _Fixed:_ the paths are now in backticks.
-
-<a id="SEC-00021"></a>
-## Questions
-
-Each question has a suggested answer to accept or replace.
-
-1. **Which lists can be sectioned?** Only bulleted lists, or also numbered lists and task lists
-   (where would the anchor go relative to `[ ]`)? What about nested lists: does sectioning a list
-   section its sub-lists too? _Suggested:_ bulleted and numbered lists, anchor after the task box,
-   nested lists only when directed separately.
-   A: All three kinds of lists, nested lists may NOT be treated as sections
-3. **How does a user direct that a list become sections, and how is that remembered?**
-   _Suggested:_ a badge-area or context action in the editors, and a list counts as sectioned
-   whenever any of its items has an anchor, so new items in it get anchors automatically.
-   A: For this increment of work, the user must manually put in an anchor tag with a section
-      ID. It's crude for now, but will have a better UI in future when we work on badge
-      behavior and other aspects.
-5. **Which files get anchors automatically?** Every Markdown file under the root, or only files
-   matching the prefix configuration (or another opt-in list)? And should the background pass
-   write files, or only report? _Suggested:_ only files that match a key in the configuration
-   file, with no `"**/*"` default unless the user adds it; no automatic writes to files that
-   aren't open except through an explicit "add anchors to all files" command.
-   A: As suggested
-7. **When are anchors inserted in an open file?** On open, on save, or both? _Suggested:_ on save
-   only, so viewing never changes a file.
-   A: As suggested
-9. **"The prefix to use in new files":** does the prefix apply to new sections in any file
-   matching the glob, or only to files created after the configuration? If a file is moved to a
-   folder with another prefix, do its new sections use the new prefix, so one file mixes
-   prefixes? _Suggested:_ new sections use the prefix that matches the file's current path; IDs
-   never change once assigned.
-   A: As suggested
-10. **What are the CUID2s for in this step?** Do they need to exist now, or can they wait for the
-   features that use them (comments, metadata)? Should the document's CUID2 be stored in the
-   file (for example in the root anchor or the front matter) so it survives renames outside
-   Specquer? _Suggested:_ keep them, and store the document CUID2 in the root anchor as a
-   `data-` attribute.
-   A: As suggested, and that makes it more feasible to manage file move or rename in conflict
-      resolution for this work item.
-11. **Can IDs be reused?** When a section is deleted, may its number be assigned again?
-   _Suggested:_ never; the sequence only increases, so old links never point at a new section.
-   A: As suggested
-13. **Is `.specquer/shared/` committed to Git?** Step 001 ignores `.specquer/user/` only.
-   _Suggested:_ yes, committed, with sorted YAML to keep merges small (Feedback 7).
-   A: Yes
-15. **YAML or SQLite?** The notes leave it open. _Suggested:_ YAML in `.specquer/shared/` as the
-   committed source, with an in-memory index built at startup; SQLite only if startup on large
-   repositories proves slow.
-   A: Concur, leave out SQLite for this work
-17. **What does link support include?** _Suggested:_ completion of section IDs after `#` in a
-    Markdown link in the text editor, and "copy link" on each badge; link checking later.
-    A: Good suggestions
-19. **What does the badge tooltip show?** _Suggested:_ the section ID and the document path,
-    with the CUID2 only as secondary detail.
-    A: OK; will change in future
-21. **What if WYSIWYG can't keep anchors or show badges?** Drop WYSIWYG, make it read-only, or
-    hide anchors only in the preview? _Suggested:_ decide after a spike at the start of the work;
-    if it fails, mark WYSIWYG experimental and warn before editing a sectioned file in it.
-    A: As suggested
-23. **Do section IDs ever appear in headings' text** (for example to show them in GitHub's
-    rendering)? _Suggested:_ no; the anchor is invisible on GitHub and the badge shows it in
-    Specquer.
-    A: Only if a user manually types it there
+* Link this document and the implementation plan in the VitePress navigation.
+* Update the documents in `documentation/specifications` to include these changes.
