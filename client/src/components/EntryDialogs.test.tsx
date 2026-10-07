@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, mock, test } from "bun:test";
 import type { DeletePreview, TreeNode } from "@specquer/shared/api";
-import { DeleteDialog, RenameDialog, splitExtension } from "./EntryDialogs";
+import { CreateDialog, type CreateRequest, DeleteDialog, RenameDialog, splitExtension } from "./EntryDialogs";
 
 
 const file: TreeNode = { kind: "file", name: "spec.md", path: "docs/spec.md" };
@@ -56,6 +56,60 @@ describe("RenameDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(onClose).toHaveBeenCalled();
     expect(onRename).not.toHaveBeenCalled();
+  });
+});
+
+describe("CreateDialog", () => {
+  const newFile: CreateRequest = { parent: { ...folder, kind: "folder", children: [] }, kind: "file" };
+  const newFolder: CreateRequest = { ...newFile, kind: "folder" };
+
+  test("a new file's name starts empty and gets the .md extension", async () => {
+    const onCreate = mock(async () => null);
+    const onClose = mock(() => {});
+    render(<CreateDialog request={newFile} onClose={onClose} onCreate={onCreate} />);
+    expect(screen.getByRole("dialog", { name: "New file" })).toBeTruthy();
+    const input = screen.getByRole("textbox", { name: "New name" }) as HTMLInputElement;
+    expect(input.value).toBe("");
+    expect(screen.getByText(".md")).toBeTruthy();
+    fireEvent.change(input, { target: { value: "spec" } });
+    (screen.getByRole("button", { name: "Create" }) as HTMLButtonElement).click();
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(onCreate).toHaveBeenCalledWith(newFile, "spec.md");
+  });
+
+  test("names the root folder as such", () => {
+    render(<CreateDialog request={{ ...newFile, parent: { ...folder, kind: "folder", name: "", path: "" } }} onClose={() => {}} onCreate={async () => null} />);
+    expect(screen.getByText("Enter a name for the new file in the root folder.")).toBeTruthy();
+  });
+
+  test("a new folder's name has no extension", async () => {
+    const onCreate = mock(async () => null);
+    render(<CreateDialog request={newFolder} onClose={() => {}} onCreate={onCreate} />);
+    expect(screen.getByRole("dialog", { name: "New folder" })).toBeTruthy();
+    expect(screen.queryByText(".md")).toBeNull();
+    fireEvent.change(screen.getByRole("textbox", { name: "New name" }), { target: { value: "notes" } });
+    (screen.getByRole("button", { name: "Create" }) as HTMLButtonElement).click();
+    await waitFor(() => expect(onCreate).toHaveBeenCalledWith(newFolder, "notes"));
+  });
+
+  test("an empty or invalid name isn't sent", async () => {
+    const onCreate = mock(async () => null);
+    render(<CreateDialog request={newFile} onClose={() => {}} onCreate={onCreate} />);
+    (screen.getByRole("button", { name: "Create" }) as HTMLButtonElement).click();
+    expect((await screen.findByRole("alert")).textContent).toContain("empty");
+    fireEvent.change(screen.getByRole("textbox", { name: "New name" }), { target: { value: "a/b" } });
+    (screen.getByRole("button", { name: "Create" }) as HTMLButtonElement).click();
+    expect((await screen.findByRole("alert")).textContent).toContain("/");
+    expect(onCreate).not.toHaveBeenCalled();
+  });
+
+  test("a name collision keeps the dialog open with the server's message", async () => {
+    const onClose = mock(() => {});
+    render(<CreateDialog request={newFolder} onClose={onClose} onCreate={async () => "A file or folder with that name already exists."} />);
+    fireEvent.change(screen.getByRole("textbox", { name: "New name" }), { target: { value: "taken" } });
+    (screen.getByRole("button", { name: "Create" }) as HTMLButtonElement).click();
+    expect((await screen.findByRole("alert")).textContent).toBe("A file or folder with that name already exists.");
+    expect(onClose).not.toHaveBeenCalled();
   });
 });
 

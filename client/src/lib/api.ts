@@ -47,6 +47,8 @@ async function json<T>(res: JsonResponse): Promise<T> {
 
 export type SaveOutcome = { kind: "saved"; version: string } | { kind: "conflict"; version: string };
 
+export type CreateOutcome = { kind: "created"; path: string } | { kind: "exists"; message: string };
+
 export type RenameOutcome = { kind: "renamed"; path: string; uiState: UiState } | { kind: "exists"; message: string };
 
 /** The operations the UI uses; tests substitute their own. */
@@ -54,6 +56,7 @@ export interface Api {
   getTree(): Promise<Tree>;
   readFile(path: string): Promise<FileContent>;
   saveFile(path: string, text: string, baseVersion: string, options?: { keepalive?: boolean }): Promise<SaveOutcome>;
+  create(parent: string, name: string, kind: "file" | "folder"): Promise<CreateOutcome>;
   rename(path: string, newName: string): Promise<RenameOutcome>;
   deletePreview(path: string): Promise<DeletePreview>;
   deleteEntry(path: string): Promise<UiState>;
@@ -77,6 +80,15 @@ export const httpApi: Api = {
     }
     const body = await json<{ version: string }>(res);
     return { kind: "saved", version: body.version };
+  },
+  async create(parent, name, kind) {
+    const res = await client.api.create.$post({ json: { parent, name, kind } });
+    if (res.status === 409) {
+      const body = (await res.json()) as ApiErrorBody;
+      return { kind: "exists", message: body.message };
+    }
+    const body = await json<{ path: string }>(res);
+    return { kind: "created", path: body.path };
   },
   async rename(path, newName) {
     const res = await client.api.rename.$post({ json: { path, newName } });

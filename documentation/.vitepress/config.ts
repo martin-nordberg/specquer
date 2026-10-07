@@ -45,6 +45,7 @@ export default defineConfig({
                     items: [
                       {text: 'Requirements', link: '/work-items/step-001/requirements'},
                       {text: 'Implementation Plan', link: '/work-items/step-001/implementation-plan'},
+                      {text: 'New File and Folder', link: '/work-items/step-001/new-file-folder'},
                     ]
                   }
                 ]

@@ -1,8 +1,17 @@
-import { chmod, lstat, readdir, realpath, rename, rm, stat } from "node:fs/promises";
+import { chmod, lstat, mkdir, readdir, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join, sep } from "node:path";
 import { ApiError, type DeletePreview, type FileContent, type SaveResult, type Tree, type TreeFolder } from "@specquer/shared/api";
-import { PROTECTED_NAMES, baseName, checkPath, isMarkdownFile, joinPath, parentPath, pathSegments } from "@specquer/shared/paths";
-import { gitInfo, gitMarkdownFiles, gitUncommitted } from "./git.ts";
+import {
+  MARKDOWN_EXTENSION,
+  PROTECTED_NAMES,
+  baseName,
+  checkPath,
+  isMarkdownFile,
+  joinPath,
+  parentPath,
+  pathSegments,
+} from "@specquer/shared/paths";
+import { gitInfo, gitMarkdownFiles, gitUncommitted, gitUntrackedFolders } from "./git.ts";
 
 /** Folders the tree never shows (besides the protected `.git` and `.specquer`). */
 const SKIPPED_FOLDERS: ReadonlySet<string> = new Set([...PROTECTED_NAMES, "node_modules"]);
@@ -10,10 +19,20 @@ const SKIPPED_FOLDERS: ReadonlySet<string> = new Set([...PROTECTED_NAMES, "node_
 /** The tree lists at most this many files (decision D9). */
 export const MAX_TREE_FILES = 10_000;
 
+/** Walks of the file system for the tree stop after this many entries. */
+export const MAX_WALK_ENTRIES = 100_000;
+
 /** The delete dialog lists at most this many files. */
 export const MAX_PREVIEW_FILES = 500;
 
 const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
+
+/** What a walk of the file system found for the tree. */
+interface WalkResult {
+  files: string[];
+  emptyFolders: string[];
+  entries: number;
+}
 
 function isNotFound(err: unknown): boolean {
   return (err as NodeJS.ErrnoException).code === "ENOENT" || (err as NodeJS.ErrnoException).code === "ENOTDIR";
@@ -75,6 +94,20 @@ export class FileService {
     return { absolute: join(realParent, baseName(path)), isFolder: info.isDirectory() };
   }
 
+  /** An existing folder's real path, which must be inside the root ("" is the root itself). */
+  private async existingFolder(path: string): Promise<string> {
+    let real: string;
+    try {
+      real = await realpath(this.absolute(path));
+    } catch (err) {
+      if (isNotFound(err)) throw new ApiError(404, "not_found", `'${path}' doesn't exist.`);
+      throw err;
+    }
+    if (!this.isInsideRoot(real)) throw new ApiError(403, "forbidden", `'${path}' is outside the root folder.`);
+    if (!(await stat(real)).isDirectory()) throw new ApiError(400, "not_a_folder", `'${path}' isn't a folder.`);
+    return real;
+  }
+
   async kindOf(path: string): Promise<"file" | "folder" | undefined> {
     if (!checkPath(path).ok) return undefined;
     try {
@@ -86,9 +119,20 @@ export class FileService {
   }
 
   async getTree(): Promise<Tree> {
-    const listed = (await gitMarkdownFiles(this.root)) ?? (await this.walkMarkdownFiles());
+    const walked: WalkResult = { files: [], emptyFolders: [], entries: 0 };
+    const gitFiles = await gitMarkdownFiles(this.root);
+    if (gitFiles === null) await this.walk("", walked, true);
+    else {
+      // Git lists neither empty folders nor what is inside untracked ones, so walk those
+      walked.files = gitFiles;
+      for (const folder of (await gitUntrackedFolders(this.root)) ?? []) {
+        const check = checkPath(folder);
+        if (!check.ok || check.path === "" || pathSegments(check.path).some((segment) => SKIPPED_FOLDERS.has(segment))) continue;
+        await this.walk(check.path, walked, false);
+      }
+    }
     const files: string[] = [];
-    for (const path of listed) {
+    for (const path of walked.files) {
       const check = checkPath(path);
       if (!check.ok || !isMarkdownFile(check.path)) continue;
       if (pathSegments(check.path).some((segment) => SKIPPED_FOLDERS.has(segment))) continue;
@@ -97,24 +141,33 @@ export class FileService {
       files.push(check.path);
     }
     files.sort();
-    const truncated = files.length > MAX_TREE_FILES;
-    return { root: buildTree(files.slice(0, MAX_TREE_FILES)), truncated };
+    const truncated = files.length > MAX_TREE_FILES || walked.entries > MAX_WALK_ENTRIES;
+    return { root: buildTree(files.slice(0, MAX_TREE_FILES), walked.emptyFolders), truncated };
   }
 
-  /** Lists Markdown files when the root isn't in a Git work tree (no ignore rules then apply). */
-  private async walkMarkdownFiles(): Promise<string[]> {
-    const files: string[] = [];
-    const walk = async (folder: string) => {
-      const entries = await readdir(this.absolute(folder), { withFileTypes: true });
-      for (const entry of entries) {
-        if (files.length > MAX_TREE_FILES) return;
-        const path = joinPath(folder, entry.name);
-        if (entry.isDirectory() && !SKIPPED_FOLDERS.has(entry.name)) await walk(path);
-        else if (entry.isFile() && isMarkdownFile(path)) files.push(path);
-      }
-    };
-    await walk("");
-    return files;
+  /**
+   * Walks a folder for the tree, collecting folders that hold no files (only other such folders,
+   * if any) and, if `collectFiles` is set, Markdown files. Returns whether the folder holds files.
+   */
+  private async walk(folder: string, result: WalkResult, collectFiles: boolean): Promise<boolean> {
+    let entries;
+    try {
+      entries = await readdir(this.absolute(folder), { withFileTypes: true });
+    } catch (err) {
+      if (isNotFound(err)) return true;
+      throw err;
+    }
+    let holdsFiles = false;
+    for (const entry of entries) {
+      if (++result.entries > MAX_WALK_ENTRIES || result.files.length > MAX_TREE_FILES) return true;
+      const path = joinPath(folder, entry.name);
+      if (!entry.isDirectory() || SKIPPED_FOLDERS.has(entry.name)) {
+        holdsFiles = true;
+        if (collectFiles && entry.isFile() && isMarkdownFile(path)) result.files.push(path);
+      } else if (await this.walk(path, result, collectFiles)) holdsFiles = true;
+    }
+    if (!holdsFiles && folder !== "") result.emptyFolders.push(folder);
+    return holdsFiles;
   }
 
   async readFile(path: string): Promise<FileContent> {
@@ -136,6 +189,26 @@ export class FileService {
     const bytes = new TextEncoder().encode(text);
     await writeAtomically(real, bytes);
     return { ok: true, version: contentVersion(bytes) };
+  }
+
+  /**
+   * Creates an empty Markdown file or an empty folder in `parent`. Returns the new path, or
+   * `null` if the name is taken.
+   */
+  async create(parent: string, name: string, kind: "file" | "folder"): Promise<string | null> {
+    const path = joinPath(parent, name);
+    if (kind === "file" && !isMarkdownFile(path)) {
+      throw new ApiError(400, "invalid", `The name must end with '${MARKDOWN_EXTENSION}'.`);
+    }
+    const target = join(await this.existingFolder(parent), name);
+    try {
+      if (kind === "folder") await mkdir(target);
+      else await writeFile(target, "", { flag: "wx" });
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "EEXIST") return null;
+      throw err;
+    }
+    return path;
   }
 
   /** Renames a file or folder within its folder. Returns the new path, or `null` if the name is taken. */
@@ -193,8 +266,8 @@ export class FileService {
   }
 }
 
-/** Builds the folder tree from sorted file paths; folders come before files. */
-export function buildTree(files: string[]): TreeFolder {
+/** Builds the folder tree from sorted file paths and empty folders; folders come before files. */
+export function buildTree(files: string[], emptyFolders: string[] = []): TreeFolder {
   const root: TreeFolder = { kind: "folder", name: "", path: "", children: [] };
   const folders = new Map<string, TreeFolder>([["", root]]);
   const folderFor = (path: string): TreeFolder => {
@@ -206,6 +279,7 @@ export function buildTree(files: string[]): TreeFolder {
     }
     return folder;
   };
+  for (const folder of emptyFolders) folderFor(folder);
   for (const file of files) folderFor(parentPath(file)).children.push({ kind: "file", name: baseName(file), path: file });
   const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
   for (const folder of folders.values()) {

@@ -8,7 +8,7 @@ This document describes what Specquer works with and how its screen is organized
 | ------- | ----------- |
 | Root folder | The folder Specquer was launched in (or given on the command line). Everything Specquer shows lies inside it. Usually a Git repository or part of one. |
 | Workspace path | A path relative to the root, with `/` as the separator, such as `docs/specs/login.md`. The root itself is the empty path. All paths in the API and in the UI state are workspace paths. |
-| Folder | A folder under the root that contains Markdown files, directly or further down. Folders without Markdown files, `.git`, `.specquer`, `node_modules` and anything Git ignores are not shown. |
+| Folder | A folder under the root that contains Markdown files, directly or further down, or that is empty. Other folders without Markdown files, `.git`, `.specquer`, `node_modules` and anything Git ignores are not shown. |
 | Spec file | A Markdown (`.md`) file: optional YAML front matter followed by a GitHub Flavored Markdown body. Raw HTML may appear, for example traceability anchors. MDX is not supported. |
 | Front matter | The YAML between the `---` lines at the top of a file. Free-form; there is no schema. |
 | Body | The Markdown after the front matter, structured by nested headings (`#`, `##`, `###` and so on). |
@@ -48,11 +48,11 @@ Specquer has one view: a header and two panes side by side.
 | Region | Contents |
 | ------ | -------- |
 | Header | Application name; light/dark switch |
-| Left pane | Folder tree; context menu on each folder and file (Rename, Delete) |
+| Left pane | Folder tree; context menu on each folder (New file, New folder, Rename, Delete), each file (Rename, Delete) and the empty space below the last entry (New file, New folder in the root) |
 | Right pane, row 1 | File path breadcrumb (a drop-down of recent files once there are any), save status, view-type switch |
 | Right pane, row 2 | Front matter editor with a drag bar below it |
 | Right pane, row 3 | Markdown content in one of four views |
-| Dialogs | Rename, delete, and the conflict dialog when a file changed on disk |
+| Dialogs | New file, new folder, rename, delete, and the conflict dialog when a file changed on disk |
 
 ## 3. Navigation
 

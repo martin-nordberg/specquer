@@ -1,3 +1,5 @@
+import { stat } from "node:fs/promises";
+import { join } from "node:path";
 import { expect, launch, openFile, test, treeItem } from "./fixtures";
 
 test.beforeEach(async ({ page, specquer }) => {
@@ -51,6 +53,54 @@ test("renaming a folder moves the open file with it", async ({ page, specquer })
   await expect(page.getByRole("treeitem", { name: "specs" })).toHaveAttribute("aria-expanded", "true");
   await expect(page.getByRole("navigation", { name: "breadcrumb" })).toContainText("specs");
   expect(await specquer.read("specs/deep/c.md")).toBe("# Gamma\n");
+});
+
+test("a new file is created empty, shown in the tree and opened", async ({ page, specquer }) => {
+  await treeItem(page, "docs").click({ button: "right" });
+  await page.getByRole("menuitem", { name: "New file…" }).click();
+  const dialog = page.getByRole("dialog", { name: "New file" });
+  const input = dialog.getByRole("textbox", { name: "New name" });
+  await expect(input).toHaveValue("");
+  await expect(dialog).toContainText(".md");
+
+  await input.fill("a");
+  await dialog.getByRole("button", { name: "Create" }).click();
+  await expect(dialog.getByRole("alert")).toHaveText("A file or folder with that name already exists.");
+
+  await input.fill("fresh");
+  await dialog.getByRole("button", { name: "Create" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole("treeitem", { name: "docs" })).toHaveAttribute("aria-expanded", "true");
+  await expect(treeItem(page, "fresh.md")).toBeVisible();
+  await expect(page.getByRole("treeitem", { name: "fresh.md" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("navigation", { name: "breadcrumb" })).toContainText("fresh.md");
+  expect(await specquer.read("docs/fresh.md")).toBe("");
+});
+
+test("a new folder is created and shown in the tree while empty", async ({ page, specquer }) => {
+  await treeItem(page, "docs").click({ button: "right" });
+  await page.getByRole("menuitem", { name: "New folder…" }).click();
+  const dialog = page.getByRole("dialog", { name: "New folder" });
+  await expect(dialog).not.toContainText(".md");
+  await dialog.getByRole("textbox", { name: "New name" }).fill("drafts");
+  await dialog.getByRole("button", { name: "Create" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(treeItem(page, "drafts")).toBeVisible();
+  expect((await stat(join(specquer.root, "docs/drafts"))).isDirectory()).toBe(true);
+  await page.reload();
+  await expect(treeItem(page, "drafts")).toBeVisible();
+});
+
+test("the space below the tree creates entries in the root folder", async ({ page, specquer }) => {
+  await page.locator('nav[aria-label="Folders"] [data-path=""]').click({ button: "right" });
+  await page.getByRole("menuitem", { name: "New file…" }).click();
+  const dialog = page.getByRole("dialog", { name: "New file" });
+  await expect(dialog).toContainText("in the root folder");
+  await dialog.getByRole("textbox", { name: "New name" }).fill("top");
+  await dialog.getByRole("button", { name: "Create" }).click();
+  await expect(treeItem(page, "top.md")).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "breadcrumb" })).toContainText("top.md");
+  expect(await specquer.read("top.md")).toBe("");
 });
 
 test("deleting a folder lists hidden files first", async ({ page, specquer }) => {

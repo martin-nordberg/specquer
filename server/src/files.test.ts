@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdir, readdir, symlink } from "node:fs/promises";
+import { mkdir, readdir, stat, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { tempRoot, testApp } from "./test-support.ts";
 
@@ -44,6 +44,16 @@ describe("GET /api/tree", () => {
     const tree = (await (await request("/api/tree")).json()) as TreeJson;
     expect(flatten(tree.root)).toEqual(["a/", "a/b.md", "B.MD", "z.md"]);
     expect(tree.truncated).toBe(false);
+  });
+
+  test("lists folders that hold no files, inside and outside Git", async () => {
+    for (const git of [false, true]) {
+      const { root, request } = await setup({ "t/a.md": "", "full/notes.txt": "" }, { git });
+      for (const folder of ["t/empty", "new/inner", "new/sub/deeper", "node_modules/x"]) await mkdir(join(root, folder), { recursive: true });
+      await Bun.write(join(root, "new/sub/b.md"), "");
+      const tree = (await (await request("/api/tree")).json()) as TreeJson;
+      expect(flatten(tree.root)).toEqual(["new/", "new/inner/", "new/sub/", "new/sub/deeper/", "new/sub/b.md", "t/", "t/empty/", "t/a.md"]);
+    }
   });
 
   test("respects .gitignore in a Git repository", async () => {
@@ -124,6 +134,52 @@ describe("PUT /api/file", () => {
   test("doesn't create files", async () => {
     const { request } = await setup({});
     expect((await request("/api/file?path=new.md", { method: "PUT", body: { text: "x", baseVersion: "" } })).status).toBe(404);
+  });
+});
+
+describe("POST /api/create", () => {
+  const create = (body: object) => ({ method: "POST", body });
+
+  test("creates an empty file and a folder", async () => {
+    const { root, request } = await setup({ "d/a.md": "A" });
+    const file = await request("/api/create", create({ parent: "d", name: "new.md", kind: "file" }));
+    expect(file.status).toBe(201);
+    expect(await file.json()).toEqual({ path: "d/new.md" });
+    expect(await read(root, "d/new.md")).toBe("");
+    const folder = await request("/api/create", create({ parent: "", name: "notes", kind: "folder" }));
+    expect(await folder.json()).toEqual({ path: "notes" });
+    expect((await stat(join(root, "notes"))).isDirectory()).toBe(true);
+  });
+
+  test("409 when the name is taken, without changing the existing entry", async () => {
+    const { root, request } = await setup({ "d/a.md": "A" });
+    expect((await request("/api/create", create({ parent: "d", name: "a.md", kind: "file" }))).status).toBe(409);
+    expect((await request("/api/create", create({ parent: "d", name: "a.md", kind: "folder" }))).status).toBe(409);
+    expect((await request("/api/create", create({ parent: "", name: "d", kind: "file" }))).status).toBe(400);
+    expect((await request("/api/create", create({ parent: "", name: "d", kind: "folder" }))).status).toBe(409);
+    expect(await read(root, "d/a.md")).toBe("A");
+  });
+
+  test.each(["x.txt", "x", "../x.md", "sub/x.md", ".md", ""])("rejects the file name %p", async (name) => {
+    const { request } = await setup({});
+    expect((await request("/api/create", create({ parent: "", name, kind: "file" }))).status).toBe(400);
+  });
+
+  test("refuses protected names, protected or missing parents, and files as parents", async () => {
+    const { request } = await setup({ "a.md": "" });
+    expect((await request("/api/create", create({ parent: "", name: ".git", kind: "folder" }))).status).toBe(400);
+    expect((await request("/api/create", create({ parent: ".specquer", name: "x.md", kind: "file" }))).status).toBe(400);
+    expect((await request("/api/create", create({ parent: "missing", name: "x.md", kind: "file" }))).status).toBe(404);
+    expect((await request("/api/create", create({ parent: "a.md", name: "x.md", kind: "file" }))).status).toBe(400);
+  });
+
+  test("won't create through a symbolic link out of the root", async () => {
+    const { root, request } = await setup({});
+    const outside = await tempRoot();
+    cleanups.push(outside.cleanup);
+    await symlink(outside.root, join(root, "link"));
+    expect((await request("/api/create", create({ parent: "link", name: "x.md", kind: "file" }))).status).toBe(403);
+    expect(await readdir(outside.root)).toEqual([]);
   });
 });
 

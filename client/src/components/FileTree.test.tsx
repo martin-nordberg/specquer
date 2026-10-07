@@ -23,6 +23,8 @@ function setup(expanded: string[] = []) {
   const handlers = {
     onToggleFolder: mock(() => {}),
     onOpenFile: mock(() => {}),
+    onNewFile: mock(() => {}),
+    onNewFolder: mock(() => {}),
     onRename: mock(() => {}),
     onDelete: mock(() => {}),
   };
@@ -66,6 +68,31 @@ describe("FileTree", () => {
     expect(onDelete).toHaveBeenCalledWith(root.children[0]);
   });
 
+  test("folders offer New file and New folder; files don't", async () => {
+    const { onNewFile, onNewFolder } = setup();
+    fireEvent.contextMenu(screen.getByText("docs"));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "New file…" }));
+    expect(onNewFile).toHaveBeenCalledWith(root.children[0]);
+    fireEvent.contextMenu(screen.getByText("docs"));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "New folder…" }));
+    expect(onNewFolder).toHaveBeenCalledWith(root.children[0]);
+    fireEvent.contextMenu(screen.getByText("b.md"));
+    await screen.findByRole("menuitem", { name: "Rename…" });
+    expect(screen.queryByRole("menuitem", { name: "New file…" })).toBeNull();
+  });
+
+  test("the space below the last entry offers New file and New folder in the root", async () => {
+    const { onNewFile, onNewFolder, container } = setup();
+    const background = container.querySelector('[data-path=""]')!;
+    fireEvent.contextMenu(background);
+    fireEvent.click(await screen.findByRole("menuitem", { name: "New file…" }));
+    expect(onNewFile).toHaveBeenCalledWith(root);
+    fireEvent.contextMenu(background);
+    expect(screen.queryByRole("menuitem", { name: "Rename…" })).toBeNull();
+    fireEvent.click(await screen.findByRole("menuitem", { name: "New folder…" }));
+    expect(onNewFolder).toHaveBeenCalledWith(root);
+  });
+
   test("an empty folder says so", () => {
     render(
       <FileTree
@@ -74,6 +101,8 @@ describe("FileTree", () => {
         currentFile={undefined}
         onToggleFolder={() => {}}
         onOpenFile={() => {}}
+        onNewFile={() => {}}
+        onNewFolder={() => {}}
         onRename={() => {}}
         onDelete={() => {}}
       />,

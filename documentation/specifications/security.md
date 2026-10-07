@@ -42,7 +42,8 @@ The rules below are implemented in `server/src/security.ts`, `server/src/files.t
 
 - Every path the API receives is validated by the shared path rules: relative to the root, `/`-separated, no `..`, no absolute or drive paths, no backslashes or control characters, and no `.git` or `.specquer` segment.
 - The server resolves the path against the root and checks the **real** path (after following symbolic links) stays inside the root. For rename and delete, which act on the entry itself, the real path of its folder must be inside the root, so a symbolic link is renamed or deleted, never its target.
-- Reading and writing are limited to existing `.md` files that are UTF-8 text. The API can't create files.
+- Reading and writing are limited to existing `.md` files that are UTF-8 text.
+- Creating is limited to an empty `.md` file or an empty folder, named by the same name rules, inside an existing folder whose real path is inside the root. It never overwrites: an existing file, folder or symbolic link of that name answers `409`.
 - Rename changes only the name within the same folder; the new name is validated the same way and a file must keep its extension.
 - The root folder itself can't be renamed or deleted.
 

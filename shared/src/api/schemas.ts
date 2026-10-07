@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { entryNameSchema, entryPathSchema, markdownPathSchema } from "../paths/paths.ts";
+import { entryNameSchema, entryPathSchema, markdownPathSchema, workspacePathSchema } from "../paths/paths.ts";
 
 /** A folder in the tree; it lists only folders that contain Markdown files, and `.md` files. */
 export interface TreeFolder {
@@ -57,6 +57,14 @@ export const saveFileSchema = z.object({
   text: z.string(),
   /** The version the edits were based on. */
   baseVersion: z.string(),
+});
+
+export const createSchema = z.object({
+  /** The folder to create the entry in ("" for the root folder). */
+  parent: workspacePathSchema,
+  /** The new entry's name (not a path); a file's must end with `.md`. */
+  name: entryNameSchema,
+  kind: z.enum(["file", "folder"]),
 });
 
 export const renameSchema = z.object({

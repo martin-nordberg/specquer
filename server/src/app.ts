@@ -27,6 +27,10 @@ export function createHandlers(files: FileService, uiState: UiStateStore): ApiHa
     getTree: () => files.getTree(),
     readFile: (path) => files.readFile(path),
     saveFile: (path, text, baseVersion) => files.saveFile(path, text, baseVersion),
+    async create(parent, name, kind) {
+      const path = await files.create(parent, name, kind);
+      return path === null ? { ok: false, reason: "exists" } : { ok: true, path };
+    },
     async rename(path, newName) {
       const newPath = await files.rename(path, newName);
       if (newPath === null) return { ok: false, reason: "exists" };

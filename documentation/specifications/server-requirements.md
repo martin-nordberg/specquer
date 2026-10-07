@@ -25,11 +25,11 @@ specquer [root] [--port <n>] [--no-open]
 
 `GET /api/tree` returns the folders and Markdown files under the root.
 
-1. Only `.md` files are listed (case-insensitive extension), with the folders that contain them, directly or further down. Folders without Markdown files are left out.
+1. Only `.md` files are listed (case-insensitive extension), with the folders that contain them, directly or further down. Empty folders (holding no files, only other empty folders if any) are listed too, so a folder created through the API shows. Other folders without Markdown files are left out.
 2. `.git`, `.specquer` and `node_modules` are never listed.
-3. In a Git work tree, the list comes from `git ls-files --cached --others --exclude-standard`, so `.gitignore` rules (including nested ones and global excludes) apply. Tracked files deleted from disk are left out.
+3. In a Git work tree, the list comes from `git ls-files --cached --others --exclude-standard`, so `.gitignore` rules (including nested ones and global excludes) apply. Tracked files deleted from disk are left out. Git doesn't list empty folders, so the server also asks it for untracked folders that aren't ignored (`git ls-files --others --exclude-standard --directory`) and walks those to find the empty ones.
 4. Outside a Git work tree, the server walks the folders itself; no ignore rules apply then.
-5. The tree is loaded in one request. It holds at most 10,000 files; beyond that it is cut off and marked as truncated.
+5. The tree is loaded in one request. It holds at most 10,000 files, and walks of the file system stop after 100,000 entries; beyond either limit it is cut off and marked as truncated.
 6. Folders come before files; names sort naturally, ignoring case.
 
 ## 4. Files
@@ -38,12 +38,13 @@ specquer [root] [--port <n>] [--no-open]
 | ----- | -------- |
 | `GET /api/file?path=` | Returns the file's text and its **version** (SHA-256 of its bytes). |
 | `PUT /api/file?path=` | Body `{ text, baseVersion }`. Writes the text if the file's current version equals `baseVersion`; otherwise answers `409` with the current version and writes nothing. Returns the new version. |
+| `POST /api/create` | Body `{ parent, name, kind }` (`kind` is `file` or `folder`; `parent` is `""` for the root). Creates an empty `.md` file or an empty folder in `parent`, which must be an existing folder. `409` if the name is taken. Answers `201` with the new path. |
 | `POST /api/rename` | Body `{ path, newName }`. Renames a file or folder within its folder. `409` if the name is taken. Returns the new path and the updated UI state. |
 | `GET /api/entry/delete-preview?path=` | Lists the files a delete would remove (up to 500, with the total count) and those not committed to Git, or `null` outside Git. |
 | `DELETE /api/entry?path=` | Deletes a file or a folder with everything in it. Returns the updated UI state. |
 
 1. All paths are workspace paths, validated and confined to the root as specified in [Security](security.md) §5. Invalid paths answer `400`, missing entries `404`, paths leading outside the root `403`.
-2. Only existing `.md` files can be read or written; the API doesn't create files. Files must be UTF-8; others answer `415`. A byte-order mark is kept.
+2. Only existing `.md` files can be read or written; `PUT /api/file` doesn't create files. New files are created empty through `POST /api/create`, whose name must end in `.md`, and never replace an existing file or folder. Files must be UTF-8; others answer `415`. A byte-order mark is kept.
 3. The server deals in whole file text, byte for byte: splitting into front matter and body happens in the client, so line endings and the trailing newline are preserved.
 4. Writes are atomic: the text is written to a temporary file in the same folder, given the original's permissions, and renamed over the original.
 5. A file can only be renamed to a name with the same extension. A case-only rename works on case-insensitive file systems.

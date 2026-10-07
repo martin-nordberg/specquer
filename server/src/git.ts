@@ -29,6 +29,20 @@ export async function gitMarkdownFiles(root: string): Promise<string[] | null> {
 }
 
 /**
+ * Untracked folders Git doesn't ignore, relative to the root and without the trailing slash. Git
+ * lists a folder with no tracked files as one entry instead of its contents, empty ones included.
+ */
+export async function gitUntrackedFolders(root: string): Promise<string[] | null> {
+  const result = await $`git -C ${root} ls-files -z --others --exclude-standard --directory`.quiet().nothrow();
+  if (result.exitCode !== 0) return null;
+  return result.stdout
+    .toString()
+    .split("\0")
+    .filter((p) => p.endsWith("/"))
+    .map((p) => p.slice(0, -1));
+}
+
+/**
  * Files under `path` (relative to the root) that aren't committed: new, modified, deleted or
  * ignored. Paths are relative to the root.
  */

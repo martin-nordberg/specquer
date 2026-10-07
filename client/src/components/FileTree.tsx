@@ -1,6 +1,6 @@
-import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen, Pencil, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, FilePlus, FileText, Folder, FolderOpen, FolderPlus, Pencil, Trash2 } from "lucide-react";
 import type { TreeFolder, TreeNode } from "@specquer/shared/api";
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { cn } from "@/lib/utils";
 
 /** The folder tree: folders and `.md` files, expanded folders remembered, single click opens. */
@@ -10,20 +10,47 @@ export interface FileTreeProps {
   currentFile: string | undefined;
   onToggleFolder: (path: string, expanded: boolean) => void;
   onOpenFile: (path: string) => void;
+  onNewFile: (folder: TreeFolder) => void;
+  onNewFolder: (folder: TreeFolder) => void;
   onRename: (node: TreeNode) => void;
   onDelete: (node: TreeNode) => void;
 }
 
 export function FileTree(props: FileTreeProps) {
-  if (props.root.children.length === 0) {
-    return <p className="p-4 text-sm text-muted-foreground">No Markdown files in this folder.</p>;
-  }
   return (
-    <ul role="tree" aria-label="Files" className="py-1 text-sm select-none">
-      {props.root.children.map((node) => (
-        <TreeItem key={node.path} node={node} depth={0} {...props} />
-      ))}
-    </ul>
+    <div className="flex flex-[1_0_auto] flex-col">
+      {props.root.children.length > 0 && (
+        <ul role="tree" aria-label="Files" className="pt-1 text-sm select-none">
+          {props.root.children.map((node) => (
+            <TreeItem key={node.path} node={node} depth={0} {...props} />
+          ))}
+        </ul>
+      )}
+      {/* The space below the last entry stands for the root folder */}
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          <div data-path="" className="min-h-8 flex-1">
+            {props.root.children.length === 0 && <p className="p-4 text-sm text-muted-foreground">No Markdown files in this folder.</p>}
+          </div>
+        </ContextMenuTrigger>
+        <ContextMenuContent>
+          <NewEntryItems folder={props.root} {...props} />
+        </ContextMenuContent>
+      </ContextMenu>
+    </div>
+  );
+}
+
+function NewEntryItems({ folder, onNewFile, onNewFolder }: Pick<FileTreeProps, "onNewFile" | "onNewFolder"> & { folder: TreeFolder }) {
+  return (
+    <>
+      <ContextMenuItem onSelect={() => onNewFile(folder)}>
+        <FilePlus /> New file…
+      </ContextMenuItem>
+      <ContextMenuItem onSelect={() => onNewFolder(folder)}>
+        <FolderPlus /> New folder…
+      </ContextMenuItem>
+    </>
   );
 }
 
@@ -54,6 +81,12 @@ function TreeItem({ node, depth, ...props }: FileTreeProps & { node: TreeNode; d
           </button>
         </ContextMenuTrigger>
         <ContextMenuContent>
+          {node.kind === "folder" && (
+            <>
+              <NewEntryItems folder={node} {...props} />
+              <ContextMenuSeparator />
+            </>
+          )}
           <ContextMenuItem onSelect={() => props.onRename(node)}>
             <Pencil /> Rename…
           </ContextMenuItem>

@@ -1,7 +1,7 @@
 import { AlertTriangle } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
-import type { DeletePreview, TreeNode } from "@specquer/shared/api";
-import { checkName } from "@specquer/shared/paths";
+import type { DeletePreview, TreeFolder, TreeNode } from "@specquer/shared/api";
+import { MARKDOWN_EXTENSION, checkName } from "@specquer/shared/paths";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -13,57 +13,62 @@ export function splitExtension(node: Pick<TreeNode, "kind" | "name">): { stem: s
   return { stem: node.name.slice(0, dot), extension: node.name.slice(dot) };
 }
 
-export interface RenameDialogProps {
-  node: TreeNode | null;
+interface NameDialogProps {
+  open: boolean;
+  title: string;
+  description: string;
+  /** The name the text box starts with, without the extension. */
+  initialName: string;
+  /** A fixed extension shown after the text box and added to the name ("" for none). */
+  extension: string;
+  submitLabel: string;
+  /** An id for the error message, unique among open dialogs. */
+  errorId: string;
   onClose: () => void;
-  /** Performs the rename; resolves to an error message to show, or `null` on success. */
-  onRename: (node: TreeNode, newName: string) => Promise<string | null>;
+  /** Performs the action; resolves to an error message to show, or `null` on success. */
+  onSubmit: (name: string) => Promise<string | null>;
 }
 
-export function RenameDialog({ node, onClose, onRename }: RenameDialogProps) {
-  const { stem, extension } = node === null ? { stem: "", extension: "" } : splitExtension(node);
-  const [value, setValue] = useState(stem);
+/** A modal dialog with a text box for a file or folder name. */
+function NameDialog(props: NameDialogProps) {
+  const { open, initialName, extension, errorId, onClose, onSubmit } = props;
+  const [value, setValue] = useState(initialName);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    setValue(stem);
+    setValue(initialName);
     setError(null);
-  }, [node, stem]);
+  }, [open, initialName]);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (node === null) return;
-    const newName = value + extension;
-    const check = checkName(newName);
+    const name = value + extension;
+    const check = checkName(name);
     if (!check.ok || value === "") {
       setError(check.ok ? "The name can't be empty." : check.reason);
       return;
     }
-    if (newName === node.name) {
-      onClose();
-      return;
-    }
     setBusy(true);
-    const result = await onRename(node, newName);
+    const result = await onSubmit(name);
     setBusy(false);
     if (result === null) onClose();
     else setError(result);
   };
 
   return (
-    <Dialog open={node !== null} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent>
         <form onSubmit={submit} className="grid gap-4">
           <DialogHeader>
-            <DialogTitle>Rename {node?.kind === "folder" ? "folder" : "file"}</DialogTitle>
-            <DialogDescription>Enter a new name for “{node?.name}”.</DialogDescription>
+            <DialogTitle>{props.title}</DialogTitle>
+            <DialogDescription>{props.description}</DialogDescription>
           </DialogHeader>
           <div className="flex items-center gap-1">
             <Input
               aria-label="New name"
               aria-invalid={error !== null}
-              aria-describedby={error !== null ? "rename-error" : undefined}
+              aria-describedby={error !== null ? errorId : undefined}
               value={value}
               autoFocus
               onFocus={(event) => event.currentTarget.select()}
@@ -75,7 +80,7 @@ export function RenameDialog({ node, onClose, onRename }: RenameDialogProps) {
             {extension !== "" && <span className="text-muted-foreground">{extension}</span>}
           </div>
           {error !== null && (
-            <p id="rename-error" role="alert" className="text-sm text-error-text">
+            <p id={errorId} role="alert" className="text-sm text-error-text">
               {error}
             </p>
           )}
@@ -86,12 +91,71 @@ export function RenameDialog({ node, onClose, onRename }: RenameDialogProps) {
               </Button>
             </DialogClose>
             <Button type="submit" disabled={busy}>
-              Rename
+              {props.submitLabel}
             </Button>
           </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+export interface RenameDialogProps {
+  node: TreeNode | null;
+  onClose: () => void;
+  /** Performs the rename; resolves to an error message to show, or `null` on success. */
+  onRename: (node: TreeNode, newName: string) => Promise<string | null>;
+}
+
+export function RenameDialog({ node, onClose, onRename }: RenameDialogProps) {
+  const { stem, extension } = node === null ? { stem: "", extension: "" } : splitExtension(node);
+  return (
+    <NameDialog
+      open={node !== null}
+      title={`Rename ${node?.kind === "folder" ? "folder" : "file"}`}
+      description={`Enter a new name for “${node?.name ?? ""}”.`}
+      initialName={stem}
+      extension={extension}
+      submitLabel="Rename"
+      errorId="rename-error"
+      onClose={onClose}
+      onSubmit={async (newName) => {
+        if (node === null) return null;
+        return newName === node.name ? null : onRename(node, newName);
+      }}
+    />
+  );
+}
+
+/** What the create dialog makes, and where. */
+export interface CreateRequest {
+  parent: TreeFolder;
+  kind: "file" | "folder";
+}
+
+export interface CreateDialogProps {
+  request: CreateRequest | null;
+  onClose: () => void;
+  /** Performs the create; resolves to an error message to show, or `null` on success. */
+  onCreate: (request: CreateRequest, name: string) => Promise<string | null>;
+}
+
+export function CreateDialog({ request, onClose, onCreate }: CreateDialogProps) {
+  const isFile = request?.kind !== "folder";
+  return (
+    <NameDialog
+      open={request !== null}
+      title={isFile ? "New file" : "New folder"}
+      description={`Enter a name for the new ${isFile ? "file" : "folder"} in ${
+        request === null || request.parent.path === "" ? "the root folder" : `“${request.parent.name}”`
+      }.`}
+      initialName=""
+      extension={isFile ? MARKDOWN_EXTENSION : ""}
+      submitLabel="Create"
+      errorId="create-error"
+      onClose={onClose}
+      onSubmit={async (name) => (request === null ? null : onCreate(request, name))}
+    />
   );
 }
 

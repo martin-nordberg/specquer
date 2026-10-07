@@ -14,7 +14,7 @@ import {
 } from "@specquer/shared/uistate";
 import { ConflictDialog } from "@/components/ConflictDialog";
 import { ContentView, ViewSwitcher } from "@/components/ContentView";
-import { DeleteDialog, RenameDialog } from "@/components/EntryDialogs";
+import { CreateDialog, type CreateRequest, DeleteDialog, RenameDialog } from "@/components/EntryDialogs";
 import { FilePath } from "@/components/FilePath";
 import { FileTree } from "@/components/FileTree";
 import { FrontmatterEditor, initialFrontmatterHeight } from "@/components/FrontmatterEditor";
@@ -55,6 +55,7 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
   const ui = useSyncExternalStore(uiStore.subscribe, uiStore.get);
   const doc = useSyncExternalStore(docStore.subscribe, docStore.get);
   const [tree, setTree] = useState(initialTree);
+  const [creating, setCreating] = useState<CreateRequest | null>(null);
   const [renaming, setRenaming] = useState<TreeNode | null>(null);
   const [deleting, setDeleting] = useState<TreeNode | null>(null);
   const [openError, setOpenError] = useState<string | null>(null);
@@ -112,6 +113,23 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
     };
   }, [docStore, uiStore]);
 
+  /** Creates the entry, shows it in its expanded folder, and opens a new file. */
+  const create = useCallback(
+    async ({ parent, kind }: CreateRequest, name: string): Promise<string | null> => {
+      try {
+        const result = await api.create(parent.path, name, kind);
+        if (result.kind === "exists") return result.message;
+        if (parent.path !== "") uiStore.update((state) => setFolderExpanded(state, parent.path, true));
+        await refreshTree();
+        if (kind === "file") void open(result.path);
+        return null;
+      } catch (err) {
+        return (err as Error).message;
+      }
+    },
+    [api, uiStore, refreshTree, open],
+  );
+
   const rename = useCallback(
     async (node: TreeNode, newName: string): Promise<string | null> => {
       const current = docStore.get().document?.path;
@@ -160,17 +178,19 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
   const openFromUi = useCallback((path: string) => void open(path), [open]);
 
   const left = (
-    <nav aria-label="Folders" className="h-full overflow-auto">
+    <nav aria-label="Folders" className="flex h-full flex-col overflow-auto">
       <FileTree
         root={tree.root}
         expanded={expanded}
         currentFile={document_?.path}
         onToggleFolder={(path, isExpanded) => uiStore.update((s) => setFolderExpanded(s, path, isExpanded))}
         onOpenFile={openFromUi}
+        onNewFile={(folder) => setCreating({ parent: folder, kind: "file" })}
+        onNewFolder={(folder) => setCreating({ parent: folder, kind: "folder" })}
         onRename={setRenaming}
         onDelete={setDeleting}
       />
-      {tree.truncated && <p className="p-2 text-xs text-muted-foreground">Too many files: the list is incomplete.</p>}
+      {tree.truncated && <p className="shrink-0 p-2 text-xs text-muted-foreground">Too many files: the list is incomplete.</p>}
     </nav>
   );
 
@@ -234,6 +254,7 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
           right={right}
         />
       </main>
+      <CreateDialog request={creating} onClose={() => setCreating(null)} onCreate={create} />
       <RenameDialog node={renaming} onClose={() => setRenaming(null)} onRename={rename} />
       <DeleteDialog node={deleting} onClose={() => setDeleting(null)} loadPreview={api.deletePreview} onDelete={remove} />
     </div>

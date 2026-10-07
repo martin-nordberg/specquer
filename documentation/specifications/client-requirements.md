@@ -1,6 +1,6 @@
 # Specquer Client Requirements
 
-Requirements for the browser user interface (`client/`). They come from [Step 001](/work-items/step-001/requirements) and its [implementation plan](/work-items/step-001/implementation-plan). The screen layout is in [Information Architecture](info-architecture.md).
+Requirements for the browser user interface (`client/`). They come from [Step 001](/work-items/step-001/requirements), its [implementation plan](/work-items/step-001/implementation-plan) and [New File and Folder](/work-items/step-001/new-file-folder). The screen layout is in [Information Architecture](info-architecture.md).
 
 ## 1. General
 
@@ -15,11 +15,11 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 
 ## 3. Folder Tree
 
-1. The tree starts at the root folder and shows folders and `.md` files only, as listed by the server (see [Server Requirements](server-requirements.md) §3).
+1. The tree starts at the root folder and shows folders and `.md` files only, as listed by the server (see [Server Requirements](server-requirements.md) §3). Empty folders are shown too, so a new folder appears at once.
 2. Folders come before files; names sort naturally, ignoring case.
 3. Clicking a folder expands or collapses it. Expanded folders persist in the UI state.
 4. Single-clicking a file opens it in the file pane. The open file is highlighted with the navigation color.
-5. Right-clicking a folder or file opens a context menu with **Rename…** and **Delete…**.
+5. Right-clicking a folder or file opens a context menu with **Rename…** and **Delete…**. For a folder, the menu starts with **New file…** and **New folder…**. Right-clicking the empty space below the last entry (or in an empty tree) offers **New file…** and **New folder…** for the root folder.
 
 ### 3.1 Rename
 
@@ -30,7 +30,15 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 5. A name already used by a file or folder in the same folder keeps the dialog open with "A file or folder with that name already exists."
 6. Unsaved changes to the open file are saved first if the rename affects it. After the rename, the open file follows its new path and the UI state is updated (see [UI-State Domain Design](uistate-domain-design.md) §4).
 
-### 3.2 Delete
+### 3.2 New File and New Folder
+
+1. A modal dialog has an empty text box, a **Create** button and a **Cancel** button. It is titled **New file** or **New folder** and names the folder the entry is created in ("the root folder" for the root).
+2. For a file, the extension (`.md`) is shown after the text box and added to the name; a folder's name has no extension.
+3. Invalid names and names already used in the folder keep the dialog open with the reason, as for rename (§3.1, items 4 and 5).
+4. After creating the entry, the folder it was created in (unless it is the root) is expanded and the tree is reloaded, so the new entry shows.
+5. A new file is created empty and opened in the file pane (saving the previously open file first, as for any file switch).
+
+### 3.3 Delete
 
 1. A modal dialog has a **Delete** button (error color) and a **Cancel** button.
 2. For a folder, the dialog lists every file that will be deleted, including files the tree doesn't show, and how many of them the tree doesn't show.

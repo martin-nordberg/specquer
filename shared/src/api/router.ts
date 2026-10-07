@@ -8,6 +8,7 @@ import {
   type DeletePreview,
   type FileContent,
   type Tree,
+  createSchema,
   entryQuerySchema,
   fileQuerySchema,
   renameSchema,
@@ -32,12 +33,15 @@ export class ApiError extends Error {
 
 export type SaveResult = { ok: true; version: string } | { ok: false; reason: "conflict"; version: string };
 
+export type CreateResult = { ok: true; path: string } | { ok: false; reason: "exists" };
+
 export type RenameResult = { ok: true; path: string; uiState: UiState } | { ok: false; reason: "exists" };
 
 export interface ApiHandlers {
   getTree(): Promise<Tree>;
   readFile(path: string): Promise<FileContent>;
   saveFile(path: string, text: string, baseVersion: string): Promise<SaveResult>;
+  create(parent: string, name: string, kind: "file" | "folder"): Promise<CreateResult>;
   rename(path: string, newName: string): Promise<RenameResult>;
   deletePreview(path: string): Promise<DeletePreview>;
   deleteEntry(path: string): Promise<UiState>;
@@ -74,6 +78,17 @@ export function createApiRouter(handlers: ApiHandlers) {
       const result = await handlers.saveFile(c.req.valid("query").path, text, baseVersion);
       if (!result.ok) return c.json({ error: "conflict", version: result.version }, 409);
       return c.json({ version: result.version }, 200);
+    })
+    .post("/create", validate("json", createSchema), async (c) => {
+      const { parent, name, kind } = c.req.valid("json");
+      const result = await handlers.create(parent, name, kind);
+      if (!result.ok) {
+        return c.json(
+          { error: "exists", message: "A file or folder with that name already exists." } satisfies ApiErrorBody,
+          409,
+        );
+      }
+      return c.json({ path: result.path }, 201);
     })
     .post("/rename", validate("json", renameSchema), async (c) => {
       const { path, newName } = c.req.valid("json");
