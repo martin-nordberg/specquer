@@ -138,10 +138,10 @@ client                         server                          agent / provider
 Preview ─ outline of saved text
   │ SummaryStore.need(sections)
   │ POST /api/summaries ───────► SummaryService
-  │  (aborted when not needed)    ├─ short? → as written
+  │  (≤ 3 in flight; aborted)     ├─ short? → as written
   │                               ├─ cache (bun:sqlite) hit? → cached
   │                               └─ CallQueue (concurrency, ─► summarizeWithFallback
-  │                                  shared calls, aborts)        └─ ChatOpenAI ─► NVIDIA
+  │                                  shared calls, drops)         └─ ChatOpenAI ─► NVIDIA
   ◄──────── { summary, model, cached, truncated }
 ```
 

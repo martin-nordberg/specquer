@@ -66,22 +66,23 @@ test("a call whose requests were all aborted is dropped before it starts", async
   expect(ran).toBe(false);
 });
 
-test("a running call is aborted only when every request for it is", async () => {
+test("a running call runs to the end when its requests are aborted, and can be joined again", async () => {
   const queue = new CallQueue(() => 1);
-  let callSignal: AbortSignal | undefined;
-  const task = (signal: AbortSignal) => {
-    callSignal = signal;
-    return new Promise<string>((resolve) => setTimeout(() => resolve("late"), 30));
+  let calls = 0;
+  let finished = false;
+  const task = async () => {
+    calls++;
+    await Bun.sleep(30);
+    finished = true;
+    return "late";
   };
   const a = new AbortController();
-  const b = new AbortController();
   const first = queue.run("k", task, a.signal);
-  const second = queue.run("k", task, b.signal);
   await Bun.sleep(0);
   a.abort();
   await expect(first).rejects.toBeDefined();
-  expect(callSignal?.aborted).toBe(false);
-  b.abort();
-  await expect(second).rejects.toBeDefined();
-  expect(callSignal?.aborted).toBe(true);
+  expect(queue.active).toBe(1);
+  expect(await queue.run("k", task)).toBe("late");
+  expect(finished).toBe(true);
+  expect(calls).toBe(1);
 });

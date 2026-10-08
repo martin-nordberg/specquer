@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { describe, expect, mock, test } from "bun:test";
 import { useState } from "react";
 import type { SummaryRequest, SummaryResult } from "@specquer/shared/api";
-import { SummaryStore } from "@/app/summaries";
+import { MAX_IN_FLIGHT, SummaryStore } from "@/app/summaries";
 import type { Api } from "@/lib/api";
 import { ApiRequestError } from "@/lib/api";
 import { Preview, type PreviewSummaries } from "./Preview";
@@ -189,6 +189,24 @@ describe("the summarized preview", () => {
     await waitFor(() => expect(calls).toHaveLength(1));
     act(() => void fireEvent.keyDown(slider(), { key: "ArrowRight" }));
     await waitFor(() => expect(calls[0]!.signal?.aborted).toBe(true));
+  });
+
+  test("at most a few requests are in flight, so other requests aren't held up", async () => {
+    const pending: Array<() => void> = [];
+    const { api, calls } = fakeApi((request) => new Promise((resolve) => pending.push(() => resolve({ summary: `Summary of ${request.text.split("\n")[0]}.`, model: "m", cached: false, truncated: false }))));
+    const body = `# Top\n\n${[1, 2, 3, 4, 5, 6, 7, 8].map((n) => `## S${n}\n\n${words(80, "alpha")}\n`).join("\n")}`;
+    render(<Harness store={new SummaryStore(api)} initialSteps={1} markdown={body} savedBody={body} />);
+    await waitFor(() => expect(calls).toHaveLength(MAX_IN_FLIGHT));
+    // In document order; one finishing lets the next one go
+    expect(calls.map((c) => c.request.text.split("\n")[0])).toEqual(["## S1", "## S2", "## S3"]);
+    await act(async () => pending.shift()!());
+    await waitFor(() => expect(calls).toHaveLength(MAX_IN_FLIGHT + 1));
+    expect(screen.getByText("Summary of ## S1.")).toBeDefined();
+    // Moving the slider drops the queued ones without sending them
+    act(() => void fireEvent.keyDown(slider(), { key: "ArrowRight" }));
+    await waitFor(() => expect(screen.queryByText("Summarizing...")).toBeNull());
+    for (const release of pending) await act(async () => release());
+    expect(calls).toHaveLength(MAX_IN_FLIGHT + 1);
   });
 
   test("disabled: the full text, whatever the stored position", async () => {

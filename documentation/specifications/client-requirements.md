@@ -103,7 +103,7 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 7. A summary shows "Summarizing..." while it is made; then plain text paragraphs, never Markdown or HTML, under a subtle "AI summary" label (with "shortened" when the section was too long and was cut). If it can't be made (a network failure, the provider's rate limit), the error shows in its place with **Retry**.
 8. Summaries are made from the saved file only; unsaved text is never sent. A section edited since the last save keeps its last summary, labeled "out of date", and is summarized again after the next save.
 9. Clicking a summary, or its **Show full text**, moves the slider to the full text and scrolls to its section. A link to a section hidden by a summary (`other.md#SPEC-00012`) does the same.
-10. Summaries are kept in memory while Specquer is open, so moving the slider back and forth asks for nothing new. Requests no longer needed (the slider moved, another file opened, another view chosen) are aborted.
+10. Summaries are kept in memory while Specquer is open, so moving the slider back and forth asks for nothing new. At most three summary requests are in flight at once, in document order, so they never take all of the browser's connections to the server and saves and file loads don't wait behind them. Requests no longer needed (the slider moved, another file opened, another view chosen) are aborted, or dropped before they are sent.
 
 ## 7. Saving
 

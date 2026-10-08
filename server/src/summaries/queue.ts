@@ -1,13 +1,13 @@
 /**
  * The model call queue: at most `concurrency` calls at once; requests with the same key share
- * one call; a call whose requests were all aborted is dropped if it hasn't started, and aborted
- * if it has.
+ * one call; a call whose requests were all aborted is dropped if it hasn't started. One that has
+ * started runs to the end (its result is cached, and a request for it joins it), since the work
+ * is under way and the slider often comes back.
  */
 
 interface Entry {
   key: string;
-  task: (signal: AbortSignal) => Promise<unknown>;
-  controller: AbortController;
+  task: () => Promise<unknown>;
   /** Requests still waiting for the result. */
   waiters: number;
   started: boolean;
@@ -29,7 +29,7 @@ export class CallQueue {
   }
 
   /** Runs `task` for `key`, or joins the call already queued or running for it. */
-  run<T>(key: string, task: (signal: AbortSignal) => Promise<T>, signal?: AbortSignal): Promise<T> {
+  run<T>(key: string, task: () => Promise<T>, signal?: AbortSignal): Promise<T> {
     if (signal?.aborted) return Promise.reject(signal.reason);
     let entry = this.entries.get(key);
     if (entry === undefined) {
@@ -41,7 +41,7 @@ export class CallQueue {
       });
       // Nobody may be listening when a dropped call rejects
       promise.catch(() => undefined);
-      entry = { key, task, controller: new AbortController(), waiters: 0, started: false, promise, resolve, reject };
+      entry = { key, task, waiters: 0, started: false, promise, resolve, reject };
       this.entries.set(key, entry);
       this.waiting.push(entry);
     }
@@ -62,13 +62,11 @@ export class CallQueue {
 
   private leave(entry: Entry): void {
     entry.waiters--;
-    if (entry.waiters > 0) return;
-    if (this.entries.get(entry.key) === entry) this.entries.delete(entry.key);
-    if (!entry.started) {
-      const index = this.waiting.indexOf(entry);
-      if (index !== -1) this.waiting.splice(index, 1);
-      entry.reject(new DOMException("Dropped", "AbortError"));
-    } else entry.controller.abort(new DOMException("Aborted", "AbortError"));
+    if (entry.waiters > 0 || entry.started) return;
+    this.entries.delete(entry.key);
+    const index = this.waiting.indexOf(entry);
+    if (index !== -1) this.waiting.splice(index, 1);
+    entry.reject(new DOMException("Dropped", "AbortError"));
   }
 
   private pump(): void {
@@ -77,7 +75,7 @@ export class CallQueue {
       entry.started = true;
       this.running++;
       Promise.resolve()
-        .then(() => entry.task(entry.controller.signal))
+        .then(() => entry.task())
         .then(entry.resolve, entry.reject)
         .finally(() => {
           this.running--;

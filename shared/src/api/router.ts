@@ -104,6 +104,8 @@ export function createApiRouter(handlers: ApiHandlers) {
       if (err instanceof ApiError) {
         return c.json({ error: err.code, message: err.message } satisfies ApiErrorBody, err.status);
       }
+      // The client went away (a summary no longer needed): nobody reads the response
+      if (c.req.raw.signal.aborted) return c.body(null, 499 as never);
       console.error(err);
       return c.json({ error: "internal", message: "Internal server error" } satisfies ApiErrorBody, 500);
     })

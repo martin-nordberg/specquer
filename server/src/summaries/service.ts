@@ -116,12 +116,19 @@ export class SummaryService {
     if (cached !== undefined) return { summary: cached.summary, truncated: cached.truncated, cached: true };
     const result = await summarizeWithFallback(input, tokenBudget, {
       summarizePart: (part) => this.summarizeInput(part, model, modelId, tokenBudget, signal),
-      call: (callInput) =>
-        this.queue.run(
-          cacheKey(callInput.text, modelId, PROMPT_VERSION, callInput.sentences),
-          (callSignal) => summarizeSection(model, callInput, { signal: callSignal }),
+      call: (callInput) => {
+        const callKey = cacheKey(callInput.text, modelId, PROMPT_VERSION, callInput.sentences);
+        return this.queue.run(
+          callKey,
+          async () => {
+            const summary = await summarizeSection(model, callInput);
+            // A section summarized whole is cached here, so a call whose request is gone is kept
+            if (callKey === key) await this.cache.put(key, PROMPT_VERSION, { summary, model: modelId, truncated: false });
+            return summary;
+          },
           signal,
-        ),
+        );
+      },
     });
     await this.cache.put(key, PROMPT_VERSION, { summary: result.summary, model: modelId, truncated: result.truncated });
     return { ...result, cached: false };
