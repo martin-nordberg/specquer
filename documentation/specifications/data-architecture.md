@@ -384,6 +384,6 @@ CREATE TABLE summaries (key TEXT PRIMARY KEY, model TEXT, prompt_version INTEGER
 ### 4.5. Request Flow
 
 1. The preview computes the outline of the text shown and the stop; for the saved text, it lists the sections the stop summarizes that aren't short, and tells the client's `SummaryStore` it needs them.
-2. The store requests each one it doesn't have (`POST /api/summaries`, one request per section, decision D4), keeps results in memory by path, headings and simplified text, and aborts requests no longer needed.
-3. The server answers short sections as written and cached ones at once; the others go through the call queue, which limits concurrency, shares a call between identical requests, and drops or aborts calls nobody waits for.
+2. The store requests each one it doesn't have (`POST /api/summaries`, one request per section, decision D4), keeps results in memory by path, headings and simplified text, and aborts requests no longer needed. At most three are in flight at once, in document order; the rest wait in the client, where those no longer needed are dropped unsent.
+3. The server answers short sections as written and cached ones at once; the others go through the call queue, which limits concurrency, shares a call between identical requests, and drops calls nobody waits for that haven't started. A started call runs to the end and is cached, even if its request was aborted.
 4. After a save the saved text changes, so the sections whose text changed are requested again; the others are already in memory.
