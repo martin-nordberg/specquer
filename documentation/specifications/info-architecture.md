@@ -12,8 +12,8 @@ This document describes what Specquer works with and how its screen is organized
 | Spec file | A Markdown (`.md`) file: optional YAML front matter followed by a GitHub Flavored Markdown body. Raw HTML may appear, for example traceability anchors. MDX is not supported. |
 | Front matter | The YAML between the `---` lines at the top of a file. Free-form; there is no schema. |
 | Body | The Markdown after the front matter, structured by nested headings (`#`, `##`, `###` and so on). |
-| UI state | Per-user settings in `.specquer/user/uistate.yaml`: theme, pane width, expanded folders, recent files, the open file and per-file view settings. See [UI-State Domain Design](uistate-domain-design.md). |
-| Section | A whole spec file (the root section), a top-level heading with its content, or an item of a sectioned list. Sectioned files are chosen by `.specquer/shared/section-prefixes.config.yaml`. See [Sections Domain Design](sections-domain-design.md). |
+| UI state | Per-user settings in `.specquer/user/uistate.yaml`: theme, pane width, expanded folders, recent files, the open file and per-file view settings. See [Data Architecture](data-architecture.md) §3. |
+| Section | A whole spec file (the root section), a top-level heading with its content, or an item of a sectioned list. Sectioned files are chosen by `.specquer/shared/section-prefixes.config.yaml`. See [Data Architecture](data-architecture.md) §2. |
 | Section anchor and ID | An invisible HTML anchor that marks a section with a permanent ID such as `REQ-00257`, used in links to the section. The root anchor also carries the document ID. |
 | Shared data | The section configuration and data files in `.specquer/shared/`, committed to Git: `documents.yaml` and, per prefix, `sections.yaml`. |
 

@@ -32,9 +32,7 @@ export default defineConfig({
                         {text: 'Server Requirements', link: '/specifications/server-requirements'},
                         {text: 'Technical Architecture', link: '/specifications/technical-architecture'},
                         {text: 'Security', link: '/specifications/security'},
-                        {text: 'Markdown Domain Design', link: '/specifications/markdown-domain-design'},
-                        {text: 'UI-State Domain Design', link: '/specifications/uistate-domain-design'},
-                        {text: 'Sections Domain Design', link: '/specifications/sections-domain-design'},
+                        {text: 'Data Architecture', link: '/specifications/data-architecture'},
                     ]
                 }
             ],

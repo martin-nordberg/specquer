@@ -66,7 +66,7 @@ specquer [root] [--port <n>] [--no-open]
 5. Renames and deletes through the API update the stored state in the same request.
 6. Updates are applied one at a time. Across tabs and windows, the last write wins.
 
-The model is specified in [UI-State Domain Design](uistate-domain-design.md).
+The model is specified in [Data Architecture](data-architecture.md) §3.
 
 ## 6. Sections
 
@@ -85,7 +85,7 @@ The model is specified in [UI-State Domain Design](uistate-domain-design.md).
 5. Renames and deletes update the paths in `documents.yaml`, and drop the documents (and their sections) that are gone or no longer match the configuration.
 6. Data files are written atomically and only when their content changes; damaged or conflicted data files never stop the server.
 
-The model, recognition rules, data files and conflict rules are specified in [Sections Domain Design](sections-domain-design.md).
+The model, recognition rules, data files and conflict rules are specified in [Data Architecture](data-architecture.md) §2.
 
 ## 8. Other Routes
 

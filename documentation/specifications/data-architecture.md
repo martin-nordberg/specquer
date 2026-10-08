@@ -1,4 +1,76 @@
-# Sections Domain Design
+# Data Architecture
+
+The data Specquer works with: the content of spec files (Markdown), the permanent IDs of the sections of spec files (sections), and the per-user state of the interface (UI state).
+
+## 1. Markdown Content
+
+The Markdown domain is the code that works on the content of spec files, as opposed to reading and writing them. It lives in `shared/src/markdown/` (`@specquer/shared/markdown`) so the client, a Web Worker and the server can all use it. It has no Bun or DOM dependencies.
+
+### 1.1. Scope
+
+| Now (Steps 001 and 002) | Later |
+| ----------------------- | ----- |
+| Splitting a file into front matter and body, and joining them | The heading and section tree (for collapsible sections and summaries) |
+| Checking front matter for YAML syntax errors | Rewriting the Markdown syntax tree (renames, link updates) |
+| The preview pipeline (Markdown to a sanitized HTML syntax tree) | |
+| Finding section anchors and the edits that add them (`sections.ts`, see §2) | |
+
+Building the section tree was left for a later step (Step 001 decision D13); the pipeline is the place to add it.
+
+### 1.2. Front Matter
+
+```ts
+splitFrontmatter(text: string): { frontmatter: string | null; body: string; layout: FrontmatterLayout }
+joinFrontmatter(frontmatter: string | null, body: string, layout?: FrontmatterLayout): string
+```
+
+- Front matter is a block that starts with `---` on the first line and ends at the next line that is `---` (trailing spaces allowed). `frontmatter` is the text between the delimiter lines, without the last line ending; `null` means the file has none. A block that is never closed is body text.
+- **Round trip:** `joinFrontmatter(splitFrontmatter(t))` returns `t` byte for byte. The layout records what that needs: the line ending (`\n` or `\r\n`), a byte-order mark, the closing line as written, whether the closing line ends with a line ending, and whether the block was completely empty (`---` directly followed by `---`). Files mixing line endings inside the front matter block are treated as having none, which also round-trips.
+- **Adding front matter:** joining non-null front matter with a body from a file that had none produces `---`, the front matter, `---`, then the body, using the body's line ending.
+- **Removing front matter:** joining `null` returns the body alone.
+- `detectEol`, `toLf` and `fromLf` convert between a file's line endings and the `\n` the editors use.
+
+```ts
+checkYaml(frontmatter: string): Array<{ message: string; line?: number }>
+```
+
+- Parses with the `yaml` package and reports syntax errors only. There is no schema; the result drives a warning marker and never stops a save.
+
+### 1.3. Preview Pipeline
+
+```ts
+markdownToHast(markdown: string): Root   // hast, the HTML syntax tree
+```
+
+The pipeline is a frozen unified processor (decision D3):
+
+| Step | Plugin | Purpose |
+| ---- | ------ | ------- |
+| 1 | `remark-parse` | Markdown to mdast |
+| 2 | `remark-frontmatter` | Recognize YAML front matter |
+| 3 | `remark-gfm` | Tables, task lists, strikethrough, autolinks, footnotes |
+| 4 | `remark-rehype` (`allowDangerousHtml`) | mdast to hast; front matter is dropped |
+| 5 | `rehype-raw` | Parse raw HTML into real elements |
+| 6 | `rehype-sanitize` | Remove anything not allowed (decision D15) |
+| 7 | Fragment links | Rewrite `#id` links to `#user-content-id` |
+| 8 | Section anchors | Mark the top-level section anchors (`data-section-anchor`, with the section's kind) and move a heading's anchor into the heading, so the preview can show badges |
+
+- **Sanitize schema:** GitHub's default schema, plus `data-*` attributes on `a` and `span` for traceability anchors (`<a name="r7k2" data-status="draft"></a>`). `id` and `name` values get the `user-content-` prefix against DOM clobbering, so step 7 rewrites in-page links to match. See [Security](security.md) §6.
+- **Where it runs:** in the client's Web Worker (`client/src/preview/preview-worker.ts`), which returns the hast tree; the main thread renders it with `hast-util-to-jsx-runtime` and a component map. The map's `a` component opens links to other workspace `.md` files in Specquer, and renders a marked section anchor as the anchor followed by a badge. If the worker can't start, the client calls `markdownToHast` on the main thread.
+- **Output is data:** the tree is plain objects, so it can cross the worker boundary and could be produced on the server too.
+
+### 1.4. Editors and the Markdown Domain
+
+- The client keeps one copy of the open file: front matter (or `null`) and body, both with `\n` line endings, plus the layout from `splitFrontmatter`.
+- The file text for saving is `fromLf(joinFrontmatter(frontmatter, body, layout), eol)`. It is written only if it differs from the text last read or saved, so an unedited file is never rewritten.
+- Milkdown (WYSIWYG) serializes Markdown its own way (list markers, table padding, reference links become inline links). Its output replaces the body only after the user edits in it (decision D5). Raw HTML, including section anchors, survives its round trip unchanged.
+- Saving a sectioned file may return edits that add anchors; the client applies them to the body (see §2.7).
+
+### 1.5. Tests
+
+`shared/src/markdown/frontmatter.test.ts` checks the round trip for LF, CRLF, BOM, empty and blank blocks, unterminated blocks, mixed line endings and closing lines at the end of the file. `preview.test.ts` checks GFM output, that front matter is left out, the traceability anchors, the section anchors, and that scripts, event handlers, iframes and `javascript:` links are removed. `sections.test.ts` checks finding and adding section anchors.
+
+## 2. Sections
 
 Sections give parts of spec files permanent IDs, as targets for links, traceability and, later, review comments, summaries and metadata. They come from [Step 002](/work-items/step-002-sections/requirements) and its [implementation plan](/work-items/step-002-sections/implementation-plan).
 
@@ -14,7 +86,7 @@ The code is split by where it runs:
 | `server` | `src/sections/reconcile.ts` | Reconciliation: the conflict rules, as a pure function |
 | `server` | `src/sections/section-index.ts` | `SectionIndex`: the in-memory index, ID allocation, save, create, rename, delete, **Add section anchors** |
 
-## 1. Model
+### 2.1. Model
 
 | Concept | Description |
 | ------- | ----------- |
@@ -26,7 +98,7 @@ The code is split by where it runs:
 | Section UID | A CUID2 per section, the key of its entry in `sections.yaml`, for future attributes |
 | Known prefix | A prefix that is a value in the configuration or already has a `sections.yaml` |
 
-## 2. Recognizing Sections
+### 2.2. Recognizing Sections
 
 `findSections(body)` parses the body (the file without front matter, `\n` line endings) with `remark-parse` and GFM, so headings and anchors in code, block quotes and nested lists are never sections. An anchor is an inline HTML open tag `<a … id="…" …>` directly followed by `</a>`.
 
@@ -41,7 +113,7 @@ Other `<a id>` and `<a name>` tags are left alone. In a section anchor's place, 
 
 `anchorEdits(body, sections, plan)` returns the edits (insertions and replacements, sorted, not overlapping) that give every section without an ID its new ID, renumber the sections the plan names, and set the root anchor's document ID; other attributes of an anchor are kept. Applying them and finding the sections again needs no further edits.
 
-## 3. Configuration
+### 2.3. Configuration
 
 `.specquer/shared/section-prefixes.config.yaml` maps globs on workspace paths to prefixes:
 
@@ -57,7 +129,7 @@ prefixes:
 - The file is read with the `yaml` package's document API, so key order is kept, and read again when its modification time changes. An invalid prefix is reported in the log and its key ignored.
 - A file's new sections get the prefix for its current path; a moved file keeps its IDs, so one file can mix prefixes.
 
-## 4. Data Files
+### 2.4. Data Files
 
 Committed to Git in `.specquer/shared/`, one entry per line, entries in the order they were added:
 
@@ -78,7 +150,7 @@ sections:
 - Invalid entries are skipped and an unreadable file counts as empty (reported in the log); the index is rebuilt from the documents and the file is written with the next change. Nothing here stops the server.
 - Files are written atomically, only when their content changes, and not at all while they would be empty.
 
-## 5. Reconciliation
+### 2.5. Reconciliation
 
 `reconcile(data, scannedDocuments, knownPrefixes, newUid)` is a pure function from the data files and the sections found in the documents to the data files as they should be and, for each document, the fixes its anchors need (its document ID, and the sections to renumber).
 
@@ -99,7 +171,7 @@ Sections:
 
 An ID typed in the section ID format is kept, as an ID arriving from another branch would be, even if its number was retired; only a placeholder asks Specquer to choose the number.
 
-## 6. The Section Index
+### 2.6. The Section Index
 
 `SectionIndex` (server) holds the configuration, the data files and, for each sectioned document, its path, modification time, document ID and found sections. All its operations run one at a time.
 
@@ -115,7 +187,7 @@ An ID typed in the section ID format is kept, as an ID arriving from another bra
 
 Data files are written only by the changes in this table, and then hold the whole reconciled state, including fixes the scans found for other documents.
 
-## 7. Client
+### 2.7. Client
 
 - **Anchors added on save.** `DocumentStore` keeps the body it sent. When the save returns edits, it builds a CodeMirror `ChangeSet` from them, maps it through the changes typed since (a `ChangeSet` from `@codemirror/merge`'s `diff` of the sent and current body) and applies it. The written text becomes the saved text, so the anchors aren't unsaved changes.
 - **Text editor.** `CodeEditor` applies a body changed from outside as the minimal changes, so the selection is mapped and the cursor stays put, and outside the undo history (`addToHistory: false`), so undo never removes an assigned anchor (which would retire its number).
@@ -124,6 +196,67 @@ Data files are written only by the changes in this table, and then hold the whol
 - **Completion.** A CodeMirror completion source recognizes `](#…` and `](path#…` and offers sections from `GET /api/sections/search`: of all documents without a path (inserting the path relative to the open file, or nothing for the same file), of that document with one.
 - **Links to sections.** A preview link to another document with a fragment opens the document and scrolls the preview to `user-content-<id>` once rendered.
 
-## 8. Tests
+### 2.8. Tests
 
 `shared`: `sections/ids.test.ts`, `markdown/sections.test.ts` (every recognition rule, placeholders, legacy root anchors, byte-order mark, stability), `markdown/preview.test.ts` (marking and moving anchors). `server`: `sections/config.test.ts`, `data.test.ts` (layout, merge conflicts, damaged files), `reconcile.test.ts` (a test per rule), `sections-api.test.ts` (save, copies, moves, create, rename, delete, queries, the dry run). `client`: `edits.test.ts`, `document-store.test.ts`, `SectionBadge.test.tsx`, `section-completion.test.ts`. End to end: `e2e/sections.spec.ts`.
+
+## 3. UI State
+
+The UI state is the per-user state of the Specquer interface. The client reads and changes it; the server stores it. Its model lives in `shared/src/uistate/` (`@specquer/shared/uistate`) so both sides apply the same rules.
+
+### 3.1. Storage
+
+- File: `.specquer/user/uistate.yaml` under the root folder, written by the server with `Bun.YAML`, atomically.
+- `.specquer/user/` gets a `.gitignore` containing `*` when Specquer creates the folder, so the state is never committed.
+- Several tabs or windows may change it; the last write wins.
+
+### 3.2. Model
+
+```ts
+UiState = {
+  version: 1,
+  theme?: "light" | "dark",      // absent until the user chooses; the browser's preference applies
+  treePaneFraction: number,      // folder pane width, 0.1 to 0.7 of the window; default 0.25
+  expandedFolders: string[],     // workspace paths
+  recentFiles: string[],         // most recent first, at most 10, never the current file
+  currentFile?: string,          // the open file
+  files: Record<string, {        // keyed by workspace path
+    viewType: "text" | "split" | "preview" | "wysiwyg",   // default "text"
+    frontmatterHeight?: number,  // front matter editor height in pixels
+  }>,
+}
+```
+
+All paths are workspace paths: relative to the root, separated by `/`.
+
+### 3.3. Parsing
+
+`parseUiState(value)` turns whatever was stored into a valid state:
+
+- Each field falls back to its default on its own, so one damaged field doesn't lose the rest.
+- Unknown fields are dropped; non-string paths and duplicates are removed; the recent files are cut to ten; per-file entries that aren't objects are dropped, and an invalid view type becomes `"text"`.
+- A file that isn't YAML at all gives the defaults. Specquer never fails to start because of the UI state.
+
+### 3.4. Updates
+
+Every change is a pure function from state to state:
+
+| Function | Effect |
+| -------- | ------ |
+| `openFile(state, path)` | Makes `path` current; the previous current file moves to the front of the recent files; `path` leaves them |
+| `closeFile(state)` | No current file; the previous one joins the recent files |
+| `setViewType`, `setFrontmatterHeight` | Per-file settings |
+| `setTheme`, `setTreePaneFraction` (clamped), `setFolderExpanded` | Global settings |
+| `renameInUiState(state, from, to)` | Rewrites every entry for `from` and everything inside it: expanded folders, recent files, current file, per-file settings |
+| `deleteInUiState(state, path)` | Removes every entry for `path` and everything inside it |
+| `pruneMissing(state, kindOf)` | Removes entries for files and folders that no longer exist, for example deleted by a coding agent |
+| `diffUiState(a, b)`, `applyUiStatePatch(state, patch)` | The top-level fields that changed, and applying them |
+
+### 3.5. Client and Server
+
+- **Client:** `UiStateStore` holds the state, applies changes at once and sends the changed top-level fields as a `PATCH` 300 ms later (and at once when the tab is hidden or the page closes). Before a rename or delete it sends pending changes, and afterwards it takes the state the server returns. Creating a file or folder doesn't involve the server's state: the client expands the folder it was created in and opens a new file through ordinary updates.
+- **Server:** `UiStateStore` reads the file for every request, applies the change, drops entries for vanished paths and writes the file, one update at a time. Renames and deletes through the API update the state in the same request, after the file-system change, so the old paths can still be matched.
+
+### 3.6. Versioning
+
+`version` is 1. A later change to the model raises it; `parseUiState` will then migrate older content, and anything it can't migrate falls back to defaults as above.

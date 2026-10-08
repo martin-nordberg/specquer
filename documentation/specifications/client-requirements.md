@@ -28,7 +28,7 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 3. Rename never moves an entry to another folder.
 4. An invalid name (empty, leading or trailing spaces, `/` or `\`, `.` or `..`, control characters, `.git`, `.specquer`, too long) keeps the dialog open with the reason, in the error color.
 5. A name already used by a file or folder in the same folder keeps the dialog open with "A file or folder with that name already exists."
-6. Unsaved changes to the open file are saved first if the rename affects it. After the rename, the open file follows its new path and the UI state is updated (see [UI-State Domain Design](uistate-domain-design.md) §4).
+6. Unsaved changes to the open file are saved first if the rename affects it. After the rename, the open file follows its new path and the UI state is updated (see [Data Architecture](data-architecture.md) §3.4).
 
 ### 3.2 New File and New Folder
 
