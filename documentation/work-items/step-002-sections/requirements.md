@@ -1,12 +1,8 @@
-<a id="WORK-00000"></a>
-
-<a id="WORK-00001"></a>
 # Sections
 
 _Step 002 requirements. The [implementation plan](implementation-plan.md) records the design and
 the decisions taken while planning._
 
-<a id="WORK-00002"></a>
 ## Definitions
 
 **Section** - One of the following:
@@ -86,19 +82,17 @@ A **known prefix** is one that is a value in the prefix configuration or already
 `sections.yaml`. An ID with any other prefix is renumbered with the file's prefix (see Section
 Conflict Resolution).
 
-<a id="WORK-00003"></a>
 ## Purpose of Sections
 
 The following functionality will be built upon sections as Specquer evolves:
 
-* <a id="WORK-00004"></a> Sections serve as targets of links from elsewhere in the documentation.
-* <a id="WORK-00005"></a> In particular, sections are the source and sink for requirements traceability links.
-* <a id="WORK-00006"></a> Sections can have sidecar review comment threads attached to them.
-* <a id="WORK-00007"></a> Specquer automates hierarchical summarization of documents section by section.
-* <a id="WORK-00008"></a> Sections have attached metadata like status, priority, owner, etc.
-* <a id="WORK-00009"></a> Sections have a role when document change history is displayed in a granular way.
+* Sections serve as targets of links from elsewhere in the documentation.
+* In particular, sections are the source and sink for requirements traceability links.
+* Sections can have sidecar review comment threads attached to them.
+* Specquer automates hierarchical summarization of documents section by section.
+* Sections have attached metadata like status, priority, owner, etc.
+* Sections have a role when document change history is displayed in a granular way.
 
-<a id="WORK-00010"></a>
 ## Functionality for This Work Item
 
 * Read and write the configuration and data files for documents and sections.
@@ -107,7 +101,6 @@ The following functionality will be built upon sections as Specquer evolves:
 * Out of scope, left for future work: section attributes, summarization, review comment threads,
   change history, a user interface for turning a list into sections, and SQLite.
 
-<a id="WORK-00011"></a>
 ## Configuration
 
 All of Specquer's shared files live in `.specquer/shared/`, which is committed to Git (unlike
@@ -142,7 +135,6 @@ New sections use the prefix for the file's current path. A file moved to a folde
 prefix keeps its existing section IDs, and its new sections get the new prefix, so one file can
 mix prefixes.
 
-<a id="WORK-00012"></a>
 ## Document Data
 
 `.specquer/shared/documents.yaml` lists every sectioned document:
@@ -169,10 +161,8 @@ in the file is taken to be the older one and wins.
 
 The server keeps an in-memory index of these files and of the sections found in the documents.
 
-<a id="WORK-00013"></a>
 ## Section Anchor Insertion
 
-<a id="WORK-00014"></a>
 ### Timing
 
 Viewing a file never changes it. Specquer inserts and corrects section anchors:
@@ -195,7 +185,6 @@ holds the whole reconciled state, including fixes found by the background readin
 The editor shows the anchors inserted on save at once, without losing the cursor position or
 treating them as unsaved changes.
 
-<a id="WORK-00015"></a>
 ### ID Generation
 
 For each new section the server takes the next sequence number for the prefix and generates a
@@ -212,7 +201,6 @@ be, unless it is already taken or its prefix isn't known; then it is renumbered.
 
 Insertion keeps each file's line endings and byte-order mark, as saving does.
 
-<a id="WORK-00017"></a>
 ### Document Conflict Resolution
 
 Whenever external changes are possible, Specquer resolves conflicts between the documents and
@@ -247,10 +235,8 @@ Fixes that change a document are made when it is next saved or when **Add sectio
 covers it. Until then the index records the duplicates. Fixes to the data files alone are written
 with the next change that writes them (see Timing).
 
-<a id="WORK-00018"></a>
 ## User Interface Additions
 
-<a id="WORK-00019"></a>
 ### Badges
 
 * In the preview and split views, a badge appears at the start of each section heading, between

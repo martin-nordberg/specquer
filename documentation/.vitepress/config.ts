@@ -51,11 +51,19 @@ export default defineConfig({
                   },
                   {
                     text: '002-Sections',
-                    collapsed: false,
+                    collapsed: true,
                     items: [
                       {text: 'Requirements', link: '/work-items/step-002-sections/requirements'},
                       {text: 'Implementation Plan', link: '/work-items/step-002-sections/implementation-plan'},
                       {text: 'Simpler Prefix Configuration', link: '/work-items/step-002-sections/simpler-prefix-config'},
+                    ]
+                  },
+                  {
+                    text: '003-Section UIDs',
+                    collapsed: false,
+                    items: [
+                      {text: 'Section Anchor Conflicts', link: '/work-items/step-003-section-uids/section-anchor-conflicts'},
+                      {text: 'Implementation Plan', link: '/work-items/step-003-section-uids/implementation-plan'},
                     ]
                   }
                 ]
