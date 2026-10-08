@@ -55,6 +55,7 @@ export default defineConfig({
                     items: [
                       {text: 'Requirements', link: '/work-items/step-002-sections/requirements'},
                       {text: 'Implementation Plan', link: '/work-items/step-002-sections/implementation-plan'},
+                      {text: 'Simpler Prefix Configuration', link: '/work-items/step-002-sections/simpler-prefix-config'},
                     ]
                   }
                 ]

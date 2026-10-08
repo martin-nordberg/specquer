@@ -115,18 +115,20 @@ Other `<a id>` and `<a name>` tags are left alone. In a section anchor's place, 
 
 ### 2.3. Configuration
 
-`.specquer/shared/section-prefixes.config.yaml` maps globs on workspace paths to prefixes:
+`.specquer/shared/section-prefixes.config.yaml` maps workspace paths to prefixes:
 
 ```yaml
 prefixes:
+  "documentation/": REQ
   "documentation/notes/": NOTE
   "documentation/notes/ideas.md": IDEA
   "documentation/specifications/": SPEC
 ```
 
-- Keys are matched from the last to the first with `Bun.Glob`; a key ending in `/` matches the folder and everything in it (`key + "**"`). Only Markdown files that match a key are sectioned.
-- Without the file nothing is sectioned; there is no built-in `"**/*"` default.
-- The file is read with the `yaml` package's document API, so key order is kept, and read again when its modification time changes. An invalid prefix is reported in the log and its key ignored.
+- A key is a folder, ending in `/`, which covers every file in it and its subfolders, or a file, ending in `.md`. Keys are paths relative to the root folder (the folder holding `.specquer`); a leading `./` is removed, and `./` alone is the root folder. Keys aren't globs.
+- A file's prefix comes from the longest key that matches its path, so a file key beats its folder's key and a subfolder's key beats its parent's. The order of the keys doesn't matter. Only Markdown files that match a key are sectioned.
+- Without the file nothing is sectioned; there is no built-in default. A user who wants every file sectioned adds the key `./`.
+- The file is read with the `yaml` package's document API, and read again when its modification time changes. An invalid key (not ending in `/` or `.md`, with empty, `.` or `..` segments, or holding `*` or `?`), an invalid prefix, and a key that repeats another after normalizing are reported in the log and ignored.
 - A file's new sections get the prefix for its current path; a moved file keeps its IDs, so one file can mix prefixes.
 
 ### 2.4. Data Files

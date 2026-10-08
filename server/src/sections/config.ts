@@ -4,10 +4,10 @@ import { isPrefix } from "@specquer/shared/sections";
 import { parseDocument, isMap, isScalar } from "yaml";
 
 /**
- * The prefix configuration, `.specquer/shared/section-prefixes.config.yaml`: globs on workspace
- * paths mapped to the prefix new sections get. Keys are checked from the last to the first, so
- * they are listed from least to most specific; a key ending in `/` matches that folder and
- * everything in it. Only Markdown files matching a key are sectioned; without the file, none is.
+ * The prefix configuration, `.specquer/shared/section-prefixes.config.yaml`: workspace paths mapped
+ * to the prefix new sections get. A key is a folder (ending in `/`), which covers everything in it,
+ * or a Markdown file (ending in `.md`). The longest key that matches a file's path wins, whatever
+ * the order of the keys. Only Markdown files matching a key are sectioned; without the file, none is.
  */
 
 export const SHARED_FOLDER = join(".specquer", "shared");
@@ -16,14 +16,31 @@ export const CONFIG_FILE = join(SHARED_FOLDER, "section-prefixes.config.yaml");
 interface Rule {
   key: string;
   prefix: string;
-  glob: Bun.Glob;
+}
+
+/**
+ * A key as a workspace path: without leading `./`, or `undefined` when it isn't a folder ending in
+ * `/` or a file ending in `.md`, has empty, `.` or `..` segments, or holds `*` or `?` (keys are no
+ * longer globs). `./` alone is the root folder, the key `""`.
+ */
+export function normalizeKey(key: string): string | undefined {
+  let path = key.trim();
+  while (path.startsWith("./")) path = path.slice(2);
+  const isFolder = path === "" || path.endsWith("/");
+  if ((!isFolder && !isMarkdownFile(path)) || /[*?]/.test(path)) return undefined;
+  const segments = (isFolder ? path.slice(0, -1) : path).split("/");
+  if (path !== "" && segments.some((s) => s === "" || s === "." || s === "..")) return undefined;
+  return path;
 }
 
 export class PrefixConfig {
+  /** Longest key first, so the first match is the most specific. */
   private readonly rules: Rule[];
+  private readonly prefixList: string[];
 
   constructor(entries: ReadonlyArray<readonly [key: string, prefix: string]>) {
-    this.rules = entries.map(([key, prefix]) => ({ key, prefix, glob: new Bun.Glob(key.endsWith("/") ? `${key}**` : key) }));
+    this.rules = entries.map(([key, prefix]) => ({ key, prefix })).sort((a, b) => b.key.length - a.key.length);
+    this.prefixList = entries.map(([, prefix]) => prefix);
   }
 
   static readonly empty = new PrefixConfig([]);
@@ -31,11 +48,8 @@ export class PrefixConfig {
   /** The prefix for new sections in a file, or `undefined` when the file isn't sectioned. */
   prefixFor(path: string): string | undefined {
     if (!isMarkdownFile(path)) return undefined;
-    for (let i = this.rules.length - 1; i >= 0; i--) {
-      const rule = this.rules[i]!;
-      if (rule.glob.match(path)) return rule.prefix;
-    }
-    return undefined;
+    const rule = this.rules.find(({ key }) => (key === "" || key.endsWith("/") ? path.startsWith(key) : path === key));
+    return rule?.prefix;
   }
 
   isSectioned(path: string): boolean {
@@ -44,13 +58,13 @@ export class PrefixConfig {
 
   /** The prefixes the configuration names. */
   prefixes(): Set<string> {
-    return new Set(this.rules.map((rule) => rule.prefix));
+    return new Set(this.prefixList);
   }
 }
 
 /**
- * Parses the configuration. Key order is kept even for keys that look like numbers; entries
- * with an invalid prefix are reported through `warn` and ignored.
+ * Parses the configuration. Entries with an invalid key or prefix, and repeats of a key, are
+ * reported through `warn` and ignored.
  */
 export function parsePrefixConfig(text: string, warn: (message: string) => void = () => {}): PrefixConfig {
   const doc = parseDocument(text);
@@ -65,14 +79,25 @@ export function parsePrefixConfig(text: string, warn: (message: string) => void 
     return PrefixConfig.empty;
   }
   const entries: Array<[string, string]> = [];
+  const seen = new Set<string>();
   for (const pair of prefixes.items) {
     const key = isScalar(pair.key) ? String(pair.key.value) : undefined;
     const value = isScalar(pair.value) ? pair.value.value : undefined;
-    if (key === undefined || key === "" || typeof value !== "string" || !isPrefix(value)) {
+    const path = key === undefined ? undefined : normalizeKey(key);
+    if (path === undefined) {
+      warn(`${CONFIG_FILE}: ignoring '${key}': a key is a folder ending in '/' or a file ending in '.md', not a glob`);
+      continue;
+    }
+    if (typeof value !== "string" || !isPrefix(value)) {
       warn(`${CONFIG_FILE}: ignoring '${key}': '${String(value)}' isn't a valid prefix`);
       continue;
     }
-    entries.push([key, value]);
+    if (seen.has(path)) {
+      warn(`${CONFIG_FILE}: ignoring '${key}': the path is already configured`);
+      continue;
+    }
+    seen.add(path);
+    entries.push([path, value]);
   }
   return new PrefixConfig(entries);
 }

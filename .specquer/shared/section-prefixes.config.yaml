@@ -1,6 +1,7 @@
 prefixes:
+  "documentation/": REQ
   "documentation/notes/": NOTE
   "documentation/notes/ideas.md": IDEA
-  "documentation/specifications/": SPEC
   "documentation/references/": REF
+  "documentation/specifications/": SPEC
   "documentation/work-items/": WORK
