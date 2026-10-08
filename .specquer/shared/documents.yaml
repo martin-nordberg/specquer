@@ -1,0 +1,27 @@
+# Specquer's sectioned documents, by document ID; written by Specquer. Commit this file.
+documents:
+  aa5s6iueggr8: { path: documentation/notes/database-choice.md }
+  aciqejdm8xn2: { path: documentation/notes/ideas.md }
+  uew7n9oins9k: { path: documentation/notes/platform-choice.md }
+  dx2r7acuwbse: { path: documentation/notes/traceability-links.md }
+  a6bbx10a5oza: { path: documentation/references/glossary.md }
+  x3ma1n76ojko: { path: documentation/references/overview.md }
+  b2j6fcpzpax2: { path: documentation/references/spec-driven-development.md }
+  c50dtk0gu7qt: { path: documentation/references/specquer-technologies.md }
+  hqhb8pujtp2h: { path: documentation/specifications/client-requirements.md }
+  zp0zh8v7la11: { path: documentation/specifications/data-architecture.md }
+  iy4rl3v8on0h: { path: documentation/specifications/info-architecture.md }
+  gnv4h0oi8xrd: { path: documentation/specifications/overview.md }
+  t34ybwudslp2: { path: documentation/specifications/security.md }
+  dtnurz41yejv: { path: documentation/specifications/server-requirements.md }
+  crzxf49hslqn: { path: documentation/specifications/technical-architecture.md }
+  m25jr3fkti2j: { path: documentation/work-items/step-001-doc-editing/implementation-plan.md }
+  eadgo6hyxw93: { path: documentation/work-items/step-001-doc-editing/new-file-folder.md }
+  khm5xtgxdc0q: { path: documentation/work-items/step-001-doc-editing/requirements.md }
+  edeyktmu17ex: { path: documentation/work-items/step-002-sections/implementation-plan.md }
+  q3bm12jcb88o: { path: documentation/work-items/step-002-sections/requirements.md }
+  eg9wdy0no0fm: { path: documentation/work-items/step-002-sections/simpler-prefix-config.md }
+  on22s0wjxfzw: { path: documentation/work-items/step-003-section-uids/implementation-plan.md }
+  rkxbb6vpvyi0: { path: documentation/work-items/step-003-section-uids/section-anchor-conflicts.md }
+  n8w0w4eq2ka6: { path: documentation/work-items/step-004-hierarchical-summarization/implementation-plan.md }
+  hopyomttch3i: { path: documentation/work-items/step-004-hierarchical-summarization/requirements.md }

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project state
 
-`specquer` is a local Markdown spec editor and browser (Step 001: `documentation/work-items/step-001-doc-editing/`; Step 002, sections with permanent IDs: `documentation/work-items/step-002-sections/`; Step 003, section UIDs in anchors and conflict handling: `documentation/work-items/step-003-section-uids/`). The architecture is in `documentation/specifications/technical-architecture.md`; the other specifications there (security, client and server requirements, information architecture, data architecture: Markdown content, sections and UI state) describe the behavior. There is no lint config yet — update this file as structure emerges.
+`specquer` is a local Markdown spec editor and browser (Step 001: `documentation/work-items/step-001-doc-editing/`; Step 002, sections with permanent IDs: `documentation/work-items/step-002-sections/`; Step 003, section UIDs in anchors and conflict handling: `documentation/work-items/step-003-section-uids/`; Step 004, hierarchical summarization, planned: `documentation/work-items/step-004-hierarchical-summarization/`). The architecture is in `documentation/specifications/technical-architecture.md`; the other specifications there (security, client and server requirements, information architecture, data architecture: Markdown content, sections and UI state) describe the behavior. There is no lint config yet — update this file as structure emerges.
 
 The root is a Bun workspace with five packages (`agent` is still a placeholder):
 

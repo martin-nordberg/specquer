@@ -60,10 +60,18 @@ export default defineConfig({
                   },
                   {
                     text: '003-Section UIDs',
-                    collapsed: false,
+                    collapsed: true,
                     items: [
                       {text: 'Section Anchor Conflicts', link: '/work-items/step-003-section-uids/section-anchor-conflicts'},
                       {text: 'Implementation Plan', link: '/work-items/step-003-section-uids/implementation-plan'},
+                    ]
+                  },
+                  {
+                    text: '004-Hierarchical Summarization',
+                    collapsed: false,
+                    items: [
+                      {text: 'Requirements', link: '/work-items/step-004-hierarchical-summarization/requirements'},
+                      {text: 'Implementation Plan', link: '/work-items/step-004-hierarchical-summarization/implementation-plan'},
                     ]
                   }
                 ]
