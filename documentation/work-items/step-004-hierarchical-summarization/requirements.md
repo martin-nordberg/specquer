@@ -1,8 +1,12 @@
+<a id="WORK-00026" data-uid="hopyomttch3i"></a>
+
+<a id="WORK-00027" data-uid="qdiivkych1ko"></a>
 # Hierarchical Summarization
 
 _Step 004 requirements. Reviewed October 2026; the decisions taken in the review are listed at the
 end._
 
+<a id="WORK-00028" data-uid="ktqkbdxoh8s2"></a>
 ## Context
 
 * Summaries appear in the preview: the preview half of the split view, and the preview view.
@@ -13,6 +17,7 @@ end._
   expand all / collapse all within a section (described in the Ideas note). Deferred, possibly
   for good.
 
+<a id="WORK-00029" data-uid="ri2353ce7dty"></a>
 ## Summarization Slider Control
 
 * A small shadcn Slider control appears above the Markdown preview.
@@ -34,6 +39,7 @@ end._
   the view type.
 * A document without headings shows no slider.
 
+<a id="WORK-00030" data-uid="ytyw496qrpz9"></a>
 ## What a Summary Replaces
 
 * A summary replaces the content of its section, including all sections below it. The section's
@@ -49,6 +55,7 @@ end._
 * A link to a section hidden by a summary (`other.md#SPEC-00012`) does the same: the slider moves
   to the far right and the preview scrolls to the section.
 
+<a id="WORK-00031" data-uid="zkle0vo89u3l"></a>
 ## Summarization Approach
 
 * The summary text consists of 2 to 10 sentences of prose in proportion to the size of the
@@ -78,6 +85,7 @@ end._
   contain Markdown, links or HTML. Summaries are rendered as text or through the same sanitizing
   preview pipeline as specs (Security §6), never as raw HTML.
 
+<a id="WORK-00032" data-uid="u9uamo2gynzq"></a>
 ## Saving
 
 * To help bring summaries up to date, the save status "Unsaved changes" becomes a button: clicking
@@ -85,6 +93,7 @@ end._
 * The save status stays plain text when there are no changes to save ("Saved", "Saving…", and
   the error states).
 
+<a id="WORK-00033" data-uid="yunahxb0vmyv"></a>
 ## Caching
 
 * Once computed, the summary of a section is stored in a SQLite database (`bun:sqlite`) at
@@ -98,6 +107,7 @@ end._
   `*` when it creates the folder, as it does for `.specquer/user/`. Summaries aren't shared
   through Git; each user's cache is their own.
 
+<a id="WORK-00034" data-uid="l0co3q0kpaje"></a>
 ## AI Model
 
 * Summarization is the responsibility of the agent subsystem (`agent`), which runs on the server
@@ -124,6 +134,7 @@ end._
   calls, specification text sent to a third party, and the terms of use of free hosted tiers,
   which should be checked before specs are sent.
 
+<a id="WORK-00035" data-uid="ijgrgjox3r2q"></a>
 ## Decisions
 
 Taken in the October 2026 review:

@@ -1,3 +1,6 @@
+<a id="WORK-00036" data-uid="rkxbb6vpvyi0"></a>
+
+<a id="WORK-00037" data-uid="np3fkp7i619w"></a>
 # Section Anchor Conflicts
 
 _Notes from October 2026._
@@ -12,6 +15,7 @@ The section ID stays the anchor's `id`, since it is the human-readable part of U
 
 **Short answer:** yes, put the CUID2 in the anchor. It doesn't create new kinds of conflict: copies, branch collisions, edited IDs and reused IDs already happen today. Without the CUID2, Specquer can't tell them apart, so it guesses by position or file order. With it, Specquer can tell which case it is looking at. The main cost is noise in the raw text. Some important problems don't depend on this choice, though, and two of them are bugs in the current code (§4). Recommendations are in §6, with one for each conflict in §6.2. The recommendations were accepted, and §7 records the decisions.
 
+<a id="WORK-00038" data-uid="emal2kjrvifi"></a>
 ## 1. How Identity Works Now
 
 | Thing | Where its identity lives | Recoverable if the data files are lost? |
@@ -25,6 +29,7 @@ So a section's real identity today is the text of its section ID. The CUID2 is o
 
 Document IDs were put in the root anchor for exactly this reason: so that a document keeps its identity when it is moved or renamed outside Specquer. Sections have the same problem but not the same solution.
 
+<a id="WORK-00039" data-uid="bike3u0ykv5v"></a>
 ## 2. What Changes Anchors Outside Specquer
 
 - **People in other editors:** copy and paste, search and replace, deleting, tidying up numbers.
@@ -33,10 +38,12 @@ Document IDs were put in the root anchor for exactly this reason: so that a docu
 - **File operations:** copying, moving into or out of the configured folders, and deleting and restoring.
 - **Formatters** such as Prettier and markdownlint, and Specquer's own WYSIWYG editor. These keep raw HTML, so they are a low risk.
 
+<a id="WORK-00040" data-uid="vbd26ouvy54c"></a>
 ## 3. The Conflicts
 
 "Now" is what the current code does. The last column says whether a CUID2 in the anchor would help.
 
+<a id="WORK-00041" data-uid="mtqqf1dy1qi3"></a>
 ### 3.1 Editing
 
 | # | Situation | Now | Problem | Inline UID |
@@ -50,6 +57,7 @@ Document IDs were put in the root anchor for exactly this reason: so that a docu
 | E7 | **An anchor deleted** (an agent rewrite, or by hand) | The entry is dropped at the next write and the number retired; the section gets a new ID on save | Links break | Only if the section is restored later, with retired IDs recorded |
 | E8 | **A UID copied to a new section** (an agent imitating a neighbor) | Not applicable today | A new kind of duplicate | It has an obvious rule: the occurrence with the recorded ID keeps the UID, and the others get new UIDs |
 
+<a id="WORK-00042" data-uid="jh4mhgvyxk2g"></a>
 ### 3.2 Files and Configuration
 
 | # | Situation | Now | Inline UID |
@@ -58,6 +66,7 @@ Document IDs were put in the root anchor for exactly this reason: so that a docu
 | F2 | A file moved out of the configured folders and back, or deleted and restored with `git restore` | Its entries are dropped at the next write; when it comes back, its sections get **new CUID2s** | **Helps:** the UIDs come back with the text |
 | F3 | A file copied and the original then deleted (how agents often "move" files) | Handled. Fixes are only written on save, so a short-lived copy settles back into a move | Same |
 
+<a id="WORK-00043" data-uid="lennrfe30wb5"></a>
 ### 3.3 Git
 
 | # | Situation | Now | Problem | Inline UID |
@@ -69,6 +78,7 @@ Document IDs were put in the root anchor for exactly this reason: so that a docu
 | G5 | **Conflict markers inside a document** during an unresolved merge | Both sides' anchors are found, and a save in Specquer renumbers one of them | The resolution is decided before the user has resolved the merge | No help. Don't anchor such a file (§6.1, item 3) |
 | G6 | Conflicting entries in `sections.yaml` | Read with the conflict markers dropped, and the earlier entry wins | Low risk: the entries are mostly derived | Lower still: the entries can be rebuilt from the documents (§5.3) |
 
+<a id="WORK-00044" data-uid="mpwobdcpttgw"></a>
 ## 4. Problems That Don't Depend on the UID Choice
 
 - **S1. The index of other documents goes stale. (Bug.)** Specquer scans the files only at startup and when the tree reloads, which happens only after Specquer itself creates, renames or deletes something. A save indexes only the file being saved. So duplicates are resolved and numbers issued using an out-of-date view of every other file. If an agent adds `SPEC-00300` elsewhere, Specquer can issue `SPEC-00300` again. The fix is cheap: the scan's modification-time and size cache makes a full check of the files fast, so do one before issuing numbers or settling duplicates.
@@ -77,8 +87,10 @@ Document IDs were put in the root anchor for exactly this reason: so that a docu
 - **S4. Links are never updated or checked.** Renumbering is safe for a copy, because links point to the original. For a collision (G1) or an edited ID (E3), it leaves links pointing to the wrong section or nowhere.
 - **S5. Duplicates within a document are settled by position (E1).** An outside editor gives no better signal than position. Specquer's own editor does: it can tell a paste from typing.
 
+<a id="WORK-00045" data-uid="aymoj63op1wo"></a>
 ## 5. Putting the UID in the Anchor
 
+<a id="WORK-00046" data-uid="yduta9iav8zl"></a>
 ### 5.1 Design
 
 - `data-uid="<CUID2>"` on every section anchor. New CUID2s are 12 characters long (`init({ length: 12 })` in `@paralleldrive/cuid2`).
@@ -90,6 +102,7 @@ Document IDs were put in the root anchor for exactly this reason: so that a docu
 - New anchors get both at once. Existing anchors get their UID from `sections.yaml`, so current CUID2s are kept. As with other fixes, files are rewritten only on save or by **Add section anchors**, never by a scan.
 - **No migration of document IDs.** `data-document-id` is no longer read. Specquer hasn't been used outside this repository, and the existing document IDs will be deleted by hand, so nothing needs to carry over. The root sections' own CUID2s in `sections.yaml` are dropped as well; nothing is keyed by them yet.
 
+<a id="WORK-00047" data-uid="sigajh80qalh"></a>
 ### 5.2 Rules by Combination
 
 | Found | Meaning | Action |
@@ -105,10 +118,12 @@ Document IDs were put in the root anchor for exactly this reason: so that a docu
 
 Every one of these situations happens today. The UID only makes them distinguishable. The one new situation is a copied UID, and its rule is simple, so the UID adds few rules and removes guessing.
 
+<a id="WORK-00048" data-uid="du9ewe1314ct"></a>
 ### 5.3 Effect on the Data Files
 
 With UIDs in the documents, every entry in `sections.yaml` except `lastSequence` can be rebuilt from the files, so losing or damaging the file no longer loses identity. The entries stay, though, as the last known state. The rules in §5.2 need it: "the recorded ID" and "the recorded occurrence" refer to it. A `retired` list (UID and ID, appended) joins them, so restores and reuse can be told apart. Future metadata (status, review comments, summaries) can be kept in side files keyed by UID. Section-level history also becomes possible: `git log -S <uid>` follows a section across edits, moves and renames, which serves the "granular change history" purpose in the Step 002 requirements.
 
+<a id="WORK-00049" data-uid="m27zkyd2qzkn"></a>
 ### 5.4 Costs
 
 - **Noise in the source:** 24 more characters per anchor with 12-character CUID2s, which is heaviest on sectioned list items:
@@ -117,8 +132,10 @@ With UIDs in the documents, every entry in `sections.yaml` except `lastSequence`
 - **One more token for agents to damage.** Damage can be detected, though: an unknown UID is a new section, and a copied UID follows the rule in §5.2.
 - **Things it doesn't fix:** copies within a document (E1), the order of a move (E2), separated or misplaced anchors (E5, E6), deleted anchors (E7) and links (S4).
 
+<a id="WORK-00050" data-uid="cuji3bphl0zx"></a>
 ## 6. Recommendations
 
+<a id="WORK-00051" data-uid="m90a2cysgmfl"></a>
 ### 6.1 In Order of Value for the Effort
 
 1. Read the data files again when they change on disk (S2, G4).
@@ -131,6 +148,7 @@ With UIDs in the documents, every entry in `sections.yaml` except `lastSequence`
 8. Put the UID in the anchor, with the rules in §5.2, and retired IDs recorded in `sections.yaml`. The root anchor's UID is also the document ID (§5.1).
 9. Link checking (S4), which is needed before collision renumbering can ever be safe. It is a larger, separate step.
 
+<a id="WORK-00052" data-uid="t7re4v8e3q7f"></a>
 ### 6.2 For Each Conflict
 
 | # | Recommendation |
@@ -153,6 +171,7 @@ With UIDs in the documents, every entry in `sections.yaml` except `lastSequence`
 | G5 | Skip anchoring (item 3) |
 | G6 | No change: with UIDs in the anchors, the entries can be rebuilt from the documents (§5.3) |
 
+<a id="WORK-00053" data-uid="c12d77b2flmu"></a>
 ## 7. Decisions
 
 The recommendations in §6 were accepted. These questions were settled along with them:

@@ -1,11 +1,16 @@
+<a id="SPEC-00001" data-uid="zp0zh8v7la11"></a>
+
+<a id="SPEC-00002" data-uid="aktuc2n0mul5"></a>
 # Data Architecture
 
 The data Specquer works with: the content of spec files (Markdown), the permanent IDs of the sections of spec files (sections), the per-user state of the interface (UI state), and AI summaries of sections (summaries).
 
+<a id="SPEC-00003" data-uid="d5wru4623ay4"></a>
 ## 1. Markdown Content
 
 The Markdown domain is the code that works on the content of spec files, as opposed to reading and writing them. It lives in `shared/src/markdown/` (`@specquer/shared/markdown`) so the client, a Web Worker and the server can all use it. It has no Bun or DOM dependencies.
 
+<a id="SPEC-00004" data-uid="y0ccxd7qi8hq"></a>
 ### 1.1. Scope
 
 | Now (Steps 001 to 004) | Later |
@@ -16,6 +21,7 @@ The Markdown domain is the code that works on the content of spec files, as oppo
 | Finding section anchors and the edits that add them (`sections.ts`, see §2) | |
 | The heading outline, the summary slider's stops, and summaries in the preview tree (`outline.ts`, `summary-tree.ts`, see §1.6) | |
 
+<a id="SPEC-00005" data-uid="yhgres48khvu"></a>
 ### 1.2. Front Matter
 
 ```ts
@@ -35,6 +41,7 @@ checkYaml(frontmatter: string): Array<{ message: string; line?: number }>
 
 - Parses with the `yaml` package and reports syntax errors only. There is no schema; the result drives a warning marker and never stops a save.
 
+<a id="SPEC-00006" data-uid="ceexvonxkwxf"></a>
 ### 1.3. Preview Pipeline
 
 ```ts
@@ -58,6 +65,7 @@ The pipeline is a frozen unified processor (decision D3):
 - **Where it runs:** in the client's Web Worker (`client/src/preview/preview-worker.ts`), which returns the hast tree; the main thread renders it with `hast-util-to-jsx-runtime` and a component map. The map's `a` component opens links to other workspace `.md` files in Specquer, and renders a marked section anchor as the anchor followed by a badge. If the worker can't start, the client calls `markdownToHast` on the main thread.
 - **Output is data:** the tree is plain objects, so it can cross the worker boundary and could be produced on the server too.
 
+<a id="SPEC-00007" data-uid="rw9dw5ins0bf"></a>
 ### 1.4. Editors and the Markdown Domain
 
 - The client keeps one copy of the open file: front matter (or `null`) and body, both with `\n` line endings, plus the layout from `splitFrontmatter`.
@@ -65,6 +73,7 @@ The pipeline is a frozen unified processor (decision D3):
 - Milkdown (WYSIWYG) serializes Markdown its own way (list markers, table padding, reference links become inline links). Its output replaces the body only after the user edits in it (decision D5). Raw HTML, including section anchors, survives its round trip unchanged.
 - Saving a sectioned file may return edits that add anchors; the client applies them to the body (see §2.7).
 
+<a id="SPEC-00008" data-uid="a1zpzrzeu209"></a>
 ### 1.5. Outline and Stops
 
 ```ts
@@ -78,10 +87,12 @@ OutlineSection = { depth, title, heading: Range, range: Range, lead: Range, chil
 - Each summarized section has an **outline path**, the indexes of the section and its ancestors from the top (`1.0.2`), which identifies "the same section" across edits (Step 004 decision D5), and the titles of the headings above it.
 - **Summaries in the preview** (`summarizeTree`, decision D1): the whole body is rendered once, then the tree's top-level children are filtered by their source offsets. A summarized section keeps its heading (except at stop 0) and the rest of its range becomes one `specquer-summary` element, which the client's component map renders. Rendering once keeps reference links, footnotes and badges working. Top-level headings get `data-outline-path`, so sections without anchors can be scrolled to.
 
+<a id="SPEC-00009" data-uid="sva68cymg7sb"></a>
 ### 1.6. Tests
 
 `outline.test.ts` checks outlines (skipped and unused levels, a document starting at h2, a preamble, headings in block quotes and lists, anchors before headings, setext headings, a byte-order mark), the stops and what each summarizes, and the filtered preview tree at every stop. `shared/src/markdown/frontmatter.test.ts` checks the round trip for LF, CRLF, BOM, empty and blank blocks, unterminated blocks, mixed line endings and closing lines at the end of the file. `preview.test.ts` checks GFM output, that front matter is left out, the traceability anchors, the section anchors, and that scripts, event handlers, iframes and `javascript:` links are removed. `sections.test.ts` checks finding and adding section anchors.
 
+<a id="SPEC-00010" data-uid="hrvyjtuuo71x"></a>
 ## 2. Sections
 
 Sections give parts of spec files permanent IDs, as targets for links, traceability and, later, review comments, summaries and metadata. They come from [Step 002](/work-items/step-002-sections/requirements) and its [implementation plan](/work-items/step-002-sections/implementation-plan). [Step 003](/work-items/step-003-section-uids/implementation-plan) put each section's UID in its anchor and made Specquer report conflicts it can't settle by itself; its [analysis](/work-items/step-003-section-uids/section-anchor-conflicts) lists the conflicts that anchors edited outside Specquer can cause.
@@ -100,6 +111,7 @@ The code is split by where it runs:
 | `server` | `src/sections/agent-guide.ts` | Adding the agent rules to `AGENTS.md` |
 | `client` | `src/components/section-editing.ts` | Paste handling and muted UIDs in the text editor |
 
+<a id="SPEC-00011" data-uid="fudl6mu2mzdq"></a>
 ### 2.1. Model
 
 | Concept | Description |
@@ -113,6 +125,7 @@ The code is split by where it runs:
 | Stray anchor | An anchor with a section ID that isn't in a section anchor's place (in a block quote, a nested list or an ordinary paragraph, usually because text moved). It no longer marks a section and is reported |
 | Known prefix | A prefix that is a value in the configuration or already has a `sections.yaml` |
 
+<a id="SPEC-00012" data-uid="c1rykxhrwzmz"></a>
 ### 2.2. Recognizing Sections
 
 `analyzeBody(body, options)` parses the body (the file without front matter, `\n` line endings) with `remark-parse` and GFM, so headings and anchors in code, block quotes and nested lists are never sections, and returns the sections and the stray anchors; `findSections` returns only the sections. An anchor is an inline HTML open tag `<a … id="…" …>` directly followed by `</a>`; its `data-uid`, if valid, is the section's UID (a placeholder's is ignored).
@@ -130,6 +143,7 @@ Other `<a id>` and `<a name>` tags are left alone, but one whose `id` is in the 
 
 `hasConflictMarkers(body)` is true when the body has a `<<<<<<<` line and a `>>>>>>>` line; a `=======` line alone is a setext underline.
 
+<a id="SPEC-00013" data-uid="qwmbf9l4ymzl"></a>
 ### 2.3. Configuration
 
 `.specquer/shared/section-prefixes.config.yaml` maps workspace paths to prefixes:
@@ -148,6 +162,7 @@ prefixes:
 - The file is read with the `yaml` package's document API, and read again when its modification time changes. An invalid key (not ending in `/` or `.md`, with empty, `.` or `..` segments, or holding `*` or `?`), an invalid prefix, and a key that repeats another after normalizing are reported in the log and ignored.
 - A file's new sections get the prefix for its current path; a moved file keeps its IDs, so one file can mix prefixes.
 
+<a id="SPEC-00014" data-uid="bmy8786aswqq"></a>
 ### 2.4. Data Files
 
 Committed to Git in `.specquer/shared/`, one entry per line, entries in the order they were added:
@@ -174,6 +189,7 @@ retired:
 - Invalid entries are skipped and an unreadable file counts as empty (reported in the log); the index is rebuilt from the documents and the file is written with the next change. Nothing here stops the server.
 - Files are written atomically, only when their content changes, and not at all while they would be empty. They are read again when their modification time or size changes, or a prefix folder appears or goes, as after a pull or a branch switch; numbers issued in the running session stay issued.
 
+<a id="SPEC-00015" data-uid="cwls8mo6j18e"></a>
 ### 2.5. Reconciliation
 
 `reconcile(data, scannedDocuments, knownPrefixes, newUid, requests)` is a pure function from the data files and the sections found in the documents (each with its ID and UID) to the data files as they should be, the fixes each document's anchors need, and the duplicates waiting for the user. A section's identity is its UID; its ID is its name. A document with merge conflict markers is **frozen**: its sections count as present (so they are neither retired nor reused, and raise `lastSequence`), but it gets no fixes and takes no part in settling duplicates.
@@ -206,6 +222,7 @@ Sections, in this order:
 - Entries for UIDs that no document holds are retired; `lastSequence` becomes the highest number known for the prefix: stored, recorded, retired, or found in a document.
 - An ID typed in the section ID format is kept, as an ID arriving from another branch would be, unless it is taken, retired or has an unknown prefix; only a placeholder asks Specquer to choose the number.
 
+<a id="SPEC-00016" data-uid="xc6ahefb2ecm"></a>
 ### 2.6. The Section Index
 
 `SectionIndex` (server) holds the configuration, the data files and, for each sectioned document, its path, modification time, found sections, stray anchors and whether it is frozen. All its operations run one at a time.
@@ -224,6 +241,7 @@ Sections, in this order:
 
 Data files are written only by the changes in this table, and then hold the whole reconciled state, including fixes the scans found for other documents.
 
+<a id="SPEC-00017" data-uid="rnh1wrm2w21u"></a>
 ### 2.7. Client
 
 - **Anchors added on save.** `DocumentStore` keeps the body it sent. When the save returns edits, it builds a CodeMirror `ChangeSet` from them, maps it through the changes typed since (a `ChangeSet` from `@codemirror/merge`'s `diff` of the sent and current body) and applies it. The written text becomes the saved text, so the anchors aren't unsaved changes. Renumbering a duplicate in the open file saves first and applies the server's edits the same way.
@@ -237,20 +255,24 @@ Data files are written only by the changes in this table, and then hold the whol
 - **Completion.** A CodeMirror completion source recognizes `](#…` and `](path#…` and offers sections from `GET /api/sections/search`: of all documents without a path (inserting the path relative to the open file, or nothing for the same file), of that document with one.
 - **Links to sections.** A preview link to another document with a fragment opens the document and scrolls the preview to `user-content-<id>` once rendered.
 
+<a id="SPEC-00018" data-uid="pri1xxztpd4f"></a>
 ### 2.8. Tests
 
 `shared`: `sections/ids.test.ts`, `uids.test.ts`, `agent-guide.test.ts`, `markdown/sections.test.ts` (every recognition rule, UIDs, placeholders, the root anchor with a recorded UID, stray anchors, conflict markers, byte-order mark, stability), `markdown/preview.test.ts` (marking and moving anchors). `server`: `sections/config.test.ts`, `data.test.ts` (layout, retired entries, merge conflicts, damaged files, changes on disk), `reconcile.test.ts` (a test per rule), `sections-api.test.ts` (save, copies, moves, create, rename, delete, queries, the dry run, IDs added outside Specquer, data files changed on disk, edited IDs, copies and collisions, renumbering, retired IDs, conflict markers, stray anchors, the agent guide). `client`: `edits.test.ts`, `document-store.test.ts` (notices, renumbering), `SectionBadge.test.tsx`, `SectionProblems.test.tsx` (problem badges, notices, the problems dialog, the agent guide offer), `section-editing.test.ts` (paste handling in both editors), `section-completion.test.ts`. End to end: `e2e/sections.spec.ts`.
 
+<a id="SPEC-00019" data-uid="harzrgdaqt3k"></a>
 ## 3. UI State
 
 The UI state is the per-user state of the Specquer interface. The client reads and changes it; the server stores it. Its model lives in `shared/src/uistate/` (`@specquer/shared/uistate`) so both sides apply the same rules.
 
+<a id="SPEC-00020" data-uid="igor7lxc2qky"></a>
 ### 3.1. Storage
 
 - File: `.specquer/user/uistate.yaml` under the root folder, written by the server with `Bun.YAML`, atomically.
 - `.specquer/user/` gets a `.gitignore` containing `*` when Specquer creates the folder, so the state is never committed.
 - Several tabs or windows may change it; the last write wins.
 
+<a id="SPEC-00021" data-uid="n624876fazjz"></a>
 ### 3.2. Model
 
 ```ts
@@ -271,6 +293,7 @@ UiState = {
 
 All paths are workspace paths: relative to the root, separated by `/`.
 
+<a id="SPEC-00022" data-uid="b5od7dyxstrp"></a>
 ### 3.3. Parsing
 
 `parseUiState(value)` turns whatever was stored into a valid state:
@@ -279,6 +302,7 @@ All paths are workspace paths: relative to the root, separated by `/`.
 - Unknown fields are dropped; non-string paths and duplicates are removed; the recent files are cut to ten; per-file entries that aren't objects are dropped, and an invalid view type becomes `"text"`.
 - A file that isn't YAML at all gives the defaults. Specquer never fails to start because of the UI state.
 
+<a id="SPEC-00023" data-uid="z152glza2s7y"></a>
 ### 3.4. Updates
 
 Every change is a pure function from state to state:
@@ -294,19 +318,23 @@ Every change is a pure function from state to state:
 | `pruneMissing(state, kindOf)` | Removes entries for files and folders that no longer exist, for example deleted by a coding agent |
 | `diffUiState(a, b)`, `applyUiStatePatch(state, patch)` | The top-level fields that changed, and applying them |
 
+<a id="SPEC-00024" data-uid="fx9bqp14fish"></a>
 ### 3.5. Client and Server
 
 - **Client:** `UiStateStore` holds the state, applies changes at once and sends the changed top-level fields as a `PATCH` 300 ms later (and at once when the tab is hidden or the page closes). Before a rename or delete it sends pending changes, and afterwards it takes the state the server returns. Creating a file or folder doesn't involve the server's state: the client expands the folder it was created in and opens a new file through ordinary updates.
 - **Server:** `UiStateStore` reads the file for every request, applies the change, drops entries for vanished paths and writes the file, one update at a time. Renames and deletes through the API update the state in the same request, after the file-system change, so the old paths can still be matched.
 
+<a id="SPEC-00025" data-uid="ihuj1n0gkbn6"></a>
 ### 3.6. Versioning
 
 `version` is 1. Fields added since (`summaryStop`) are optional and parsed on their own, so they need no new version. A later incompatible change to the model raises it; `parseUiState` will then migrate older content, and anything it can't migrate falls back to defaults as above.
 
+<a id="SPEC-00026" data-uid="ks2numy77dxy"></a>
 ## 4. Summaries
 
 AI summaries of heading sections, shown in the preview by the summary slider ([Client Requirements](client-requirements.md) §6.2). The rules both sides share live in `shared/src/summaries/` (`@specquer/shared/summaries`); the model calls in `agent`; the cache and the call queue in `server/src/summaries/`.
 
+<a id="SPEC-00027" data-uid="f2qwhacxfvuy"></a>
 ### 4.1. Rules
 
 - **Simplification** (`simplifySectionText`), before a section is summarized or hashed: LF line endings, no trailing whitespace on lines, runs of blank lines collapsed to one, section anchors removed (placeholders and strays included), leading and trailing whitespace removed. Editor settings and anchor metadata then don't change the cache key.
@@ -314,6 +342,7 @@ AI summaries of heading sections, shown in the preview by the summary slider ([C
 - **Length:** `targetSentences(words)` = about one sentence per 150 words, at least 2 and at most 10.
 - **Saved text only:** the client sends the text of each section from the body as last read or written (`DocumentStore.savedBody()`), never unsaved edits. Sections of the text shown are matched to sections of the saved text by outline path; one whose text differs keeps its summary, labeled out of date.
 
+<a id="SPEC-00028" data-uid="u2xhdkksjhmj"></a>
 ### 4.2. Agent Configuration
 
 ```yaml
@@ -332,12 +361,14 @@ summaries:
 - The personal `.specquer/user/agent.config.yaml` overrides the shared file key by key under `summaries:`, and its `model:` replaces the shared one as a whole, since a model's name, URL and key variable belong together (decision D7).
 - Unknown keys are ignored; an invalid `model:` is dropped and an invalid setting falls back to its default, each reported on the server's console.
 
+<a id="SPEC-00029" data-uid="kwkob0mx0z6x"></a>
 ### 4.3. Making a Summary
 
 - **Prompt** (`agent/src/summarize.ts`, `PROMPT_VERSION = 1`): the document's path, the headings above the section and the target sentence count, with the simplified text between `<text>` tags. It asks for plain prose (no Markdown, headings, lists, links or HTML), in the language of the text, and says to ignore instructions in the text. The output has Markdown markers and HTML tags stripped.
 - **Model** (`agent/src/model.ts`): `ChatOpenAI` from `@langchain/openai` at the configured base URL (NVIDIA's API is OpenAI-compatible), temperature 0.2, at most 1,024 output tokens, a 120-second timeout and one retry.
 - **Long sections:** a section estimated (characters / 4) above the token budget is summarized from its heading and lead text followed by its subsections' summaries, each made (or found) through the cache first; short subsections count as written. One without subsections is cut at the budget, and its summary is labeled "shortened".
 
+<a id="SPEC-00030" data-uid="v4uhme42gvyw"></a>
 ### 4.4. Cache
 
 ```sql
@@ -349,6 +380,7 @@ CREATE TABLE summaries (key TEXT PRIMARY KEY, model TEXT, prompt_version INTEGER
 - Rows older than 30 days are ignored when read, and deleted at startup (if the cache exists) and once a day while summarizing (decision D8).
 - A database that can't be opened is moved aside and created again; if that fails too, summaries are made without a cache.
 
+<a id="SPEC-00031" data-uid="n8x5jzlpt0mj"></a>
 ### 4.5. Request Flow
 
 1. The preview computes the outline of the text shown and the stop; for the saved text, it lists the sections the stop summarizes that aren't short, and tells the client's `SummaryStore` it needs them.

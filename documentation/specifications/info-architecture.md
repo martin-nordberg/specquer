@@ -1,7 +1,11 @@
+<a id="SPEC-00032" data-uid="iy4rl3v8on0h"></a>
+
+<a id="SPEC-00033" data-uid="d22x9flrhjgs"></a>
 # Specquer Information Architecture
 
 This document describes what Specquer works with and how its screen is organized. The detailed behavior is in [Client Requirements](client-requirements.md) and [Server Requirements](server-requirements.md).
 
+<a id="SPEC-00034" data-uid="ksr9zuovd7zl"></a>
 ## 1. Content
 
 | Concept | Description |
@@ -42,6 +46,7 @@ root folder
 └── README.md                spec file
 ```
 
+<a id="SPEC-00035" data-uid="ih7efd3xle7k"></a>
 ## 2. Screen Layout
 
 Specquer has one view: a header and two panes side by side.
@@ -71,6 +76,7 @@ Specquer has one view: a header and two panes side by side.
 | Right pane, row 3 | Markdown content in one of four views |
 | Dialogs | New file, new folder, rename, delete, add section anchors, and the conflict dialog when a file changed on disk |
 
+<a id="SPEC-00036" data-uid="x9pynsmcyb9v"></a>
 ## 3. Navigation
 
 - **Opening a file:** single-click it in the tree, pick it from the recent-files drop-down, or click a link to it in the preview; a link to a section scrolls the preview to it. Only one file is open at a time; there are no tabs.
@@ -78,6 +84,7 @@ Specquer has one view: a header and two panes side by side.
 - **Restart:** Specquer reopens the file that was open last, with its view type, and restores expanded folders, pane width and theme.
 - **Browser back and forward** don't navigate between files.
 
+<a id="SPEC-00037" data-uid="a1ji7t4zjjgj"></a>
 ## 4. View Types
 
 | View | Content area | Editable |
@@ -91,6 +98,7 @@ The view type is remembered per file. All views edit the same in-memory copy of 
 
 In the split and preview views, the summary slider above the preview replaces sections, level by level, with AI summaries, down to one summary of the whole document. Its position is remembered per file. See [Client Requirements](client-requirements.md) §6.2.
 
+<a id="SPEC-00038" data-uid="hxls9q5i5br9"></a>
 ## 5. Saving
 
 Edits are kept in memory and saved automatically: before another file opens, when the browser tab loses focus or the page closes, and every 60 seconds while there are changes. The save status shows "Saved", "Unsaved changes", "Saving…", or an error; "Unsaved changes" is a button that saves now. Files that weren't edited are never written.

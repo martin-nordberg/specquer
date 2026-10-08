@@ -253,7 +253,7 @@ Taken while planning; each is _Proposed_ and the work proceeds on it unless chan
 | Hast positions shift with future pipeline steps | Wrong parts hidden | Phase 0 test of filtering at every stop, kept as a regression test |
 | Keys in the wrong place | A key committed to Git | The configuration only names the variable; the docs say so |
 
-<a id=""></a>
+<a id="WORK-00025" data-uid="nznpgck88xig"></a>
 ## 9. Implementation Status
 
 Phases 0 to 5 were carried out in October 2026; Phase 6 awaits the author's review. What differs from the plan, or was learned doing it:
