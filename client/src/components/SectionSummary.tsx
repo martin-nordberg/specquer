@@ -1,4 +1,4 @@
-import { Sparkles } from "lucide-react";
+import { LoaderCircle, Sparkles } from "lucide-react";
 import type { SummaryEntry } from "@/app/summaries";
 import { Button } from "@/components/ui/button";
 
@@ -16,15 +16,20 @@ export interface SectionSummaryProps {
  * and never rendered as Markdown or HTML.
  */
 export function SectionSummary({ entry, outOfDate, onRetry, onShowFullText }: SectionSummaryProps) {
+  const loading = entry === undefined || entry.state === "loading";
   const label = ["AI summary", ...(entry?.state === "done" && entry.truncated ? ["shortened"] : []), ...(outOfDate ? ["out of date"] : [])].join(" · ");
   return (
     <section aria-label="AI summary" className="my-3 rounded-md border border-dashed bg-muted/40 px-4 py-2" data-testid="section-summary">
       <div className="mb-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-        <Sparkles className="size-3" aria-hidden />
+        {/* Turns slowly while the summary is made; the star is the icon's center */}
+        <Sparkles className={loading ? "size-3 motion-safe:animate-spin motion-safe:[animation-duration:3s]" : "size-3"} aria-hidden />
         <span>{label}</span>
       </div>
-      {entry === undefined || entry.state === "loading" ? (
-        <p className="text-muted-foreground italic">Summarizing...</p>
+      {loading ? (
+        <p className="flex items-center gap-2 text-muted-foreground italic">
+          <LoaderCircle className="size-4 shrink-0 motion-safe:animate-spin" aria-hidden />
+          Summarizing...
+        </p>
       ) : entry.state === "error" ? (
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-error-text">Couldn't summarize: {entry.message}</p>
