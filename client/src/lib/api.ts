@@ -9,6 +9,9 @@ import type {
   SectionNotice,
   SectionProblem,
   SectionSearchResult,
+  SummaryRequest,
+  SummaryResult,
+  SummaryStatus,
   Tree,
 } from "@specquer/shared/api";
 import type { BodyEdit } from "@specquer/shared/markdown";
@@ -86,6 +89,9 @@ export interface Api {
   sectionProblems(folder: string): Promise<SectionProblem[]>;
   /** Renumbers one occurrence of a duplicate ID; the edits are relative to the body on disk. */
   renumberSection(path: string, id: string, uid: string | null, baseVersion: string): Promise<SaveOutcome>;
+  summaryStatus(): Promise<SummaryStatus>;
+  /** Summarizes a section's saved text; `signal` aborts the request when it is no longer needed. */
+  summarize(request: SummaryRequest, signal?: AbortSignal): Promise<SummaryResult>;
 }
 
 type SavedBody = { version: string; edits?: BodyEdit[]; notices?: SectionNotice[] };
@@ -160,5 +166,11 @@ export const httpApi: Api = {
   },
   async renumberSection(path, id, uid, baseVersion) {
     return saveOutcome(await client.api.sections.renumber.$post({ json: { path, id, uid, baseVersion } }));
+  },
+  async summaryStatus() {
+    return json<SummaryStatus>(await client.api.summaries.status.$get());
+  },
+  async summarize(request, signal) {
+    return json<SummaryResult>(await client.api.summaries.$post({ json: request }, { init: { signal } }));
   },
 };

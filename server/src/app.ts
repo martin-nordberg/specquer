@@ -15,6 +15,7 @@ import {
   sessionCookieName,
   tokenMatches,
 } from "./security.ts";
+import { SummaryService, type SummaryServiceOptions } from "./summaries/service.ts";
 import { UiStateStore } from "./uistate-store.ts";
 
 export interface AppConfig extends SecurityConfig {
@@ -22,9 +23,11 @@ export interface AppConfig extends SecurityConfig {
   development: boolean;
   /** Fetches the bundled client page, which Bun serves from an internal route. */
   fetchPage: () => Promise<Response>;
+  /** Overrides for the summary service (tests use a fake model). */
+  summaries?: SummaryServiceOptions;
 }
 
-export function createHandlers(files: FileService, uiState: UiStateStore, sections: SectionIndex): ApiHandlers {
+export function createHandlers(files: FileService, uiState: UiStateStore, sections: SectionIndex, summaries: SummaryService): ApiHandlers {
   return {
     async getTree() {
       const tree = await files.getTree();
@@ -61,6 +64,8 @@ export function createHandlers(files: FileService, uiState: UiStateStore, sectio
     },
     sectionProblems: (folder) => sections.problems(folder),
     renumberSection: (path, id, uid, baseVersion) => sections.renumber(path, id, uid, baseVersion),
+    summaryStatus: () => summaries.status(),
+    summarize: (request, signal) => summaries.summarize(request, signal),
   };
 }
 
@@ -70,12 +75,14 @@ const UNAUTHORIZED_PAGE = `<!doctype html><html lang="en"><head><meta charset="u
 
 /**
  * The Hono app: security checks, the client page with its token exchange, and the API; and the
- * section index, which the caller scans once the server is listening.
+ * section index, which the caller scans once the server is listening, and the summary service,
+ * whose expired summaries the caller purges.
  */
 export function createApp(config: AppConfig) {
   const files = new FileService(config.root);
   const uiState = new UiStateStore(config.root, (path) => files.kindOf(path));
   const sections = new SectionIndex(files);
+  const summaries = new SummaryService(config.root, config.summaries);
   const app = new Hono();
 
   app.use(hostCheck(config));
@@ -119,9 +126,9 @@ export function createApp(config: AppConfig) {
     }),
   );
 
-  app.route("/", createApiRouter(createHandlers(files, uiState, sections)));
+  app.route("/", createApiRouter(createHandlers(files, uiState, sections, summaries)));
 
   app.notFound((c) => (c.req.path.startsWith("/api/") ? c.json({ error: "not_found", message: "Not found" }, 404) : c.text("Not found", 404)));
-  return { app, sections };
+  return { app, sections, summaries };
 }
 

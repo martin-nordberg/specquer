@@ -10,8 +10,10 @@ import {
   pruneMissing,
   renameInUiState,
   setFolderExpanded,
+  setSummaryStop,
   setTreePaneFraction,
   setViewType,
+  summaryStopOf,
 } from "./uistate.ts";
 
 describe("parseUiState", () => {
@@ -98,4 +100,24 @@ test("patches and diffs", () => {
   expect(patch).toEqual({ theme: "dark", treePaneFraction: 0.7, currentFile: "x.md" });
   expect(applyUiStatePatch(a, patch)).toEqual(b);
   expect(applyUiStatePatch(b, { theme: null, currentFile: null })).toMatchObject({ theme: undefined, currentFile: undefined });
+});
+
+describe("summaryStop", () => {
+  test("is parsed on its own, so a damaged value falls back alone", () => {
+    const state = parseUiState({ files: { "a.md": { viewType: "split", summaryStop: 2 }, "b.md": { viewType: "preview", summaryStop: -1 }, "c.md": { viewType: "split", summaryStop: 1.5 } } });
+    expect(state.files).toEqual({ "a.md": { viewType: "split", summaryStop: 2 }, "b.md": { viewType: "preview" }, "c.md": { viewType: "split" } });
+  });
+
+  test("is stored as steps from the full text and clamped to the document's stops", () => {
+    let state = setSummaryStop(defaultUiState(), "a.md", 2);
+    expect(state.files["a.md"]).toEqual({ viewType: "text", summaryStop: 2 });
+    // 5 stops (0 to 4): two steps from the full text is stop 2
+    expect(summaryStopOf(state.files["a.md"]!, 5)).toBe(2);
+    // A document with fewer stops clamps to the whole document
+    expect(summaryStopOf(state.files["a.md"]!, 2)).toBe(0);
+    expect(summaryStopOf({ viewType: "text" }, 4)).toBe(3);
+    state = setSummaryStop(state, "a.md", 0);
+    expect(state.files["a.md"]).toEqual({ viewType: "text" });
+    expect(setSummaryStop(state, "a.md", 99).files["a.md"]?.summaryStop).toBe(7);
+  });
 });

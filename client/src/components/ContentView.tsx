@@ -5,7 +5,7 @@ import type { ViewType } from "@specquer/shared/uistate";
 import { cn } from "@/lib/utils";
 import { CodeEditor, lineWrapping } from "./CodeEditor";
 import { MilkdownEditor } from "./MilkdownEditor";
-import { PREVIEW_DEBOUNCE, Preview, type ScrollTarget } from "./Preview";
+import { PREVIEW_DEBOUNCE, Preview, type PreviewSummaries, type ScrollTarget } from "./Preview";
 import { type SectionSearch, sectionCompletion } from "./section-completion";
 import { sectionEditing } from "./section-editing";
 
@@ -54,6 +54,8 @@ export interface ContentViewProps {
   /** Renumbers one occurrence of a duplicate ID in the open file. */
   onRenumber?: (id: string, uid: string | null) => void;
   scrollTarget?: ScrollTarget;
+  /** Summaries in the preview (split and preview views). */
+  summaries?: PreviewSummaries;
 }
 
 /** The Markdown body in the chosen view. All views edit the same in-memory text. */
@@ -69,6 +71,7 @@ export function ContentView({
   savedVersion,
   onRenumber,
   scrollTarget,
+  summaries,
 }: ContentViewProps) {
   const pathRef = useRef(path);
   pathRef.current = path;
@@ -100,6 +103,7 @@ export function ContentView({
       savedVersion={savedVersion}
       onRenumber={onRenumber}
       scrollTarget={scrollTarget}
+      summaries={summaries}
       debounce={debounce}
     />
   );

@@ -91,7 +91,24 @@ The model is specified in [Data Architecture](data-architecture.md) §3.
 
 The model, recognition rules, data files and conflict rules are specified in [Data Architecture](data-architecture.md) §2.
 
-## 8. Other Routes
+## 8. Summaries
+
+| Route | Behavior |
+| ----- | -------- |
+| `GET /api/summaries/status` | `{ enabled, model? , problem? }`: whether summaries can be made, the configured model's ID, and otherwise why not (no model configured, or its key variable not set). |
+| `POST /api/summaries` | Body `{ path, text, headings }`: a section's saved text (at most 1 MB), its document and the titles of the headings above it. Returns `{ summary, model, cached, truncated }`. The client aborts the request when the summary is no longer needed. |
+
+1. The configuration is read from `.specquer/shared/agent.config.yaml`, overridden by `.specquer/user/agent.config.yaml`, with the `yaml` package, and read again when either file's modification time changes. Invalid values are reported on the console and ignored, each on its own; they never stop the server. API keys come from the server's environment, through the variable the configuration names.
+2. The server simplifies the text, and returns a section of fewer than 60 words as written, without calling the model. Otherwise it answers from the cache, or calls the model.
+3. At most `summaries.concurrency` model calls (default 2) run at once. Requests for the same text share one call. A call whose requests were all aborted is dropped if it hasn't started, and aborted if it has.
+4. A section estimated (at four characters a token) above `summaries.tokenBudget` (default 24,000) is summarized from its lead text and its subsections' summaries, each found in or added to the cache; one without subsections is cut at the budget, and `truncated` says so.
+5. Summaries are cached in `.specquer/cache/summaries.db` (`bun:sqlite`, WAL mode) by a hash of the simplified text, the model ID, the prompt version and the summary's sentence count. Summaries older than 30 days are ignored, and deleted at startup and once a day while summarizing. When the server creates `.specquer/cache/`, it also writes `.specquer/cache/.gitignore` containing `*`. A database that can't be read is moved aside (`summaries.db.damaged-<time>`) and created again; the cache never stops the server.
+6. Errors use the usual JSON body: `503 not_configured` without a model or its key, `429 rate_limited` for the provider's rate limit, `502 provider_error` for other provider and network failures (with the provider's message).
+7. The server never reads files for summaries: the text comes from the authenticated client ([Security](security.md) §9).
+
+The rules for summaries are specified in [Data Architecture](data-architecture.md) §4.
+
+## 9. Other Routes
 
 | Route | Behavior |
 | ----- | -------- |

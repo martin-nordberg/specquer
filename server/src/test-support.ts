@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { $ } from "bun";
 import { createApp } from "./app.ts";
+import type { SummaryServiceOptions } from "./summaries/service.ts";
 import { sessionCookieName } from "./security.ts";
 
 /** Helpers for server tests: a temporary root folder with fixture files and a test client. */
@@ -23,13 +24,14 @@ export async function tempRoot(files: Record<string, string> = {}, options: { gi
   return { root, cleanup: () => rm(root, { recursive: true, force: true }) };
 }
 
-export function testApp(root: string, page = "<!doctype html><script>inline()</script>") {
-  const { app, sections } = createApp({
+export function testApp(root: string, page = "<!doctype html><script>inline()</script>", summaries: SummaryServiceOptions = { env: {} }) {
+  const { app, sections, summaries: summaryService } = createApp({
     root,
     token: TEST_TOKEN,
     port: () => TEST_PORT,
     development: false,
     fetchPage: async () => new Response(page),
+    summaries,
   });
   const cookie = `${sessionCookieName(TEST_PORT)}=${TEST_TOKEN}`;
   /** A request as the signed-in browser would send it. */
@@ -45,5 +47,5 @@ export function testApp(root: string, page = "<!doctype html><script>inline()</s
       },
       body: init.body === undefined ? undefined : JSON.stringify(init.body),
     });
-  return { app, sections, request };
+  return { app, sections, summaries: summaryService, request };
 }

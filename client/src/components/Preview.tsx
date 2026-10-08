@@ -1,13 +1,31 @@
 import type { Root, RootContent } from "hast";
-import { toJsxRuntime } from "hast-util-to-jsx-runtime";
-import { type ComponentProps, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type Components, toJsxRuntime } from "hast-util-to-jsx-runtime";
+import { type ComponentProps, type ReactNode, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
-import type { SectionInfo } from "@specquer/shared/api";
-import { CLOBBER_PREFIX } from "@specquer/shared/markdown";
+import type { SectionInfo, SummaryRequest } from "@specquer/shared/api";
+import {
+  CLOBBER_PREFIX,
+  OUTLINE_PATH_PROPERTY,
+  SUMMARY_TAG,
+  type SummarizedSection,
+  buildOutline,
+  summarizeTree,
+  summarizedAt,
+  summaryStopCount,
+  summaryStopName,
+} from "@specquer/shared/markdown";
 import { isMarkdownFile, normalizePath, parentPath } from "@specquer/shared/paths";
+import { isShortSection, simplifySectionText } from "@specquer/shared/summaries";
+import { type SummaryEntry, type SummaryStore, summaryKey } from "@/app/summaries";
 import { SectionBadge } from "@/components/SectionBadge";
+import { SectionSummary } from "@/components/SectionSummary";
+import { SummaryControl } from "@/components/SummaryControl";
 import { type PreviewRenderer, createPreviewRenderer } from "@/preview/renderer";
 import { cn } from "@/lib/utils";
+
+const noSubscribe = () => () => {};
+const emptyEntries: ReadonlyMap<string, SummaryEntry> = new Map();
+const noEntries = () => emptyEntries;
 
 /** Split view renders wait this long after the last keystroke. */
 export const PREVIEW_DEBOUNCE = 250;
@@ -54,6 +72,32 @@ function sectionAnchorKey(tree: Root): string {
   return ids.join(" ");
 }
 
+/** Whether a tree holds an element with this (prefixed) `id`. */
+function hasElementId(node: Root | RootContent, id: string): boolean {
+  if (node.type === "element" && node.properties.id === id) return true;
+  return "children" in node && node.children.some((child) => hasElementId(child, id));
+}
+
+/** The summaries in the preview: the slider's position, the saved text they are made from, and the store. */
+export interface PreviewSummaries {
+  /** Whether summaries can be made; when not, `problem` says why and the slider is disabled. */
+  enabled: boolean;
+  problem?: string;
+  /** The body as last saved: summaries are made from it, never from unsaved text. */
+  savedBody: string;
+  /** The slider position as steps from the full text (0 is the full text). */
+  steps: number;
+  onStepsChange: (steps: number) => void;
+  store: SummaryStore;
+}
+
+/** A section the preview shows as a summary. */
+interface ShownSummary {
+  section: SummarizedSection;
+  key: string;
+  outOfDate: boolean;
+}
+
 /** A request to scroll the preview to a section; `request` changes for each new request. */
 export interface ScrollTarget {
   sectionId: string;
@@ -72,6 +116,8 @@ export interface PreviewProps {
   /** Renumbers one occurrence of a duplicate ID in the current file. */
   onRenumber?: (id: string, uid: string | null) => void;
   scrollTarget?: ScrollTarget;
+  /** Summaries; without them the preview always shows the full text. */
+  summaries?: PreviewSummaries;
   /** Delay before rendering changes; 0 renders at once. */
   debounce?: number;
   className?: string;
@@ -85,10 +131,13 @@ export function Preview({
   savedVersion,
   onRenumber,
   scrollTarget,
+  summaries,
   debounce = 0,
   className,
 }: PreviewProps) {
-  const [tree, setTree] = useState<Root | null>(null);
+  // The tree with the text it was rendered from, whose offsets it holds
+  const [rendered, setRendered] = useState<{ tree: Root; markdown: string } | null>(null);
+  const tree = rendered?.tree ?? null;
   const [sections, setSections] = useState<SectionInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
   const latest = useRef(0);
@@ -103,7 +152,7 @@ export function Preview({
         .then((result) => {
           // Drop results for text that has since changed
           if (request !== latest.current) return;
-          setTree(result);
+          setRendered({ tree: result, markdown });
           setError(null);
         })
         .catch((err: Error) => request === latest.current && setError(err.message));
@@ -129,8 +178,68 @@ export function Preview({
     };
   }, [loadSections, currentFile, anchorKey, savedVersion]);
 
+  // Summaries: the stops come from the text shown; the summaries from the saved text (by outline path)
+  const outline = useMemo(() => (rendered === null ? null : buildOutline(rendered.markdown)), [rendered]);
+  const stopCount = outline === null ? 0 : summaryStopCount(outline);
+  const enabled = summaries?.enabled === true;
+  const steps = summaries?.steps ?? 0;
+  const stop = enabled ? Math.max(0, stopCount - 1 - steps) : stopCount - 1;
+  const savedBody = summaries?.savedBody;
+  const saved = useMemo(() => {
+    if (savedBody === undefined || !enabled) return new Map<string, { request: SummaryRequest; simplified: string }>();
+    const savedOutline = buildOutline(savedBody);
+    const savedStop = Math.max(0, summaryStopCount(savedOutline) - 1 - steps);
+    const byPath = new Map<string, { request: SummaryRequest; simplified: string }>();
+    for (const section of summarizedAt(savedOutline, savedStop, savedBody.length)) {
+      const text = savedBody.slice(section.range.from, section.range.to);
+      const simplified = simplifySectionText(text);
+      // Short sections are shown as written
+      if (!isShortSection(simplified)) byPath.set(section.path, { request: { path: currentFile, text, headings: section.headings }, simplified });
+    }
+    return byPath;
+  }, [savedBody, enabled, steps, currentFile]);
+
+  const store = summaries?.store;
+  useEffect(() => {
+    if (store === undefined) return;
+    store.need([...saved.values()].map((entry) => entry.request));
+  }, [store, saved]);
+  // Nothing is needed once the preview closes (another file, another view)
+  useEffect(() => (store === undefined ? undefined : () => store.need([])), [store]);
+  const entries = useSyncExternalStore(store?.subscribe ?? noSubscribe, store?.get ?? noEntries);
+
+  const shown = useMemo(() => {
+    const result = new Map<string, ShownSummary>();
+    if (rendered === null || outline === null) return result;
+    for (const section of summarizedAt(outline, stop, rendered.markdown.length)) {
+      const savedSection = saved.get(section.path);
+      // A section not saved yet, or short, is shown as written
+      if (savedSection === undefined) continue;
+      const current = simplifySectionText(rendered.markdown.slice(section.range.from, section.range.to));
+      if (isShortSection(current)) continue;
+      result.set(section.path, { section, key: summaryKey(savedSection.request), outOfDate: current !== savedSection.simplified });
+    }
+    return result;
+  }, [rendered, outline, stop, saved]);
+
+  const shownTree = useMemo(() => {
+    if (rendered === null || outline === null) return null;
+    return summarizeTree(rendered.tree, rendered.markdown, outline, [...shown.values()].map((entry) => entry.section));
+  }, [rendered, outline, shown]);
+
+  // A click on a summary shows the full text and scrolls to its section
+  const [outlineScroll, setOutlineScroll] = useState<{ path: string; request: number } | null>(null);
+  const onStepsChange = summaries?.onStepsChange;
+  const showFullText = useCallback(
+    (path: string) => {
+      setOutlineScroll({ path, request: Date.now() });
+      onStepsChange?.(0);
+    },
+    [onStepsChange],
+  );
+
   const content = useMemo(() => {
-    if (tree === null) return null;
+    if (shownTree === null) return null;
     const Link = ({ href, children, ...props }: ComponentProps<"a"> & { node?: unknown; "data-section-anchor"?: string; "data-uid"?: string }) => {
       delete props.node;
       if (props["data-section-anchor"] !== undefined && typeof props.id === "string") {
@@ -175,22 +284,65 @@ export function Preview({
         </a>
       );
     };
-    return toJsxRuntime(tree, { Fragment, jsx, jsxs, components: { a: Link } }) as ReactNode;
-  }, [tree, currentFile, onOpenFile, loadSections, sections, onRenumber]);
+    const Summary = (props: { "data-path"?: string }) => {
+      const path = props["data-path"] ?? "";
+      const info = shown.get(path);
+      if (info === undefined || store === undefined) return null;
+      return (
+        <SectionSummary
+          entry={entries.get(info.key)}
+          outOfDate={info.outOfDate}
+          onRetry={() => store.retry(info.key)}
+          onShowFullText={() => showFullText(path)}
+        />
+      );
+    };
+    const components = { a: Link, [SUMMARY_TAG]: Summary } as unknown as Partial<Components>;
+    return toJsxRuntime(shownTree, { Fragment, jsx, jsxs, components }) as ReactNode;
+  }, [shownTree, shown, entries, store, showFullText, currentFile, onOpenFile, loadSections, sections, onRenumber]);
 
-  // Scroll to a requested section once it has been rendered
+  // Scroll to a requested section once it has been rendered; a section hidden by a summary
+  // shows the full text first
   useEffect(() => {
-    if (scrollTarget === undefined || scrolled.current === scrollTarget.request || content === null) return;
-    const target = container.current?.querySelector(`[id="${CLOBBER_PREFIX}${scrollTarget.sectionId}"]`);
-    if (target === null || target === undefined) return;
+    if (scrollTarget === undefined || scrolled.current === scrollTarget.request || content === null || tree === null) return;
+    const id = `${CLOBBER_PREFIX}${scrollTarget.sectionId}`;
+    const target = container.current?.querySelector(`[id="${id}"]`);
+    if (target === null || target === undefined) {
+      if (stop < stopCount - 1 && hasElementId(tree, id)) onStepsChange?.(0);
+      return;
+    }
     scrolled.current = scrollTarget.request;
     target.scrollIntoView({ block: "start" });
-  }, [content, scrollTarget]);
+  }, [content, tree, scrollTarget, stop, stopCount, onStepsChange]);
+
+  useEffect(() => {
+    if (outlineScroll === null || content === null || stop < stopCount - 1) return;
+    setOutlineScroll(null);
+    if (outlineScroll.path === "") {
+      container.current?.scrollTo({ top: 0 });
+      return;
+    }
+    const property = OUTLINE_PATH_PROPERTY.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+    container.current?.querySelector(`[${property}="${outlineScroll.path}"]`)?.scrollIntoView({ block: "start" });
+  }, [content, outlineScroll, stop, stopCount]);
+
+  const names = useMemo(() => (outline === null ? [] : Array.from({ length: stopCount }, (_, i) => summaryStopName(outline, i))), [outline, stopCount]);
 
   return (
-    <div ref={container} className={cn("h-full overflow-auto", className)} data-testid="preview">
-      {error !== null && <p className="text-error-text p-4">Preview failed: {error}</p>}
-      <article className="markdown px-6 py-4">{content}</article>
+    <div className={cn("flex h-full min-h-0 flex-col", className)} data-testid="preview">
+      {summaries !== undefined && stopCount > 0 && (
+        <SummaryControl
+          count={stopCount}
+          stop={stop}
+          names={names}
+          onChange={(next) => summaries.onStepsChange(stopCount - 1 - next)}
+          {...(summaries.enabled ? {} : { problem: summaries.problem ?? "Summaries aren't enabled." })}
+        />
+      )}
+      <div ref={container} className="min-h-0 flex-1 overflow-auto">
+        {error !== null && <p className="text-error-text p-4">Preview failed: {error}</p>}
+        <article className="markdown px-6 py-4">{content}</article>
+      </div>
     </div>
   );
 }

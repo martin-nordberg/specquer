@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { type Locator, type Page, test as base, expect } from "@playwright/test";
+import { FAKE_MODEL_KEY_ENV } from "./fake-model";
 
 /** A Specquer server on its own temporary root folder. */
 export interface Specquer {
@@ -37,7 +38,8 @@ async function startSpecquer(files: Record<string, string>): Promise<Specquer & 
   // once at startup; development mode's file watchers run out when many servers run in parallel.
   const child = Bun.spawn(["bun", "src/index.ts", root, "--no-open"], {
     cwd: join(repository, "server"),
-    env: { ...process.env, NODE_ENV: "production" },
+    // The key for a fake model, which tests that summarize configure
+    env: { ...process.env, NODE_ENV: "production", [FAKE_MODEL_KEY_ENV]: "e2e-key" },
     stdout: "pipe",
     stderr: "pipe",
   });

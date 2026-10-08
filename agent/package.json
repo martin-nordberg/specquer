@@ -4,8 +4,12 @@
   "private": true,
   "dependencies": {
     "@langchain/core": "^1.2.14",
+    "@langchain/openai": "^1.6.2",
     "@specquer/shared": "workspace:*",
     "langchain": "^1.5.15",
     "zod": "^4.6.5"
+  },
+  "exports": {
+    ".": "./src/index.ts"
   }
 }

@@ -1,6 +1,6 @@
 # Data Architecture
 
-The data Specquer works with: the content of spec files (Markdown), the permanent IDs of the sections of spec files (sections), and the per-user state of the interface (UI state).
+The data Specquer works with: the content of spec files (Markdown), the permanent IDs of the sections of spec files (sections), the per-user state of the interface (UI state), and AI summaries of sections (summaries).
 
 ## 1. Markdown Content
 
@@ -8,14 +8,13 @@ The Markdown domain is the code that works on the content of spec files, as oppo
 
 ### 1.1. Scope
 
-| Now (Steps 001 and 002) | Later |
-| ----------------------- | ----- |
-| Splitting a file into front matter and body, and joining them | The heading and section tree (for collapsible sections and summaries) |
-| Checking front matter for YAML syntax errors | Rewriting the Markdown syntax tree (renames, link updates) |
+| Now (Steps 001 to 004) | Later |
+| ---------------------- | ----- |
+| Splitting a file into front matter and body, and joining them | Rewriting the Markdown syntax tree (renames, link updates) |
+| Checking front matter for YAML syntax errors | Collapsing individual sections |
 | The preview pipeline (Markdown to a sanitized HTML syntax tree) | |
 | Finding section anchors and the edits that add them (`sections.ts`, see §2) | |
-
-Building the section tree was left for a later step (Step 001 decision D13); the pipeline is the place to add it.
+| The heading outline, the summary slider's stops, and summaries in the preview tree (`outline.ts`, `summary-tree.ts`, see §1.6) | |
 
 ### 1.2. Front Matter
 
@@ -66,9 +65,22 @@ The pipeline is a frozen unified processor (decision D3):
 - Milkdown (WYSIWYG) serializes Markdown its own way (list markers, table padding, reference links become inline links). Its output replaces the body only after the user edits in it (decision D5). Raw HTML, including section anchors, survives its round trip unchanged.
 - Saving a sectioned file may return edits that add anchors; the client applies them to the body (see §2.7).
 
-### 1.5. Tests
+### 1.5. Outline and Stops
 
-`shared/src/markdown/frontmatter.test.ts` checks the round trip for LF, CRLF, BOM, empty and blank blocks, unterminated blocks, mixed line endings and closing lines at the end of the file. `preview.test.ts` checks GFM output, that front matter is left out, the traceability anchors, the section anchors, and that scripts, event handlers, iframes and `javascript:` links are removed. `sections.test.ts` checks finding and adding section anchors.
+```ts
+buildOutline(body): Outline   // { preamble: Range, sections: OutlineSection[], levels: number[] }
+OutlineSection = { depth, title, heading: Range, range: Range, lead: Range, children: OutlineSection[] }
+```
+
+- The outline comes from the same `remark-parse` tree as `analyzeBody` (§2.2), so only top-level headings count, not those in block quotes or lists. Offsets are body offsets.
+- A section's `heading` runs from its section anchor on the line before it, if any, to the end of the heading; its `range` to the next heading of the same or a higher level; its `lead` is the text before its first subsection. `preamble` is the text before the first heading; `levels` the heading levels used, ascending.
+- **Stops** (`summaryStopCount`): `levels.length + 2`, or none without headings. Stop `levels.length + 1` is the full text; stop `k` (1 to `levels.length`) summarizes every section at level `levels[k - 1]` or deeper that isn't inside one already summarized; stop 0 the whole document, preamble included (`summarizedAt`, `summaryStopName`).
+- Each summarized section has an **outline path**, the indexes of the section and its ancestors from the top (`1.0.2`), which identifies "the same section" across edits (Step 004 decision D5), and the titles of the headings above it.
+- **Summaries in the preview** (`summarizeTree`, decision D1): the whole body is rendered once, then the tree's top-level children are filtered by their source offsets. A summarized section keeps its heading (except at stop 0) and the rest of its range becomes one `specquer-summary` element, which the client's component map renders. Rendering once keeps reference links, footnotes and badges working. Top-level headings get `data-outline-path`, so sections without anchors can be scrolled to.
+
+### 1.6. Tests
+
+`outline.test.ts` checks outlines (skipped and unused levels, a document starting at h2, a preamble, headings in block quotes and lists, anchors before headings, setext headings, a byte-order mark), the stops and what each summarizes, and the filtered preview tree at every stop. `shared/src/markdown/frontmatter.test.ts` checks the round trip for LF, CRLF, BOM, empty and blank blocks, unterminated blocks, mixed line endings and closing lines at the end of the file. `preview.test.ts` checks GFM output, that front matter is left out, the traceability anchors, the section anchors, and that scripts, event handlers, iframes and `javascript:` links are removed. `sections.test.ts` checks finding and adding section anchors.
 
 ## 2. Sections
 
@@ -252,6 +264,7 @@ UiState = {
   files: Record<string, {        // keyed by workspace path
     viewType: "text" | "split" | "preview" | "wysiwyg",   // default "text"
     frontmatterHeight?: number,  // front matter editor height in pixels
+    summaryStop?: number,        // the summary slider, as steps from the full text (0 to 7; absent is 0)
   }>,
 }
 ```
@@ -274,7 +287,7 @@ Every change is a pure function from state to state:
 | -------- | ------ |
 | `openFile(state, path)` | Makes `path` current; the previous current file moves to the front of the recent files; `path` leaves them |
 | `closeFile(state)` | No current file; the previous one joins the recent files |
-| `setViewType`, `setFrontmatterHeight` | Per-file settings |
+| `setViewType`, `setFrontmatterHeight`, `setSummaryStop` | Per-file settings; `summaryStopOf(file, stopCount)` turns the stored steps into a stop, clamped to the stops a document has (Step 004 decision D3) |
 | `setTheme`, `setTreePaneFraction` (clamped), `setFolderExpanded` | Global settings |
 | `renameInUiState(state, from, to)` | Rewrites every entry for `from` and everything inside it: expanded folders, recent files, current file, per-file settings |
 | `deleteInUiState(state, path)` | Removes every entry for `path` and everything inside it |
@@ -288,4 +301,57 @@ Every change is a pure function from state to state:
 
 ### 3.6. Versioning
 
-`version` is 1. A later change to the model raises it; `parseUiState` will then migrate older content, and anything it can't migrate falls back to defaults as above.
+`version` is 1. Fields added since (`summaryStop`) are optional and parsed on their own, so they need no new version. A later incompatible change to the model raises it; `parseUiState` will then migrate older content, and anything it can't migrate falls back to defaults as above.
+
+## 4. Summaries
+
+AI summaries of heading sections, shown in the preview by the summary slider ([Client Requirements](client-requirements.md) §6.2). The rules both sides share live in `shared/src/summaries/` (`@specquer/shared/summaries`); the model calls in `agent`; the cache and the call queue in `server/src/summaries/`.
+
+### 4.1. Rules
+
+- **Simplification** (`simplifySectionText`), before a section is summarized or hashed: LF line endings, no trailing whitespace on lines, runs of blank lines collapsed to one, section anchors removed (placeholders and strays included), leading and trailing whitespace removed. Editor settings and anchor metadata then don't change the cache key.
+- **Short sections:** fewer than 60 words after simplification (`isShortSection`) are shown as written, without calling the model.
+- **Length:** `targetSentences(words)` = about one sentence per 150 words, at least 2 and at most 10.
+- **Saved text only:** the client sends the text of each section from the body as last read or written (`DocumentStore.savedBody()`), never unsaved edits. Sections of the text shown are matched to sections of the saved text by outline path; one whose text differs keeps its summary, labeled out of date.
+
+### 4.2. Agent Configuration
+
+```yaml
+# .specquer/shared/agent.config.yaml
+model:
+  provider: nvidia                              # the only provider in this version
+  name: google/gemma-4-31b-it                   # the provider's model ID
+  baseUrl: https://integrate.api.nvidia.com/v1  # the default for nvidia
+  apiKeyEnv: NVIDIA_API_KEY                     # the variable holding the key; never the key
+summaries:
+  concurrency: 2                                # model calls at once
+  tokenBudget: 24000                            # above this, summarize from subsections' summaries
+```
+
+- `model:` applies to all agent features; `summaries:` to summaries only. The schema and `mergeAgentConfig` are in `agent/src/config.ts`.
+- The personal `.specquer/user/agent.config.yaml` overrides the shared file key by key under `summaries:`, and its `model:` replaces the shared one as a whole, since a model's name, URL and key variable belong together (decision D7).
+- Unknown keys are ignored; an invalid `model:` is dropped and an invalid setting falls back to its default, each reported on the server's console.
+
+### 4.3. Making a Summary
+
+- **Prompt** (`agent/src/summarize.ts`, `PROMPT_VERSION = 1`): the document's path, the headings above the section and the target sentence count, with the simplified text between `<text>` tags. It asks for plain prose (no Markdown, headings, lists, links or HTML), in the language of the text, and says to ignore instructions in the text. The output has Markdown markers and HTML tags stripped.
+- **Model** (`agent/src/model.ts`): `ChatOpenAI` from `@langchain/openai` at the configured base URL (NVIDIA's API is OpenAI-compatible), temperature 0.2, at most 1,024 output tokens, a 120-second timeout and one retry.
+- **Long sections:** a section estimated (characters / 4) above the token budget is summarized from its heading and lead text followed by its subsections' summaries, each made (or found) through the cache first; short subsections count as written. One without subsections is cut at the budget, and its summary is labeled "shortened".
+
+### 4.4. Cache
+
+```sql
+CREATE TABLE summaries (key TEXT PRIMARY KEY, model TEXT, prompt_version INTEGER, summary TEXT, truncated INTEGER, created_at INTEGER);
+```
+
+- `.specquer/cache/summaries.db`, through `bun:sqlite` in WAL mode, created on first use with `.specquer/cache/.gitignore` (`*`).
+- `key` is the SHA-256 of the simplified text, the model ID, the prompt version and the target sentence count, so changing the model or the prompt makes summaries again. The headings and path are in the prompt but not the key.
+- Rows older than 30 days are ignored when read, and deleted at startup (if the cache exists) and once a day while summarizing (decision D8).
+- A database that can't be opened is moved aside and created again; if that fails too, summaries are made without a cache.
+
+### 4.5. Request Flow
+
+1. The preview computes the outline of the text shown and the stop; for the saved text, it lists the sections the stop summarizes that aren't short, and tells the client's `SummaryStore` it needs them.
+2. The store requests each one it doesn't have (`POST /api/summaries`, one request per section, decision D4), keeps results in memory by path, headings and simplified text, and aborts requests no longer needed.
+3. The server answers short sections as written and cached ones at once; the others go through the call queue, which limits concurrency, shares a call between identical requests, and drops or aborts calls nobody waits for.
+4. After a save the saved text changes, so the sections whose text changed are requested again; the others are already in memory.

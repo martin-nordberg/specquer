@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import type { Tree, TreeFolder, TreeNode } from "@specquer/shared/api";
+import type { SummaryStatus, Tree, TreeFolder, TreeNode } from "@specquer/shared/api";
 import { isSameOrInside, renamedPath } from "@specquer/shared/paths";
 import {
   type UiState,
@@ -8,6 +8,7 @@ import {
   openFile,
   setFolderExpanded,
   setFrontmatterHeight,
+  setSummaryStop,
   setTheme,
   setTreePaneFraction,
   setViewType,
@@ -19,7 +20,7 @@ import { CreateDialog, type CreateRequest, DeleteDialog, RenameDialog } from "@/
 import { FilePath } from "@/components/FilePath";
 import { FileTree } from "@/components/FileTree";
 import { FrontmatterEditor, initialFrontmatterHeight } from "@/components/FrontmatterEditor";
-import type { ScrollTarget } from "@/components/Preview";
+import type { PreviewSummaries, ScrollTarget } from "@/components/Preview";
 import { ProblemsDialog } from "@/components/ProblemsDialog";
 import { SectionNotices } from "@/components/SectionNotices";
 import { SplitPane } from "@/components/SplitPane";
@@ -28,6 +29,7 @@ import type { Api } from "@/lib/api";
 import { appIconSvg, svgDataUri } from "@/theme/logo";
 import { applyTheme, useSystemTheme } from "@/theme/theme";
 import { AUTOSAVE_INTERVAL, DocumentStore, type SaveStatus } from "./document-store";
+import { SummaryStore } from "./summaries";
 import { UiStateStore } from "./ui-state-store";
 
 const appIconUri = svgDataUri(appIconSvg);
@@ -59,6 +61,7 @@ export function App({ api }: { api: Api }) {
 function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiState: UiState; initialTree: Tree }) {
   const uiStore = useMemo(() => new UiStateStore(api, initialUiState), [api, initialUiState]);
   const docStore = useMemo(() => new DocumentStore(api), [api]);
+  const summaryStore = useMemo(() => new SummaryStore(api), [api]);
   const ui = useSyncExternalStore(uiStore.subscribe, uiStore.get);
   const doc = useSyncExternalStore(docStore.subscribe, docStore.get);
   const [tree, setTree] = useState(initialTree);
@@ -75,6 +78,20 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
   useEffect(() => applyTheme(theme), [theme]);
 
   const refreshTree = useCallback(async () => setTree(await api.getTree()), [api]);
+
+  // Whether summaries can be made: asked once per page load and whenever the tab gets focus, so
+  // editing the agent configuration takes effect without a restart (decision D10)
+  const [summaryStatus, setSummaryStatus] = useState<SummaryStatus | null>(null);
+  useEffect(() => {
+    const load = () =>
+      api
+        .summaryStatus()
+        .then(setSummaryStatus)
+        .catch(() => setSummaryStatus({ enabled: false, problem: "Couldn't ask the server whether summaries are enabled." }));
+    void load();
+    window.addEventListener("focus", load);
+    return () => window.removeEventListener("focus", load);
+  }, [api]);
 
   /**
    * Saves the current file, then opens another. Stays put if the save didn't succeed. With a
@@ -228,6 +245,32 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
     [api, docStore],
   );
 
+  // Summaries are made from the saved file, which changes when it is read or written
+  const savedBody = useMemo(() => docStore.savedBody(), [docStore, doc.version, document_?.path, document_?.revision]);
+  const currentPath = document_?.path;
+  const onSummaryStepsChange = useCallback(
+    (steps: number) => {
+      if (currentPath !== undefined) uiStore.update((s) => setSummaryStop(s, currentPath, steps));
+    },
+    [uiStore, currentPath],
+  );
+  const hasFile = fileState !== null;
+  const storedSteps = fileState?.summaryStop ?? 0;
+  const summaries = useMemo<PreviewSummaries | undefined>(
+    () =>
+      !hasFile
+        ? undefined
+        : {
+            enabled: summaryStatus?.enabled === true,
+            ...(summaryStatus?.problem === undefined ? {} : { problem: summaryStatus.problem }),
+            savedBody,
+            steps: storedSteps,
+            onStepsChange: onSummaryStepsChange,
+            store: summaryStore,
+          },
+    [hasFile, storedSteps, summaryStatus, savedBody, onSummaryStepsChange, summaryStore],
+  );
+
   const renumberOpen = useCallback((id: string, uid: string | null) => void docStore.renumber(id, uid), [docStore]);
 
   /** Renumbers one occurrence of a duplicate ID: through the open file's store if it is open. */
@@ -282,7 +325,20 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
             className={doc.status === "conflict" || doc.status === "error" ? "text-xs text-error-text" : "text-xs text-muted-foreground"}
             title={doc.error ?? undefined}
           >
-            {statusText[doc.status]}
+            {doc.status === "unsaved" ? (
+              // Saving brings the summaries up to date
+              <button
+                type="button"
+                aria-label="Unsaved changes: save now"
+                title="Save now"
+                className="rounded-sm underline decoration-dotted underline-offset-2 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+                onClick={() => void docStore.save()}
+              >
+                {statusText.unsaved}
+              </button>
+            ) : (
+              statusText[doc.status]
+            )}
           </span>
           <ViewSwitcher value={fileState.viewType} onChange={(view) => uiStore.update((s) => setViewType(s, document_.path, view))} />
         </div>
@@ -309,6 +365,7 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
             savedVersion={doc.version}
             onRenumber={renumberOpen}
             scrollTarget={scrollTarget?.path === document_.path ? scrollTarget : undefined}
+            summaries={summaries}
           />
         </div>
         <ConflictDialog

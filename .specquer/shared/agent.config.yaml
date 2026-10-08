@@ -1,0 +1,11 @@
+# The model for agent features (summaries in the preview). The API key is never written here:
+# apiKeyEnv names the environment variable that holds it. A personal .specquer/user/agent.config.yaml
+# overrides this file.
+model:
+  provider: nvidia
+  name: google/gemma-4-31b-it
+  baseUrl: https://integrate.api.nvidia.com/v1
+  apiKeyEnv: NVIDIA_API_KEY
+summaries:
+  concurrency: 2
+  tokenBudget: 24000

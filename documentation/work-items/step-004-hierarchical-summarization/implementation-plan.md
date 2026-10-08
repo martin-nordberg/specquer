@@ -252,3 +252,22 @@ Taken while planning; each is _Proposed_ and the work proceeds on it unless chan
 | Prompt injection in specs | Misleading summaries, injected links | Plain text output; summaries labeled as AI-generated, one click from the source |
 | Hast positions shift with future pipeline steps | Wrong parts hidden | Phase 0 test of filtering at every stop, kept as a regression test |
 | Keys in the wrong place | A key committed to Git | The configuration only names the variable; the docs say so |
+
+<a id=""></a>
+## 9. Implementation Status
+
+Phases 0 to 5 were carried out in October 2026; Phase 6 awaits the author's review. What differs from the plan, or was learned doing it:
+
+1. **The model (Phase 0).** `@langchain/openai` 1.6.2 works against NVIDIA's API with `configuration.baseURL`. Of the models NVIDIA listed, several answered 404 for this account (listed isn't callable), two timed out, and the reasoning models spent tokens thinking (one wrote its whole thought process as the answer). `google/gemma-4-31b-it` keeps to the sentence count, writes plain prose and doesn't reason: about 3 to 5 s for a section, 24 s for all of `data-architecture.md` (7,800 input tokens). It is configured in this repository's `.specquer/shared/agent.config.yaml`.
+2. **Free tier.** NVIDIA's API catalog is a trial service under the NVIDIA API Trial Terms of Service, for evaluation and prototyping, with each model under its own license; the rate limit is about 40 requests a minute per account and varies with load. This is in [Security](/specifications/security) §9.
+3. **Cost (Phase 0).** For this repository's seven specs, every stop of every spec sends about 74,000 tokens in all. The largest single call is about 7,500 tokens (`data-architecture.md` at stops 0 and 1), so the default token budget of 24,000 stays and the fallback isn't needed here. A spec with one h1 sends nearly the same text at stops 1 and 0; after simplification it is identical, so the two share one cache entry.
+4. **Filtering by position (Phase 0, D1)** works as planned, including headings whose anchors the pipeline moves into them, setext headings, a byte-order mark and footnotes; `outline.test.ts` filters a rendered document at every stop. At stop 0, generated content (the footnotes section) goes too.
+5. **Deeper sections at a stop.** With skipped levels, a stop summarizes every section at its level *or deeper* that isn't inside one already summarized, so an h3 directly under an h1 is summarized at the h2 stop.
+6. **Unsaved new sections.** A section with no saved counterpart at its outline path is shown as written until it is saved, rather than as "Summarizing...".
+7. **The long-section fallback** is orchestrated in `agent` (`summarizeWithFallback`), with the server passing the cached path for subsections and the queue for model calls, so a section waiting for its subsections never holds a queue slot.
+8. **Retries.** `ChatOpenAI` retries once (`maxRetries: 1`) before an error reaches the user, who can then **Retry**.
+9. **A configuration race.** Two requests arriving together after a configuration change could see the old configuration; the file's parse is now shared as a promise.
+10. **Status.** `GET /api/summaries/status` also returns `problem`, which the disabled slider shows as a tooltip (no model configured, or the key variable not set).
+11. **`bun:sqlite` in the release build (Phase 0):** the compiled executable created `.specquer/cache/` with its `.gitignore` and the database, summarized a section of `security.md` through NVIDIA in 3 s, and answered the same request from the cache in about 1 ms.
+12. **Tests.** Unit and component tests pass, and the end-to-end tests (`e2e/summaries.spec.ts`, against a fake OpenAI-compatible server) pass on Chrome and WebKit, as does the rest of the suite.
+13. **Phase 6.** Summaries of `overview.md`, `security.md` and `client-requirements.md` were made at every stop with the configured model. They follow the length rule exactly and read well, so the prompt is unchanged (`PROMPT_VERSION` stays 1). Calls took 2 to 17 s each on the free tier, so the stops left of the full text fill in over seconds to a minute for a large spec. The author's own review of the summaries at every stop is still to come.

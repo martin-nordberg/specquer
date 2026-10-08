@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { entryNameSchema, entryPathSchema, markdownPathSchema, workspacePathSchema } from "../paths/paths.ts";
+import { MAX_SUMMARY_TEXT } from "../summaries/rules.ts";
 
 /** A folder in the tree; it lists only folders that contain Markdown files, and `.md` files. */
 export interface TreeFolder {
@@ -160,3 +161,33 @@ export const anchorFolderSchema = z.object({
   /** Also add the section anchor rules for coding agents to the root folder's `AGENTS.md`. */
   addAgentGuide: z.boolean().default(false),
 });
+
+/** Whether summaries can be made: a model is configured and its key is set. */
+export interface SummaryStatus {
+  enabled: boolean;
+  /** The configured model's ID. */
+  model?: string;
+  /** Why summaries aren't enabled, for the slider's hint. */
+  problem?: string;
+}
+
+/**
+ * A section to summarize: its saved text (the server simplifies it), the document it is in, and
+ * the titles of the headings above it, outermost first.
+ */
+export const summaryRequestSchema = z.object({
+  path: markdownPathSchema,
+  text: z.string().max(MAX_SUMMARY_TEXT),
+  headings: z.array(z.string().max(1000)).max(6).default([]),
+});
+export type SummaryRequest = z.infer<typeof summaryRequestSchema>;
+
+export interface SummaryResult {
+  summary: string;
+  /** The model that made it. */
+  model: string;
+  /** Whether it came from the cache. */
+  cached: boolean;
+  /** Whether the text was too long and was cut before it was summarized. */
+  truncated: boolean;
+}

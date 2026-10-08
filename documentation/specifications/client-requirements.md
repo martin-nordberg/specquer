@@ -92,6 +92,19 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 6. Pasting a section anchor whose ID still exists elsewhere (in the open document, or, in the text editor, in another document) turns it into a placeholder, so the copy gets a new ID on save. A cut followed by a paste keeps the ID.
 7. In the text editor, the `data-uid` attribute of anchors is shown in the muted color. It isn't folded or hidden.
 
+### 6.2 Summaries
+
+1. In the preview and split views, a slider above the preview replaces heading sections with AI summaries, level by level. It has one stop per heading level the document uses plus two: the full text (the far right, the default) and the whole document (the far left). Skipped and unused levels add no stops. A document without headings shows no slider.
+2. Each step to the left summarizes the sections of the next higher level used, with everything below them; a section deeper than that level that isn't inside one of them is summarized too. A summarized section keeps its heading, with the summary under it. Text under a heading before its first subsection, and the text before the first heading, stay as written. At the far left one summary replaces the whole document, headings included.
+3. The stops are named "Full text", "Summarize level 3 sections", …, "Summarize document"; the current one is shown beside the slider and is the slider's accessible value text. The slider is reached and moved with the keyboard.
+4. The position is remembered per file in the UI state, as steps from the full text, and clamped to the stops the document has.
+5. Until a model is configured and its key set, the slider is disabled, the preview shows the full text, and a hint names `.specquer/shared/agent.config.yaml` (with the reason as a tooltip). The client asks the server whether summaries are enabled when the page loads and whenever the tab gets focus, so a configuration change needs no reload.
+6. A section of fewer than 60 words (after simplification) is shown as written, without calling the model. A section added since the last save is shown as written until it is saved.
+7. A summary shows "Summarizing..." while it is made; then plain text paragraphs, never Markdown or HTML, under a subtle "AI summary" label (with "shortened" when the section was too long and was cut). If it can't be made (a network failure, the provider's rate limit), the error shows in its place with **Retry**.
+8. Summaries are made from the saved file only; unsaved text is never sent. A section edited since the last save keeps its last summary, labeled "out of date", and is summarized again after the next save.
+9. Clicking a summary, or its **Show full text**, moves the slider to the full text and scrolls to its section. A link to a section hidden by a summary (`other.md#SPEC-00012`) does the same.
+10. Summaries are kept in memory while Specquer is open, so moving the slider back and forth asks for nothing new. Requests no longer needed (the slider moved, another file opened, another view chosen) are aborted.
+
 ## 7. Saving
 
 1. Edits are saved automatically:
@@ -99,7 +112,7 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
    - when the browser tab loses focus or the page closes (with `keepalive` requests, for bodies under 60 KB), and
    - every 60 seconds while there are unsaved changes.
 2. A file is only written if its text differs from what was last read or saved. Line endings (LF or CRLF), a byte-order mark and the front matter layout are preserved.
-3. The save status shows "Saved", "Unsaved changes", "Saving…", "Not saved: changed on disk" or "Save failed" (with the reason as a tooltip).
+3. The save status shows "Saved", "Unsaved changes", "Saving…", "Not saved: changed on disk" or "Save failed" (with the reason as a tooltip). "Unsaved changes" is a button (accessible name "Unsaved changes: save now") that saves at once, which also brings summaries up to date (§6.2); in the other states the status is plain text.
 4. Saving a sectioned file may add or correct section anchors. The editors show them at once: the text editor inserts them without moving the cursor or losing text typed during the save, and undo doesn't remove them. They don't count as unsaved changes. The WYSIWYG view reloads its content. When the save changed more than adding anchors (a copy renumbered, an edited ID put back, a reused number, a copied UID, or a file with conflict markers left alone), a dismissible line under the file path says what, with a link to **Section problems…**.
 5. If the file changed on disk since it was opened, saving doesn't overwrite it. A dialog offers **Reload from disk** (discarding the user's changes) and **Keep my version** (overwriting the file on disk). Autosave pauses until the user chooses, and another file can't be opened meanwhile.
 

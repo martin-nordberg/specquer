@@ -17,16 +17,24 @@ This document describes what Specquer works with and how its screen is organized
 | Section anchor and ID | An invisible HTML anchor that marks a section with a permanent ID such as `REQ-00257`, used in links to the section, and its UID (`data-uid`), the section's identity. The root anchor's UID is the document ID. |
 | Shared data | The section configuration and data files in `.specquer/shared/`, committed to Git: `documents.yaml` and, per prefix, `sections.yaml` (live and retired sections). |
 | Agent guide | Optional section anchor rules for coding agents in the root folder's `AGENTS.md`, added on request by **Add section anchors**. |
+| Summary | An AI-generated summary of a heading section, or of the whole document, shown in the preview in place of the section's content by the summary slider. Made from the saved file by the model named in the agent configuration, and cached for 30 days. See [Data Architecture](data-architecture.md) §4. |
+| Agent configuration | `.specquer/shared/agent.config.yaml` (committed) names the model for agent features and the environment variable holding its key; an optional `.specquer/user/agent.config.yaml` overrides it for one user. Without it, Specquer makes no network calls. |
+| Summary cache | `.specquer/cache/summaries.db`, per user and ignored by Git. |
 
 ```
 root folder
-├── .specquer/shared/        section configuration and data, committed
+├── .specquer/shared/        section and agent configuration and data, committed
 │   ├── section-prefixes.config.yaml
+│   ├── agent.config.yaml    optional: the model for summaries
 │   ├── documents.yaml
 │   └── REQ/sections.yaml
 ├── .specquer/user/          per-user state, ignored by Git
 │   ├── .gitignore           *
+│   ├── agent.config.yaml    optional: a personal model
 │   └── uistate.yaml
+├── .specquer/cache/         per-user cache, ignored by Git
+│   ├── .gitignore           *
+│   └── summaries.db
 ├── docs/                    folder (shown: contains .md files)
 │   ├── overview.md          spec file
 │   └── images/              not shown (no .md files)
@@ -76,11 +84,13 @@ Specquer has one view: a header and two panes side by side.
 | ---- | ------------ | -------- |
 | Text (default) | CodeMirror with Markdown highlighting | Yes |
 | Split | CodeMirror on the left, preview on the right | Text side |
-| Preview | Rendered, sanitized HTML, with badges for section anchors | No |
+| Preview | Rendered, sanitized HTML, with badges for section anchors, and the summary slider | No |
 | WYSIWYG | Milkdown rich-text editor | Yes |
 
 The view type is remembered per file. All views edit the same in-memory copy of the file, so switching views never loses changes.
 
+In the split and preview views, the summary slider above the preview replaces sections, level by level, with AI summaries, down to one summary of the whole document. Its position is remembered per file. See [Client Requirements](client-requirements.md) §6.2.
+
 ## 5. Saving
 
-Edits are kept in memory and saved automatically: before another file opens, when the browser tab loses focus or the page closes, and every 60 seconds while there are changes. The save status shows "Saved", "Unsaved changes", "Saving…", or an error. Files that weren't edited are never written.
+Edits are kept in memory and saved automatically: before another file opens, when the browser tab loses focus or the page closes, and every 60 seconds while there are changes. The save status shows "Saved", "Unsaved changes", "Saving…", or an error; "Unsaved changes" is a button that saves now. Files that weren't edited are never written.

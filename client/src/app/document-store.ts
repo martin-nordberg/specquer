@@ -137,6 +137,14 @@ export class DocumentStore {
     this.set({ document: { ...document, ...update }, status: this.state.conflict ? "conflict" : "unsaved" });
   }
 
+  /**
+   * The body of the file as last read or written (`\n` line endings), for summaries: they are
+   * made from the saved file only, never from unsaved edits.
+   */
+  savedBody(): string {
+    return toLf(splitFrontmatter(this.savedText).body);
+  }
+
   /** The file text the editors currently hold. */
   text(): string {
     const document = this.state.document;

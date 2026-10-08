@@ -13,6 +13,9 @@ import {
   type SectionNotice,
   type SectionProblem,
   type SectionSearchResult,
+  type SummaryRequest,
+  type SummaryResult,
+  type SummaryStatus,
   type Tree,
   anchorFolderSchema,
   createSchema,
@@ -23,6 +26,7 @@ import {
   saveFileSchema,
   sectionProblemsSchema,
   sectionSearchSchema,
+  summaryRequestSchema,
 } from "./schemas.ts";
 
 /**
@@ -69,6 +73,9 @@ export interface ApiHandlers {
   anchorFolder(folder: string, dryRun: boolean, addAgentGuide: boolean): Promise<AnchorFolderResult>;
   sectionProblems(folder: string): Promise<SectionProblem[]>;
   renumberSection(path: string, id: string, uid: string | null, baseVersion: string): Promise<SaveResult>;
+  summaryStatus(): Promise<SummaryStatus>;
+  /** Summarizes a section; `signal` aborts when the client no longer needs it. */
+  summarize(request: SummaryRequest, signal: AbortSignal): Promise<SummaryResult>;
 }
 
 /** A successful save's response body: the new version, and the edits and notices if any. */
@@ -161,6 +168,10 @@ export function createApiRouter(handlers: ApiHandlers) {
       const result = await handlers.renumberSection(path, id, uid, baseVersion);
       if (!result.ok) return c.json({ error: "conflict", version: result.version }, 409);
       return c.json(saveBody(result), 200);
+    })
+    .get("/summaries/status", async (c) => c.json(await handlers.summaryStatus()))
+    .post("/summaries", validate("json", summaryRequestSchema), async (c) => {
+      return c.json(await handlers.summarize(c.req.valid("json"), c.req.raw.signal));
     });
 }
 

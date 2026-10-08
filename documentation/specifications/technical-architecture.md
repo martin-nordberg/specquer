@@ -25,9 +25,9 @@ The repository is a Bun workspace with five packages.
 
 | Folder | Package | Purpose |
 | ------ | ------- | ------- |
-| `./shared` | `@specquer/shared` | API contract (routes, request validation, schemas), workspace paths, section IDs, the Markdown domain and the UI-state domain |
+| `./shared` | `@specquer/shared` | API contract (routes, request validation, schemas), workspace paths, section IDs, the Markdown domain (including the heading outline), the summary rules and the UI-state domain |
 | `./server` | `@specquer/server` | Back end: implements the API and serves the client |
-| `./agent` | `@specquer/agent` | AI functionality, used by the back end |
+| `./agent` | `@specquer/agent` | AI functionality, used by the back end: the agent configuration, the chat model, summarization |
 | `./client` | `@specquer/client` | Front end: browser user interface |
 | `./documentation` | `@specquer/documentation` | Documentation site, including these specifications |
 
@@ -90,7 +90,8 @@ The router's type is what the client's typed Hono client uses, so the client get
 | UI state | `.specquer/user/uistate.yaml` under the root folder, read and written with `Bun.YAML` |
 | Sections | `SectionIndex` (`server/src/sections/`): an in-memory index of the sectioned files and the data files in `.specquer/shared/`, which the `yaml` package reads and writes (it keeps key order and writes one flow mapping per line); document IDs and section UIDs are 12-character CUID2s (`@paralleldrive/cuid2`'s `init({ length: 12 })`) carried in the anchors' `data-uid`; the data files are read again when they change on disk; see [Data Architecture](data-architecture.md) §2 |
 | Security | Session token, Host and Origin checks, Content-Security-Policy; see [Security](security.md) |
-| AI features | Delegated to `agent` (not used yet) |
+| AI features | Delegated to `agent`. The summary service (`server/src/summaries/`) reads the agent configuration, keeps summaries in a SQLite cache (`bun:sqlite`, `.specquer/cache/summaries.db`) and queues model calls; see [Data Architecture](data-architecture.md) §4 |
+| Outbound network | Only to the configured model provider, and only when summaries are configured; see [Security](security.md) §9 |
 | Development port | 3000 |
 | Development mode | `bun --hot` (reloads on change) |
 
@@ -113,7 +114,9 @@ The command line, the file-system rules and the API are specified in [Server Req
 | AI library | LangChain.js (`langchain`, with `@langchain/core`); LangGraph (`@langchain/langgraph`) comes with it for stateful, multi-step workflows |
 | Domain models | Zod schemas from `shared` |
 | Tool schemas | Zod, used to define the input of LangChain tools and structured output |
+| Model provider | `@langchain/openai`'s `ChatOpenAI`, pointed at NVIDIA's OpenAI-compatible API (`https://integrate.api.nvidia.com/v1`); the model is configured in `.specquer/shared/agent.config.yaml` |
 | Used by | `server`, which exposes agent features through API routes |
+| Features | Summaries of sections (Step 004): `config.ts` (the configuration schema and merging), `model.ts` (the chat model for a configuration), `summarize.ts` (the prompt, plain-text output, and the fallback for long sections) |
 
 ### 6.1 Package Rationale
 
@@ -124,7 +127,25 @@ The AI functionality runs on the server and could live inside `./server`. It is 
 - The JavaScript implementation is used, in the same Bun process as the server. Python LangChain is not used, so the system keeps one language and one executable.
 - Models are reached through LangChain provider packages (such as `@langchain/anthropic`). A provider package is added to `agent` only when a feature needs it.
 - LangChain code is written against the installed version, using its type definitions and the JavaScript documentation for that major version, not from memory, because the API changes between major versions. Examples written for Python LangChain are not copied, since the two APIs differ.
+- Providers: NVIDIA's hosted models come through `@langchain/openai`, since `initChatModel` has no NVIDIA entry. Other providers will come through `initChatModel("provider:model")` and their packages; `createChatModel` in `agent/src/model.ts` is the only place that changes.
+- Tests use a fake model (`FakeListChatModel` from `@langchain/core/utils/testing` in `agent`, a stub in `server`), and the end-to-end tests a fake OpenAI-compatible server (`e2e/fake-model.ts`), so no test calls a real model or needs a key.
 - LangSmith tracing is off. `langchain` depends on `langsmith`, which sends traces to LangSmith only when tracing environment variables (such as `LANGSMITH_TRACING`) are set; Specquer does not set them.
+
+### 6.3 Summary Request Flow
+
+```
+client                         server                          agent / provider
+Preview ─ outline of saved text
+  │ SummaryStore.need(sections)
+  │ POST /api/summaries ───────► SummaryService
+  │  (aborted when not needed)    ├─ short? → as written
+  │                               ├─ cache (bun:sqlite) hit? → cached
+  │                               └─ CallQueue (concurrency, ─► summarizeWithFallback
+  │                                  shared calls, aborts)        └─ ChatOpenAI ─► NVIDIA
+  ◄──────── { summary, model, cached, truncated }
+```
+
+The client sends saved text only, and the server never reads files for summaries. The details are in [Data Architecture](data-architecture.md) §4.
 
 ## 7. Front End
 
@@ -139,6 +160,7 @@ The AI functionality runs on the server and could live inside `./server`. It is 
 | Text editing | CodeMirror 6, with a small wrapper of its own (`@codemirror/lang-markdown`, `@codemirror/lang-yaml`; `@codemirror/autocomplete` for section link completion, `@codemirror/merge`'s `diff` for applying outside changes minimally) |
 | WYSIWYG editing | Milkdown (`@milkdown/kit`, CommonMark and GFM presets), with a node view that shows section anchors as badges |
 | Markdown preview | The `shared` pipeline (unified, remark-parse, remark-gfm, remark-frontmatter, remark-rehype, rehype-raw, rehype-sanitize), run in a Web Worker and rendered with `hast-util-to-jsx-runtime` |
+| Summaries | The summary slider (the shadcn Slider on Radix UI) above the preview; the rendered tree filtered by stop (`summarizeTree` from `shared`), with summaries from `SummaryStore` (`client/src/app/summaries.ts`) rendered as plain text |
 | API client | Hono typed client (`hc`), typed from the router in `shared` |
 | Input validation | Zod and the validation functions from `shared`, so the client and server apply the same rules |
 | Build tool | Bun's bundler, through an HTML import of `client/index.html` in the back end |
@@ -203,6 +225,7 @@ A single root command (`bun run dev`) starts the back end under `bun --hot`, wit
 | Preview worker | Built first and embedded in the executable as a constant |
 | Runtime processes | One process serving both the API and the client on a single port |
 | Port | Tries 4870, falls back to a free port; `--port` fixes it |
+| Summary cache | `bun:sqlite` is built into Bun, so the compiled executable creates and reads `.specquer/cache/summaries.db` with nothing extra to ship (checked in Step 004) |
 
 In production the back end serves the client from assets embedded in the executable, not from files on disk. `bun run build` runs `server/build.ts`: it builds the preview worker, then calls `Bun.build()` with `compile`, the Tailwind plugin and `NODE_ENV` defined as `production`, which turns off development mode in `Bun.serve()`. The output is `server/dist/specquer`.
 
@@ -216,4 +239,5 @@ In production the back end serves the client from assets embedded in the executa
 
 - The root `bunfig.toml` preloads happy-dom for all tests, then puts back Bun's own `fetch`, `Request`, `Response` and timers, which the server tests use. It also keeps `e2e/` out of `bun test`, since `bun test` would otherwise pick up Playwright's `*.spec.ts` files.
 - `test:e2e` runs `bun --bun x playwright test`. Without `--bun`, Playwright silently runs on Node when Node is installed. Running Playwright on Bun isn't officially supported; the fallback is the `playwright` library inside `bun test`.
+- Tests never call a real model: `agent` uses LangChain's `FakeListChatModel`, the server tests a stub model, and `e2e/summaries.spec.ts` a fake OpenAI-compatible server (`e2e/fake-model.ts`) that `agent.config.yaml` points at. The Specquer started for end-to-end tests gets a test key in `SPECQUER_E2E_MODEL_KEY`.
 - Each end-to-end test starts its own Specquer, in production mode, on a temporary Git repository. Chrome is the installed browser (`channel: "chrome"`); WebKit, the engine of a future desktop shell on macOS and Linux, needs `bunx playwright install webkit` once.

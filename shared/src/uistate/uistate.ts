@@ -13,6 +13,8 @@ export const MAX_RECENT_FILES = 10;
 export const MIN_TREE_PANE_FRACTION = 0.1;
 export const MAX_TREE_PANE_FRACTION = 0.7;
 export const DEFAULT_TREE_PANE_FRACTION = 0.25;
+/** Six heading levels and the whole document. */
+export const MAX_SUMMARY_STEPS = 7;
 
 export const viewTypes = ["text", "split", "preview", "wysiwyg"] as const;
 export const viewTypeSchema = z.enum(viewTypes);
@@ -25,6 +27,8 @@ export const fileUiStateSchema = z.object({
   viewType: viewTypeSchema.catch("text"),
   /** Height of the front matter editor in pixels (the drag bar position). */
   frontmatterHeight: z.number().positive().optional().catch(undefined),
+  /** The summary slider's position, as steps from the full text (0, or absent, is the full text). */
+  summaryStop: z.number().int().min(0).max(MAX_SUMMARY_STEPS).optional().catch(undefined),
 });
 export type FileUiState = z.infer<typeof fileUiStateSchema>;
 
@@ -146,6 +150,22 @@ export function setViewType(state: UiState, path: string, viewType: ViewType): U
 
 export function setFrontmatterHeight(state: UiState, path: string, height: number): UiState {
   return updateFileUiState(state, path, { frontmatterHeight: Math.max(1, Math.round(height)) });
+}
+
+/** Sets the summary slider's position, as steps from the full text; 0 drops the field. */
+export function setSummaryStop(state: UiState, path: string, steps: number): UiState {
+  const { summaryStop: _, ...rest } = fileUiState(state, path);
+  const clamped = Math.min(MAX_SUMMARY_STEPS, Math.max(0, Math.round(steps)));
+  return { ...state, files: { ...state.files, [path]: clamped === 0 ? rest : { ...rest, summaryStop: clamped } } };
+}
+
+/**
+ * The stored position as a slider stop (0 is the whole document, `stopCount - 1` the full
+ * text), clamped to the stops a document has (decision D3).
+ */
+export function summaryStopOf(file: FileUiState, stopCount: number): number {
+  if (stopCount === 0) return 0;
+  return Math.max(0, stopCount - 1 - (file.summaryStop ?? 0));
 }
 
 export function setTheme(state: UiState, theme: Theme | undefined): UiState {

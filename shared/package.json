@@ -24,6 +24,7 @@
     "./paths": "./src/paths/index.ts",
     "./markdown": "./src/markdown/index.ts",
     "./uistate": "./src/uistate/index.ts",
-    "./sections": "./src/sections/index.ts"
+    "./sections": "./src/sections/index.ts",
+    "./summaries": "./src/summaries/index.ts"
   }
 }

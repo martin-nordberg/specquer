@@ -2,7 +2,7 @@
 
 Specquer is a local web server that can read, write, rename and delete files under its root folder. Anything that can talk to it can do the same, so the server is protected against other websites in the user's browser, other machines on the network and malicious content in the Markdown files themselves.
 
-The rules below are implemented in `server/src/security.ts`, `server/src/files.ts` and the shared preview pipeline, and are covered by unit tests (`server/src/security.test.ts`, `server/src/files.test.ts`, `shared/src/markdown/preview.test.ts`) and end-to-end tests (`e2e/launch.spec.ts`, `e2e/views.spec.ts`).
+The rules below are implemented in `server/src/security.ts`, `server/src/files.ts`, `server/src/summaries/` and the shared preview pipeline, and are covered by unit tests (`server/src/security.test.ts`, `server/src/files.test.ts`, `shared/src/markdown/preview.test.ts`) and end-to-end tests (`e2e/launch.spec.ts`, `e2e/views.spec.ts`).
 
 ## 1. Threats
 
@@ -14,6 +14,8 @@ The rules below are implemented in `server/src/security.ts`, `server/src/files.t
 | Path traversal | `GET /api/file?path=../../.ssh/id_rsa.md`, or a symbolic link out of the root | Path confinement (§5) |
 | Cross-site scripting through Markdown | A spec contains `<img src=x onerror="fetch('/api/entry?path=docs', {method: 'DELETE'})">` | Sanitizing (§6), Content-Security-Policy (§7) |
 | Lost work | Autosave overwrites a file a coding agent just changed; deleting a folder removes files the tree doesn't show | Version check on save; delete preview (§8) |
+| Specs sent to a third party | Summaries send section text to a model provider | Opt-in configuration, saved text only, keys only in the environment (§9) |
+| Prompt injection | A spec tells the model to answer with a link or HTML | Summaries rendered as plain text, labeled as AI-generated (§9) |
 
 ## 2. Network
 
@@ -83,3 +85,14 @@ frame-ancestors 'none'
 - **Section anchors change files only when the user does.** Viewing a file and the background scan never write. Anchors are added when a sectioned file is saved or created, and by **Add section anchors**, which lists the files it will change and asks first. Only files the configuration names are sectioned. A duplicate ID across documents is renumbered only when the user asks, and a file with merge conflict markers is never anchored. `AGENTS.md` is written only when the user ticks the box in **Add section anchors**, and only appended to, once.
 - **Delete preview.** Before deleting, the dialog lists every file that will be deleted, including files the tree doesn't show, and names the files not committed to Git (new, modified or ignored). Outside a Git repository it warns that nothing can be recovered.
 - **Per-user state stays out of Git.** `.specquer/user/` gets a `.gitignore` containing `*` when Specquer creates it.
+
+## 9. Summaries and the Model Provider
+
+Summaries in the preview (Step 004) are the server's only outbound network calls.
+
+- **Opt-in.** Until a model is configured in `.specquer/shared/agent.config.yaml` (or the personal `.specquer/user/agent.config.yaml`) and its key is set, no request leaves the machine: the slider is disabled and `POST /api/summaries` answers `503`. Specquer then works fully offline.
+- **What is sent.** The provider receives the text of each section summarized, the document's path and the titles of the headings above the section. Only saved text is sent, never unsaved edits, and only from the authenticated client: the route takes the text in its request (with the session token, Host and Origin checks of every API route) and never reads files.
+- **Keys.** The configuration never holds an API key, since the shared file is committed. It names the environment variable that holds the key (`apiKeyEnv: NVIDIA_API_KEY`); the server reads it from its own environment. Bun also loads a `.env` file from the server's working directory, which the root `.gitignore` excludes.
+- **Free tiers.** The first supported provider is NVIDIA's API catalog (build.nvidia.com), a trial service for evaluation and prototyping under the NVIDIA API Trial Terms of Service, with each model under its own license. As of October 2026 its rate limit is about 40 requests a minute per account, varying by model and load, and production use isn't allowed. Read the current terms, including what they say about storing the text sent, before sending specs that aren't public.
+- **Untrusted output.** A spec can contain text that steers the model, so a summary may hold Markdown, links or HTML. The server strips Markdown markers and HTML tags, and the client renders summaries as plain text paragraphs, never as HTML. Each summary is labeled "AI summary" and is one click from the full text.
+- **The cache.** Summaries are stored in `.specquer/cache/summaries.db` (SQLite), in the root folder, for 30 days. `.specquer/cache/` gets a `.gitignore` containing `*` when Specquer creates it, so summaries aren't committed or shared. The browser never calls a model, so the Content-Security-Policy (§7) doesn't change.
