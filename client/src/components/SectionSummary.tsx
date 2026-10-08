@@ -21,8 +21,7 @@ export function SectionSummary({ entry, outOfDate, onRetry, onShowFullText }: Se
   return (
     <section aria-label="AI summary" className="my-3 rounded-md border border-dashed bg-muted/40 px-4 py-2" data-testid="section-summary">
       <div className="mb-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-        {/* Turns slowly while the summary is made; the star is the icon's center */}
-        <Sparkles className={loading ? "size-3 motion-safe:animate-spin motion-safe:[animation-duration:3s]" : "size-3"} aria-hidden />
+        <Sparkles className="size-3" aria-hidden />
         <span>{label}</span>
       </div>
       {loading ? (
