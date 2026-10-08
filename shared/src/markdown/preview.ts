@@ -107,9 +107,11 @@ function rehypeSectionAnchors() {
         while (j < blocks.length && isBlank(blocks[j]!)) j++;
         const next = blocks[j];
         const nextIsHeading = next?.type === "element" && HEADINGS.has(next.tagName);
-        // The first block's anchor is the root's, unless (written before document IDs) it
-        // belongs to the heading directly after it
-        if (firstBlock && (anchor.properties.dataDocumentId !== undefined || !nextIsHeading)) {
+        // The first block's anchor is the root's, unless the heading on the very next line
+        // follows it, which makes it the heading's (as `findSections` decides)
+        const headingOnNextLine =
+          nextIsHeading && (block.position === undefined || next.position === undefined || next.position.start.line === block.position.end.line + 1);
+        if (firstBlock && !headingOnNextLine) {
           mark(anchor, "root");
         } else if (nextIsHeading && sectionAnchorId(firstContent((next as Element).children)) === undefined) {
           mark(anchor, "heading");

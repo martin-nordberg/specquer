@@ -1,6 +1,6 @@
-import { mkdir, readdir } from "node:fs/promises";
+import { mkdir, readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
-import { isPrefix, isSectionId, parseSectionId } from "@specquer/shared/sections";
+import { isPrefix, isSectionId, isUid, parseSectionId } from "@specquer/shared/sections";
 import { isMap, isScalar, parseDocument } from "yaml";
 import { writeAtomically } from "../files.ts";
 import { SHARED_FOLDER } from "./config.ts";
@@ -8,14 +8,21 @@ import { SHARED_FOLDER } from "./config.ts";
 /**
  * The committed data files in `.specquer/shared/`:
  *
- * - `documents.yaml`: every sectioned document, by document ID (a CUID2), with its path.
- * - `<prefix>/sections.yaml`: for each prefix, the highest sequence number ever assigned and
- *   every section, by its CUID2, with its section ID and document ID.
+ * - `documents.yaml`: every sectioned document, by document ID (its root section's UID), with
+ *   its path.
+ * - `<prefix>/sections.yaml`: for each prefix, the highest sequence number ever assigned, every
+ *   section by its UID with its section ID and document ID (the root sections included, keyed by
+ *   the document ID), and the retired sections: those no document holds any more, by UID, with
+ *   the ID they had. A section restored later is told apart from its ID reused by its UID.
+ *
+ * Every entry can be rebuilt from the documents, which carry the UIDs; the files are the last
+ * known state, which tells an edited ID or a reused one from a new one.
  *
  * One entry per line, in the order entries were added, so that Git merges conflict only where
  * both sides appended. Reading tolerates damage: merge conflict markers are dropped (keeping both
  * sides, the earlier entry winning), invalid entries skipped, an unreadable file treated as
- * empty. Nothing here ever stops the server.
+ * empty. Nothing here ever stops the server. The files are read again when they change on disk
+ * (a pull or a branch switch), see `DataFiles.changed`.
  */
 
 export interface DocumentEntry {
@@ -27,10 +34,20 @@ export interface SectionEntry {
   documentId: string;
 }
 
+export interface RetiredEntry {
+  id: string;
+}
+
 export interface PrefixData {
   lastSequence: number;
-  /** By CUID2, in file order. */
+  /** Live sections by UID, in file order. */
   sections: Map<string, SectionEntry>;
+  /** Retired sections by UID, in file order. */
+  retired: Map<string, RetiredEntry>;
+}
+
+export function emptyPrefixData(lastSequence = 0): PrefixData {
+  return { lastSequence, sections: new Map(), retired: new Map() };
 }
 
 export interface SectionData {
@@ -73,16 +90,12 @@ function mapEntries(doc: ReturnType<typeof parseDocument>, key: string): Array<[
   return entries;
 }
 
-function isCuidLike(value: string): boolean {
-  return /^[a-z][a-z0-9]{1,63}$/.test(value);
-}
-
 export function parseDocumentsFile(text: string): Map<string, DocumentEntry> {
   const documents = new Map<string, DocumentEntry>();
   const doc = parseTolerant(text);
   for (const [key, value] of mapEntries(doc, "documents")) {
     const path = (value as { path?: unknown } | null)?.path;
-    if (!isCuidLike(key) || typeof path !== "string" || documents.has(key)) continue;
+    if (!isUid(key) || typeof path !== "string" || documents.has(key)) continue;
     documents.set(key, { path });
   }
   return documents;
@@ -96,11 +109,19 @@ export function parseSectionsFile(text: string, prefix: string): PrefixData {
   const sections = new Map<string, SectionEntry>();
   for (const [key, value] of mapEntries(doc, "sections")) {
     const entry = value as { id?: unknown; documentId?: unknown } | null;
-    if (!isCuidLike(key) || sections.has(key) || typeof entry?.id !== "string" || typeof entry.documentId !== "string") continue;
-    if (!isSectionId(entry.id) || parseSectionId(entry.id)!.prefix !== prefix) continue;
+    if (!isUid(key) || sections.has(key) || typeof entry?.id !== "string" || typeof entry.documentId !== "string") continue;
+    if (!isSectionId(entry.id) || parseSectionId(entry.id)!.prefix !== prefix || !isUid(entry.documentId)) continue;
     sections.set(key, { id: entry.id, documentId: entry.documentId });
   }
-  return { lastSequence, sections };
+  // A section live on one side of a merge and retired on the other is live
+  const retired = new Map<string, RetiredEntry>();
+  for (const [key, value] of mapEntries(doc, "retired")) {
+    const entry = value as { id?: unknown } | null;
+    if (!isUid(key) || sections.has(key) || retired.has(key) || typeof entry?.id !== "string") continue;
+    if (!isSectionId(entry.id) || parseSectionId(entry.id)!.prefix !== prefix) continue;
+    retired.set(key, { id: entry.id });
+  }
+  return { lastSequence, sections, retired };
 }
 
 /** A YAML scalar for a flow mapping: plain when that is safe, otherwise double-quoted. */
@@ -117,7 +138,9 @@ export function formatDocumentsFile(documents: ReadonlyMap<string, DocumentEntry
 
 export function formatSectionsFile(data: PrefixData): string {
   const lines = [...data.sections].map(([key, entry]) => `  ${key}: { id: ${entry.id}, documentId: ${scalar(entry.documentId)} }`);
-  return `${SECTIONS_HEADER}lastSequence: ${data.lastSequence}\nsections:${lines.length === 0 ? " {}" : ""}\n${lines.map((l) => `${l}\n`).join("")}`;
+  const retired = [...data.retired].map(([key, entry]) => `  ${key}: { id: ${entry.id} }`);
+  const block = (name: string, items: string[]) => `${name}:${items.length === 0 ? " {}" : ""}\n${items.map((l) => `${l}\n`).join("")}`;
+  return `${SECTIONS_HEADER}lastSequence: ${data.lastSequence}\n${block("sections", lines)}${retired.length === 0 ? "" : block("retired", retired)}`;
 }
 
 /** Reads and writes the data files under a root folder, writing only files whose content changed. */
@@ -125,6 +148,8 @@ export class DataFiles {
   readonly folder: string;
   /** The text last read or written for each file, to skip writes that change nothing. */
   private readonly written = new Map<string, string>();
+  /** The files' modification times and sizes as last read or written; `null` before the first read. */
+  private signature: string | null = null;
 
   constructor(
     root: string,
@@ -143,20 +168,48 @@ export class DataFiles {
     }
   }
 
+  /** The data files' modification times and sizes, and which prefix folders exist. */
+  private async currentSignature(): Promise<string> {
+    const stamp = async (file: string) => {
+      try {
+        const info = await stat(file);
+        return `${info.mtimeMs}:${info.size}`;
+      } catch {
+        return "-";
+      }
+    };
+    const parts = [await stamp(join(this.folder, DOCUMENTS_FILE))];
+    for (const prefix of await this.prefixFolders()) parts.push(`${prefix}=${await stamp(join(this.folder, prefix, SECTIONS_FILE))}`);
+    return parts.join("|");
+  }
+
+  private async prefixFolders(): Promise<string[]> {
+    try {
+      return (await readdir(this.folder, { withFileTypes: true }))
+        .filter((e) => e.isDirectory() && isPrefix(e.name))
+        .map((e) => e.name)
+        .sort();
+    } catch {
+      return [];
+    }
+  }
+
+  /** Whether the files changed on disk since they were last read or written here. */
+  async changed(): Promise<boolean> {
+    return this.signature === null || (await this.currentSignature()) !== this.signature;
+  }
+
   async read(): Promise<SectionData> {
+    this.signature = await this.currentSignature();
+    // Files that vanished (a branch switch) must be written again, even with the same content
+    this.written.clear();
     const data = emptyData();
     const documentsText = await this.readText(join(this.folder, DOCUMENTS_FILE));
     if (documentsText !== null) data.documents = this.guard(DOCUMENTS_FILE, () => parseDocumentsFile(documentsText), new Map());
-    let folders: string[] = [];
-    try {
-      folders = (await readdir(this.folder, { withFileTypes: true })).filter((e) => e.isDirectory() && isPrefix(e.name)).map((e) => e.name);
-    } catch {
-      folders = [];
-    }
-    for (const prefix of folders.sort()) {
+    for (const prefix of await this.prefixFolders()) {
       const text = await this.readText(join(this.folder, prefix, SECTIONS_FILE));
       if (text === null) continue;
-      data.prefixes.set(prefix, this.guard(`${prefix}/${SECTIONS_FILE}`, () => parseSectionsFile(text, prefix), { lastSequence: 0, sections: new Map() }));
+      data.prefixes.set(prefix, this.guard(`${prefix}/${SECTIONS_FILE}`, () => parseSectionsFile(text, prefix), emptyPrefixData()));
     }
     return data;
   }
@@ -174,9 +227,10 @@ export class DataFiles {
   async write(data: SectionData): Promise<void> {
     await this.writeFile(join(this.folder, DOCUMENTS_FILE), formatDocumentsFile(data.documents), data.documents.size === 0);
     for (const [prefix, prefixData] of data.prefixes) {
-      const empty = prefixData.lastSequence === 0 && prefixData.sections.size === 0;
+      const empty = prefixData.lastSequence === 0 && prefixData.sections.size === 0 && prefixData.retired.size === 0;
       await this.writeFile(join(this.folder, prefix, SECTIONS_FILE), formatSectionsFile(prefixData), empty);
     }
+    this.signature = await this.currentSignature();
   }
 
   private async writeFile(file: string, text: string, empty: boolean): Promise<void> {

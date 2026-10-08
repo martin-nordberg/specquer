@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { setCookie } from "hono/cookie";
 import { type ApiHandlers, createApiRouter } from "@specquer/shared/api";
 import { FileService } from "./files.ts";
+import { addAgentGuideFile, hasAgentGuideFile } from "./sections/agent-guide.ts";
 import { SectionIndex } from "./sections/section-index.ts";
 import { PREVIEW_WORKER_PATH, previewWorkerScript } from "./preview-worker.ts";
 import {
@@ -53,7 +54,13 @@ export function createHandlers(files: FileService, uiState: UiStateStore, sectio
     patchUiState: (patch) => uiState.patch(patch),
     getSections: (path) => sections.sectionsOf(path),
     searchSections: (query, limit, path) => sections.search(query, limit, path),
-    anchorFolder: async (folder, dryRun) => ({ files: await sections.anchorFolder(folder, dryRun) }),
+    async anchorFolder(folder, dryRun, addAgentGuide) {
+      const changed = await sections.anchorFolder(folder, dryRun);
+      if (!dryRun && addAgentGuide) await addAgentGuideFile(files);
+      return { files: changed, agentGuide: await hasAgentGuideFile(files) };
+    },
+    sectionProblems: (folder) => sections.problems(folder),
+    renumberSection: (path, id, uid, baseVersion) => sections.renumber(path, id, uid, baseVersion),
   };
 }
 

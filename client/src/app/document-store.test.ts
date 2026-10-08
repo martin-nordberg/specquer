@@ -136,4 +136,43 @@ describe("anchors added on save", () => {
     store.setBody('<a id="RQ-00001"></a>\n\n# A\ntext\n');
     expect(await store.save()).toBe("clean");
   });
+
+  test("keeps a save's notices until dismissed", async () => {
+    const { api } = fakeApi({ "a.md": "# A\n" });
+    const notices = [{ kind: "restored" as const, id: "REQ-00099", newId: "REQ-00002", title: "A" }];
+    (api as { saveFile: unknown }).saveFile = async () => ({ kind: "saved", version: "1", notices });
+    const store = new DocumentStore(api);
+    await store.open("a.md");
+    store.setBody("# A\nmore\n");
+    await store.save();
+    expect(store.get().notices).toEqual(notices);
+    expect(store.get().version).toBe("1");
+    store.dismissNotices();
+    expect(store.get().notices).toEqual([]);
+  });
+
+  test("renumbering saves first, then applies the server's edits to the body on disk", async () => {
+    const { api, files } = fakeApi({ "a.md": "---\nx: 1\n---\n# A\n\n<a id=\"REQ-00002\"></a>\n# B\n" });
+    const renumberSection = mock(async (path: string, id: string, uid: string | null, baseVersion: string): Promise<SaveOutcome> => {
+      expect([path, id, uid, baseVersion]).toEqual(["a.md", "REQ-00002", null, "1"]);
+      const from = files["a.md"]!.indexOf("REQ-00002") - "---\nx: 1\n---\n".length;
+      files["a.md"] = files["a.md"]!.replace("REQ-00002", "REQ-00007");
+      return {
+        kind: "saved",
+        version: "2",
+        edits: [{ from, to: from + 9, insert: "REQ-00007" }],
+        notices: [{ kind: "renumbered", reason: "duplicate", id: "REQ-00002", newId: "REQ-00007", title: "B" }],
+      };
+    });
+    (api as { renumberSection: unknown }).renumberSection = renumberSection;
+    const store = new DocumentStore(api);
+    await store.open("a.md");
+    store.setBody("# A changed\n\n<a id=\"REQ-00002\"></a>\n# B\n");
+    expect(await store.renumber("REQ-00002", null)).toBe("saved");
+    expect(store.get().document?.body).toBe("# A changed\n\n<a id=\"REQ-00007\"></a>\n# B\n");
+    expect(store.get().status).toBe("saved");
+    expect(store.hasUnsavedChanges).toBe(false);
+    expect(store.text()).toBe(files["a.md"]!);
+    expect(store.get().notices.map((n) => n.kind)).toEqual(["renumbered"]);
+  });
 });

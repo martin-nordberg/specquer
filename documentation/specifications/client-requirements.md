@@ -1,6 +1,6 @@
 # Specquer Client Requirements
 
-Requirements for the browser user interface (`client/`). They come from [Step 001](/work-items/step-001-doc-editing/requirements), its [implementation plan](/work-items/step-001-doc-editing/implementation-plan), [New File and Folder](/work-items/step-001-doc-editing/new-file-folder) and [Step 002](/work-items/step-002-sections/requirements) (sections). The screen layout is in [Information Architecture](info-architecture.md).
+Requirements for the browser user interface (`client/`). They come from [Step 001](/work-items/step-001-doc-editing/requirements), its [implementation plan](/work-items/step-001-doc-editing/implementation-plan), [New File and Folder](/work-items/step-001-doc-editing/new-file-folder) [Step 002](/work-items/step-002-sections/requirements) (sections) and [Step 003](/work-items/step-003-section-uids/implementation-plan) (section UIDs and conflicts). The screen layout is in [Information Architecture](info-architecture.md).
 
 ## 1. General
 
@@ -19,7 +19,7 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 2. Folders come before files; names sort naturally, ignoring case.
 3. Clicking a folder expands or collapses it. Expanded folders persist in the UI state.
 4. Single-clicking a file opens it in the file pane. The open file is highlighted with the navigation color.
-5. Right-clicking a folder or file opens a context menu with **Rename…** and **Delete…**. For a folder, the menu starts with **New file…**, **New folder…** and **Add section anchors…**. Right-clicking the empty space below the last entry (or in an empty tree) offers the same three for the root folder.
+5. Right-clicking a folder or file opens a context menu with **Rename…** and **Delete…**. For a folder, the menu starts with **New file…**, **New folder…**, **Add section anchors…** and **Section problems…**. Right-clicking the empty space below the last entry (or in an empty tree) offers the same four for the root folder.
 
 ### 3.1 Rename
 
@@ -50,6 +50,13 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 1. The open file is saved first.
 2. A modal dialog says how many sectioned files in the folder will change and lists them, with **Add anchors** and **Cancel** buttons; when none would change it says so and offers only **Close**.
 3. Adding the anchors rewrites those files (see [Server Requirements](server-requirements.md) §6). If the open file was among them, it is reloaded.
+4. While the root folder's `AGENTS.md` lacks the section anchor rules for coding agents, the dialog offers to add them with a checkbox, unticked. Ticked, the dialog can run even when no file needs anchors (**Add to AGENTS.md**).
+
+### 3.5 Section Problems
+
+1. The open file is saved first.
+2. A modal dialog lists the problems in the folder's sectioned files: IDs used by copies of one section in several documents, IDs used by different sections (two branches issued one number), stray anchors (with their line), and files with merge conflict markers.
+3. Each occurrence opens its file, at the section. Each occurrence of a duplicate or colliding ID that doesn't keep the ID has **Renumber**, which gives it a new number; the list then reloads.
 
 ## 4. File Path
 
@@ -78,9 +85,12 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 ### 6.1 Sections
 
 1. In the preview and split views, a badge stands for each section anchor: at the start of a heading, between a list item's marker and its content, and at the top for the root section. The anchor itself stays invisible. The badge is the favicon (§9).
-2. Hovering or focusing a badge shows a tooltip with the section ID, the document path and the section's CUID2. Badges can be reached with the keyboard. Clicking one copies the section ID to the clipboard and confirms it in the tooltip.
+2. Hovering or focusing a badge shows a tooltip with the section ID, the document path and the section's UID. Badges can be reached with the keyboard. Clicking one copies the section ID to the clipboard and confirms it in the tooltip.
 3. The WYSIWYG view shows anchors as badges too (a heading's badge on the line above it) and saves them unchanged.
 4. In the text editor, typing `#` in a Markdown link target (`](#` or `](path#`) offers completion of section IDs, each with its heading text and document. Choosing one inserts the path to its document relative to the open file (nothing for the same file) and the ID.
+5. A badge whose ID is also used elsewhere has a warning ring. Its tooltip names the other occurrences, says whether this one keeps the ID, and offers **Renumber this one** (saving the open file first).
+6. Pasting a section anchor whose ID still exists elsewhere (in the open document, or, in the text editor, in another document) turns it into a placeholder, so the copy gets a new ID on save. A cut followed by a paste keeps the ID.
+7. In the text editor, the `data-uid` attribute of anchors is shown in the muted color. It isn't folded or hidden.
 
 ## 7. Saving
 
@@ -90,7 +100,7 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
    - every 60 seconds while there are unsaved changes.
 2. A file is only written if its text differs from what was last read or saved. Line endings (LF or CRLF), a byte-order mark and the front matter layout are preserved.
 3. The save status shows "Saved", "Unsaved changes", "Saving…", "Not saved: changed on disk" or "Save failed" (with the reason as a tooltip).
-4. Saving a sectioned file may add or correct section anchors. The editors show them at once: the text editor inserts them without moving the cursor or losing text typed during the save, and undo doesn't remove them. They don't count as unsaved changes. The WYSIWYG view reloads its content.
+4. Saving a sectioned file may add or correct section anchors. The editors show them at once: the text editor inserts them without moving the cursor or losing text typed during the save, and undo doesn't remove them. They don't count as unsaved changes. The WYSIWYG view reloads its content. When the save changed more than adding anchors (a copy renumbered, an edited ID put back, a reused number, a copied UID, or a file with conflict markers left alone), a dismissible line under the file path says what, with a link to **Section problems…**.
 5. If the file changed on disk since it was opened, saving doesn't overwrite it. A dialog offers **Reload from disk** (discarding the user's changes) and **Keep my version** (overwriting the file on disk). Autosave pauses until the user chooses, and another file can't be opened meanwhile.
 
 ## 8. Theme

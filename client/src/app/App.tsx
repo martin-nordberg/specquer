@@ -20,6 +20,8 @@ import { FilePath } from "@/components/FilePath";
 import { FileTree } from "@/components/FileTree";
 import { FrontmatterEditor, initialFrontmatterHeight } from "@/components/FrontmatterEditor";
 import type { ScrollTarget } from "@/components/Preview";
+import { ProblemsDialog } from "@/components/ProblemsDialog";
+import { SectionNotices } from "@/components/SectionNotices";
 import { SplitPane } from "@/components/SplitPane";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import type { Api } from "@/lib/api";
@@ -64,6 +66,7 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
   const [renaming, setRenaming] = useState<TreeNode | null>(null);
   const [deleting, setDeleting] = useState<TreeNode | null>(null);
   const [anchoring, setAnchoring] = useState<TreeFolder | null>(null);
+  const [checking, setChecking] = useState<TreeFolder | null>(null);
   const [scrollTarget, setScrollTarget] = useState<(ScrollTarget & { path: string }) | undefined>(undefined);
   const [openError, setOpenError] = useState<string | null>(null);
 
@@ -194,21 +197,50 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
     async (folder: string) => {
       const saved = await docStore.save();
       if (saved === "conflict" || saved === "error") throw new Error("Save or resolve the open file's changes first.");
-      return (await api.anchorFolder(folder, true)).files;
+      return api.anchorFolder(folder, true);
     },
     [api, docStore],
   );
 
   const addAnchors = useCallback(
-    async (folder: string): Promise<string | null> => {
+    async (folder: string, addAgentGuide: boolean): Promise<string | null> => {
       try {
         const saved = await docStore.save();
         if (saved === "conflict" || saved === "error") return "Save or resolve the open file's changes first.";
-        const { files } = await api.anchorFolder(folder, false);
+        const { files } = await api.anchorFolder(folder, false, addAgentGuide);
         const current = docStore.get().document?.path;
         // The open file was saved first, so reloading it loses nothing
         if (current !== undefined && files.includes(current) && !docStore.hasUnsavedChanges) await docStore.reloadTheirs();
         return null;
+      } catch (err) {
+        return (err as Error).message;
+      }
+    },
+    [api, docStore],
+  );
+
+  /** **Section problems**, after saving the open file so it is checked as shown. */
+  const loadProblems = useCallback(
+    async (folder: string) => {
+      await docStore.save();
+      return api.sectionProblems(folder);
+    },
+    [api, docStore],
+  );
+
+  const renumberOpen = useCallback((id: string, uid: string | null) => void docStore.renumber(id, uid), [docStore]);
+
+  /** Renumbers one occurrence of a duplicate ID: through the open file's store if it is open. */
+  const renumberIn = useCallback(
+    async (path: string, id: string, uid: string | null): Promise<string | null> => {
+      try {
+        if (docStore.get().document?.path === path) {
+          const result = await docStore.renumber(id, uid);
+          return result === "conflict" || result === "error" ? "Save or resolve the open file's changes first." : null;
+        }
+        const file = await api.readFile(path);
+        const outcome = await api.renumberSection(path, id, uid, file.version);
+        return outcome.kind === "conflict" ? `${path} changed on disk; try again.` : null;
       } catch (err) {
         return (err as Error).message;
       }
@@ -227,6 +259,7 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
         onNewFile={(folder) => setCreating({ parent: folder, kind: "file" })}
         onNewFolder={(folder) => setCreating({ parent: folder, kind: "folder" })}
         onAddAnchors={setAnchoring}
+        onShowProblems={setChecking}
         onRename={setRenaming}
         onDelete={setDeleting}
       />
@@ -254,6 +287,7 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
           <ViewSwitcher value={fileState.viewType} onChange={(view) => uiStore.update((s) => setViewType(s, document_.path, view))} />
         </div>
         {openError !== null && <p className="border-b px-3 py-1 text-sm text-error-text">{openError}</p>}
+        <SectionNotices notices={doc.notices} onDismiss={() => docStore.dismissNotices()} onShowProblems={() => setChecking(tree.root)} />
         <FrontmatterEditor
           key={`fm:${document_.revision}`}
           value={document_.frontmatter ?? ""}
@@ -272,6 +306,8 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
             onOpenFile={openFromUi}
             loadSections={api.getSections}
             searchSections={searchSections}
+            savedVersion={doc.version}
+            onRenumber={renumberOpen}
             scrollTarget={scrollTarget?.path === document_.path ? scrollTarget : undefined}
           />
         </div>
@@ -305,6 +341,7 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
       <RenameDialog node={renaming} onClose={() => setRenaming(null)} onRename={rename} />
       <DeleteDialog node={deleting} onClose={() => setDeleting(null)} loadPreview={api.deletePreview} onDelete={remove} />
       <AnchorDialog folder={anchoring} onClose={() => setAnchoring(null)} loadChanges={anchorChanges} onRun={addAnchors} />
+      <ProblemsDialog folder={checking} onClose={() => setChecking(null)} loadProblems={loadProblems} onOpen={openFromUi} onRenumber={renumberIn} />
     </div>
   );
 }

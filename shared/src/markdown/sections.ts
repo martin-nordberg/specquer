@@ -3,6 +3,7 @@ import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import { unified } from "unified";
 import { isSectionId } from "../sections/ids.ts";
+import { isUid } from "../sections/uids.ts";
 
 /**
  * Finding section anchors in a Markdown body and computing the edits that add or correct them.
@@ -11,10 +12,10 @@ import { isSectionId } from "../sections/ids.ts";
  * block quotes and nested lists are never touched. The body is the file without its front
  * matter, with `\n` line endings; all offsets are offsets into it.
  *
- * Recognized anchors (`<a id="…" …></a>`, empty, as two inline HTML nodes):
- * - Root: a paragraph holding only an anchor, as the body's first block. An anchor with a
- *   `data-document-id` always counts; one without (written before document IDs existed) counts
- *   unless the heading on the very next line follows it, which makes it that heading's anchor.
+ * Recognized anchors (`<a id="…" data-uid="…"></a>`, empty, as two inline HTML nodes):
+ * - Root: a paragraph holding only an anchor, as the body's first block, unless the heading on
+ *   the very next line follows it, which makes it that heading's anchor. An anchor whose UID is
+ *   a known document ID (`AnalyzeOptions.isDocumentUid`) is the root anchor regardless.
  * - Heading: a paragraph holding only an anchor, as the sibling directly before a top-level
  *   heading (blank lines allowed), or an anchor as the heading's first inline node (the setext
  *   form, and the form the WYSIWYG editor writes for some headings).
@@ -22,7 +23,10 @@ import { isSectionId } from "../sections/ids.ts";
  *   top-level list. A list is sectioned when at least one of its items has an anchor.
  *
  * An anchor whose `id` isn't in the section ID format (blank included) is a placeholder: the
- * section exists and gets an ID when the anchors are next written.
+ * section exists and gets an ID (and a new UID) when the anchors are next written.
+ *
+ * Anchors with a section ID anywhere else (in block quotes, nested lists, ordinary paragraphs)
+ * are **stray**: they no longer mark a section, usually because text moved.
  */
 
 export type SectionKind = "root" | "heading" | "item";
@@ -37,10 +41,10 @@ export interface FoundAnchor extends Range {
   rawId: string;
   /** The whole `id="…"` attribute. */
   idAttribute: Range;
-  /** The `data-document-id` attribute's value, if any. */
-  documentId?: string;
-  /** The whole `data-document-id="…"` attribute. */
-  documentIdAttribute?: Range;
+  /** The `data-uid` attribute's value, if any. */
+  uid?: string;
+  /** The whole `data-uid="…"` attribute. */
+  uidAttribute?: Range;
   /** The offset of the open tag's closing `>`. */
   openTagEnd: number;
 }
@@ -52,6 +56,8 @@ export interface FoundSection {
   kind: SectionKind;
   /** The section ID, or `null` when the section has no anchor yet or a placeholder. */
   id: string | null;
+  /** The anchor's UID, or `null` when it has none, an invalid one, or the anchor is a placeholder. */
+  uid: string | null;
   anchor?: FoundAnchor;
   /** The heading level (1 to 6) for heading sections. */
   depth?: number;
@@ -68,14 +74,37 @@ export interface BodyEdit {
   insert: string;
 }
 
-/** The anchors to write: new IDs for sections by index, and the root anchor's document ID. */
+/** The anchors to write, by index into the found sections. */
 export interface AnchorPlan {
   /**
-   * New section IDs, by index into the found sections: needed for every section without an ID,
-   * and given for a section with an ID to renumber it.
+   * New section IDs: needed for every section without an ID, and given for a section with an ID
+   * to renumber it or put back its recorded ID.
    */
   ids: ReadonlyMap<number, string>;
-  documentId: string;
+  /**
+   * New UIDs: needed for every section without an anchor, and given for an anchor whose UID is
+   * missing or must change. The root section's UID is the document ID.
+   */
+  uids: ReadonlyMap<number, string>;
+}
+
+/** An anchor with a section ID that isn't in a section's place. */
+export interface StrayAnchor {
+  id: string;
+  from: number;
+  to: number;
+  /** The line it is on, from 1, counted in the body. */
+  line: number;
+}
+
+export interface AnalyzeOptions {
+  /** Whether a UID is a known document ID, which marks the root anchor whatever follows it. */
+  isDocumentUid?: (uid: string) => boolean;
+}
+
+export interface BodyAnalysis {
+  sections: FoundSection[];
+  strays: StrayAnchor[];
 }
 
 const parser = unified().use(remarkParse).use(remarkGfm).freeze();
@@ -106,18 +135,18 @@ function anchorAt(children: PhrasingContent[], index: number): FoundAnchor | und
   const attributes = match[1] ?? "";
   const attributesStart = from + 2;
   let anchor: FoundAnchor | undefined;
-  let documentId: { value: string; range: Range } | undefined;
+  let uid: { value: string; range: Range } | undefined;
   for (const attribute of attributes.matchAll(ATTRIBUTE)) {
     const name = attribute[1]!.toLowerCase();
     const value = attribute[2] ?? attribute[3] ?? attribute[4] ?? "";
     const range = { from: attributesStart + attribute.index, to: attributesStart + attribute.index + attribute[0].length };
     if (name === "id" && anchor === undefined) {
       anchor = { from, to: end(close), rawId: value, idAttribute: range, openTagEnd: end(open) - 1 };
-    } else if (name === "data-document-id" && documentId === undefined) documentId = { value, range };
+    } else if (name === "data-uid" && uid === undefined) uid = { value, range };
   }
-  if (anchor !== undefined && documentId !== undefined) {
-    anchor.documentId = documentId.value;
-    anchor.documentIdAttribute = documentId.range;
+  if (anchor !== undefined && uid !== undefined) {
+    anchor.uid = uid.value;
+    anchor.uidAttribute = uid.range;
   }
   return anchor;
 }
@@ -176,6 +205,10 @@ function sectionId(anchor: FoundAnchor | undefined): string | null {
   return anchor !== undefined && isSectionId(anchor.rawId) ? anchor.rawId : null;
 }
 
+function sectionUid(anchor: FoundAnchor | undefined): string | null {
+  return sectionId(anchor) !== null && anchor!.uid !== undefined && isUid(anchor!.uid) ? anchor!.uid : null;
+}
+
 function itemSection(item: ListItem): FoundSection | undefined {
   const paragraph = item.children[0];
   if (paragraph?.type !== "paragraph" || paragraph.children.length === 0) return undefined;
@@ -184,6 +217,7 @@ function itemSection(item: ListItem): FoundSection | undefined {
   return {
     kind: "item",
     id: sectionId(anchor),
+    uid: sectionUid(anchor),
     anchor,
     title: words.slice(0, ITEM_TITLE_WORDS).join(" ") + (words.length > ITEM_TITLE_WORDS ? " …" : ""),
     insertAt: start(paragraph.children[0]!),
@@ -196,12 +230,19 @@ function shift<T extends Range>(range: T, by: number): T {
 }
 
 /** Parses a body (with `\n` line endings) and finds its sections, the root section first. */
-export function findSections(body: string): FoundSection[] {
+export function findSections(body: string, options: AnalyzeOptions = {}): FoundSection[] {
+  return analyzeBody(body, options).sections;
+}
+
+/** Parses a body (with `\n` line endings): its sections, the root section first, and its stray anchors. */
+export function analyzeBody(body: string, options: AnalyzeOptions = {}): BodyAnalysis {
   // The parser skips a byte-order mark and counts offsets without it
   const bom = bodyStart(body);
-  const sections = findSectionsIn(bom === 0 ? body : body.slice(bom));
-  if (bom === 0) return sections;
-  return sections.map((section) => {
+  const found = analyzeIn(bom === 0 ? body : body.slice(bom), options);
+  const lineOf = (offset: number) => body.slice(0, offset).split("\n").length;
+  const strays = found.strays.map((stray) => ({ ...shift(stray, bom), line: lineOf(stray.from + bom) }));
+  if (bom === 0) return { sections: found.sections, strays };
+  const sections = found.sections.map((section) => {
     const anchor = section.anchor;
     return {
       ...section,
@@ -212,15 +253,39 @@ export function findSections(body: string): FoundSection[] {
           : {
               ...shift(anchor, bom),
               idAttribute: shift(anchor.idAttribute, bom),
-              documentIdAttribute: anchor.documentIdAttribute && shift(anchor.documentIdAttribute, bom),
+              uidAttribute: anchor.uidAttribute && shift(anchor.uidAttribute, bom),
               openTagEnd: anchor.openTagEnd + bom,
             },
     };
   });
+  return { sections, strays };
 }
 
-function findSectionsIn(body: string): FoundSection[] {
+/** Every anchor in the tree, outside code. */
+function allAnchors(node: Nodes, found: FoundAnchor[]): FoundAnchor[] {
+  if (!("children" in node)) return found;
+  const children = node.children as Nodes[];
+  children.forEach((child, index) => {
+    if (child.type !== "html") allAnchors(child, found);
+    else {
+      const anchor = anchorAt(children as PhrasingContent[], index);
+      if (anchor !== undefined) found.push(anchor);
+    }
+  });
+  return found;
+}
+
+function analyzeIn(body: string, options: AnalyzeOptions): { sections: FoundSection[]; strays: Omit<StrayAnchor, "line">[] } {
   const tree = parser.parse(body) as Root;
+  const sections = sectionsOf(body, tree, options);
+  const used = new Set(sections.flatMap((section) => (section.anchor === undefined ? [] : [section.anchor.from])));
+  const strays = allAnchors(tree, [])
+    .filter((anchor) => isSectionId(anchor.rawId) && !used.has(anchor.from))
+    .map((anchor) => ({ id: anchor.rawId, from: anchor.from, to: anchor.to }));
+  return { sections, strays };
+}
+
+function sectionsOf(body: string, tree: Root, options: AnalyzeOptions): FoundSection[] {
   const blocks = tree.children;
   const sections: FoundSection[] = [];
 
@@ -231,11 +296,13 @@ function findSectionsIn(body: string): FoundSection[] {
   if (first !== undefined && firstAnchor !== undefined) {
     const next = blocks[1];
     const headingOnNextLine = next?.type === "heading" && next.position!.start.line === first.position!.end.line + 1;
-    if (firstAnchor.documentId !== undefined || !headingOnNextLine) rootAnchor = firstAnchor;
+    const documentUid = firstAnchor.uid !== undefined && options.isDocumentUid?.(firstAnchor.uid) === true;
+    if (documentUid || !headingOnNextLine) rootAnchor = firstAnchor;
   }
   sections.push({
     kind: "root",
     id: sectionId(rootAnchor),
+    uid: sectionUid(rootAnchor),
     anchor: rootAnchor,
     title: "",
     insertAt: 0,
@@ -252,6 +319,7 @@ function findSectionsIn(body: string): FoundSection[] {
       sections.push({
         kind: "heading",
         id: sectionId(anchor),
+        uid: sectionUid(anchor),
         anchor,
         depth: block.depth,
         title: plainText(block).trim(),
@@ -272,59 +340,65 @@ export function needsId(section: FoundSection): boolean {
   return section.id === null;
 }
 
-function anchorTag(id: string, documentId?: string): string {
-  const document = documentId === undefined ? "" : ` data-document-id="${documentId}"`;
-  return `<a id="${id}"${document}></a>`;
+/**
+ * Whether a body holds Git merge conflict markers: a `<<<<<<<` line and a `>>>>>>>` line. A
+ * `=======` line alone is a setext heading's underline, so it doesn't count.
+ */
+export function hasConflictMarkers(body: string): boolean {
+  return /^<{7}(?: |$)/m.test(body) && /^>{7}(?: |$)/m.test(body);
 }
 
-/** The anchor for a new file's body. */
-export function rootAnchorText(id: string, documentId: string): string {
-  return `${anchorTag(id, documentId)}\n\n`;
+function anchorTag(id: string, uid: string): string {
+  return `<a id="${id}" data-uid="${uid}"></a>`;
+}
+
+/** The anchor for a new file's body; the root section's UID is the document ID. */
+export function rootAnchorText(id: string, uid: string): string {
+  return `${anchorTag(id, uid)}\n\n`;
 }
 
 /**
- * The edits that bring a body's anchors in line with a plan: missing anchors inserted,
- * placeholders and renumbered sections given their IDs, the root anchor's document ID set.
+ * The edits that bring a body's anchors in line with a plan: missing anchors inserted with their
+ * IDs and UIDs, placeholders and renumbered sections given their IDs, UIDs added or replaced.
  * Edits are sorted by position and don't overlap.
  */
 export function anchorEdits(body: string, sections: readonly FoundSection[], plan: AnchorPlan): BodyEdit[] {
   const edits: BodyEdit[] = [];
   sections.forEach((section, index) => {
     const newId = plan.ids.get(index);
+    const newUid = plan.uids.get(index);
     const anchor = section.anchor;
     if (anchor === undefined) {
-      if (newId === undefined) throw new Error(`No ID planned for section ${index}`);
-      edits.push({ from: section.insertAt, to: section.insertAt, insert: insertion(body, section, newId, plan.documentId) });
+      if (newId === undefined || newUid === undefined) throw new Error(`No ID or UID planned for section ${index}`);
+      edits.push({ from: section.insertAt, to: section.insertAt, insert: insertion(body, section, newId, newUid) });
       return;
     }
     if (newId === undefined && section.id === null) throw new Error(`No ID planned for placeholder ${index}`);
-    if (newId !== undefined && newId !== anchor.rawId) {
-      edits.push({ ...anchor.idAttribute, insert: `id="${newId}"` });
-    }
-    if (section.kind === "root") {
-      const attribute = `data-document-id="${plan.documentId}"`;
-      if (anchor.documentIdAttribute === undefined) {
-        edits.push({ from: anchor.openTagEnd, to: anchor.openTagEnd, insert: ` ${attribute}` });
-      } else if (anchor.documentId !== plan.documentId) edits.push({ ...anchor.documentIdAttribute, insert: attribute });
-    }
+    if (newId !== undefined && newId !== anchor.rawId) edits.push({ ...anchor.idAttribute, insert: `id="${newId}"` });
+    if (newUid === undefined) {
+      if (section.uid === null) throw new Error(`No UID planned for section ${index}`);
+    } else if (anchor.uidAttribute === undefined) {
+      // Directly after `id`, as Specquer writes it
+      edits.push({ from: anchor.idAttribute.to, to: anchor.idAttribute.to, insert: ` data-uid="${newUid}"` });
+    } else if (anchor.uid !== newUid) edits.push({ ...anchor.uidAttribute, insert: `data-uid="${newUid}"` });
   });
   // Stable: at equal positions the root anchor stays before a heading's
   return edits.sort((a, b) => a.from - b.from);
 }
 
-function insertion(body: string, section: FoundSection, id: string, documentId: string): string {
+function insertion(body: string, section: FoundSection, id: string, uid: string): string {
   switch (section.form) {
     case "root":
-      return rootAnchorText(id, documentId);
+      return rootAnchorText(id, uid);
     case "atx": {
       // The anchor needs a blank line above it, or it joins the paragraph before
       const at = section.insertAt;
       const previousLine = at <= bodyStart(body) ? "" : body.slice(lineStart(body, at - 1), at - 1);
-      return `${previousLine.trim() === "" ? "" : "\n"}${anchorTag(id)}\n`;
+      return `${previousLine.trim() === "" ? "" : "\n"}${anchorTag(id, uid)}\n`;
     }
     case "setext":
     case "item":
-      return `${anchorTag(id)} `;
+      return `${anchorTag(id, uid)} `;
   }
 }
 

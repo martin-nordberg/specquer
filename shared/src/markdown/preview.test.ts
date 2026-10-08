@@ -58,7 +58,7 @@ describe("section anchors", () => {
 
   test("marks the root, heading and list item anchors", () => {
     const tree = markdownToHast(
-      `<a id="RQ-00001" data-document-id="${DOC}"></a>\n\n<a id="RQ-00002"></a>\n# Title\n\nSetext <a id="X"></a>\n\n* <a id="RQ-00003"></a> one\n- [ ] <a id="RQ-00004"></a> task\n\n> <a id="RQ-00005"></a>\n> # quoted\n`,
+      `<a id="RQ-00001" data-uid="${DOC}"></a>\n\n<a id="RQ-00002"></a>\n# Title\n\nSetext <a id="X"></a>\n\n* <a id="RQ-00003"></a> one\n- [ ] <a id="RQ-00004"></a> task\n\n> <a id="RQ-00005"></a>\n> # quoted\n`,
     );
     expect(marked(tree)).toEqual([
       "root:user-content-RQ-00001",
@@ -69,15 +69,15 @@ describe("section anchors", () => {
   });
 
   test("moves a heading's anchor into the heading", () => {
-    const tree = markdownToHast(`<a id="RQ-00001" data-document-id="${DOC}"></a>\n\n<a id="RQ-00002"></a>\n\n## Title\n`);
+    const tree = markdownToHast(`<a id="RQ-00001" data-uid="${DOC}"></a>\n\n<a id="RQ-00002"></a>\n\n## Title\n`);
     const [h2] = find(tree, "h2");
     expect(find(h2!, "a")[0]?.properties.id).toBe("user-content-RQ-00002");
     expect(text(h2!)).toBe(" Title");
     expect(find(tree, "p")).toHaveLength(1);
   });
 
-  test("a legacy first anchor directly before a heading is the heading's", () => {
-    const tree = markdownToHast('<a id="RQ-00001"></a>\n# Title\n');
-    expect(marked(tree)).toEqual(["heading:user-content-RQ-00001"]);
+  test("a first anchor directly before a heading is the heading's; with a blank line, the root's", () => {
+    expect(marked(markdownToHast('<a id="RQ-00001"></a>\n# Title\n'))).toEqual(["heading:user-content-RQ-00001"]);
+    expect(marked(markdownToHast('<a id="RQ-00001" data-uid="abc"></a>\n\n# Title\n'))).toEqual(["root:user-content-RQ-00001"]);
   });
 });

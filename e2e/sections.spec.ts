@@ -1,14 +1,16 @@
 /// <reference lib="dom" />
 import { contentEditor, expect, hideTab, launch, openFile, saveStatus, test, treeItem, typeAtEnd } from "./fixtures";
 
-const DOC = "aaaaaaaaaaaaaaaaaaaaaaaa";
+const DOC = "aaaaaaaaaaaa";
+/** An anchor as Specquer writes it. */
+const anchor = (id: string, uid: string) => `<a id="${id}" data-uid="${uid}"></a>`;
 const filler = Array.from({ length: 60 }, (_, i) => `Paragraph ${i + 1} of filler text.`).join("\n\n");
 
 test.use({
   files: {
     ".specquer/shared/section-prefixes.config.yaml": 'prefixes:\n  "specs/": SPEC\n',
     "specs/plain.md": "# Plain\n\nIntro text.\n",
-    "specs/anchored.md": `<a id="SPEC-00001" data-document-id="${DOC}"></a>\n\n<a id="SPEC-00002"></a>\n# Anchored\n\n${filler}\n\n<a id="SPEC-00003"></a>\n## Details\n\n* <a id="SPEC-00004"></a> A listed requirement\n`,
+    "specs/anchored.md": `${anchor("SPEC-00001", DOC)}\n\n${anchor("SPEC-00002", "uidtwo000002")}\n# Anchored\n\n${filler}\n\n${anchor("SPEC-00003", "uidthree0003")}\n## Details\n\n* ${anchor("SPEC-00004", "uidfour00004")} A listed requirement\n`,
     "specs/links.md": "# Links\n\nGo to [the details](anchored.md#SPEC-00003).\n",
     "notes/n.md": "# Not sectioned\n",
   },
@@ -29,13 +31,15 @@ test("saving adds anchors in place, keeps the cursor, and undo leaves them", asy
   await hideTab(page);
   await expect(saveStatus(page)).toHaveText("Saved");
   const saved = await specquer.read("specs/plain.md");
-  expect(saved).toMatch(/^<a id="SPEC-00005" data-document-id="[a-z0-9]+"><\/a>\n\n<a id="SPEC-00006"><\/a>\n# Plain\n\nIntro text.\n\n<a id="SPEC-00007"><\/a>\n## Added$/);
-  await expect(editor).toContainText('<a id="SPEC-00007"></a>');
+  expect(saved).toMatch(
+    /^<a id="SPEC-00005" data-uid="[a-z0-9]{12}"><\/a>\n\n<a id="SPEC-00006" data-uid="[a-z0-9]{12}"><\/a>\n# Plain\n\nIntro text.\n\n<a id="SPEC-00007" data-uid="[a-z0-9]{12}"><\/a>\n## Added$/,
+  );
+  await expect(editor).toContainText('<a id="SPEC-00007" data-uid=');
   // The cursor stayed at the end of the text typed; typing after a pause is a separate undo step
   await page.waitForTimeout(600);
   await page.keyboard.type(" here");
   await page.keyboard.press("ControlOrMeta+z");
-  await expect(editor).toContainText('<a id="SPEC-00007"></a>');
+  await expect(editor).toContainText('<a id="SPEC-00007" data-uid=');
   await page.keyboard.type(" again");
   await hideTab(page);
   await expect(saveStatus(page)).toHaveText("Saved");
@@ -87,7 +91,7 @@ test("WYSIWYG shows badges and keeps the anchors when editing", async ({ page, s
   const text = await specquer.read("specs/anchored.md");
   expect(text).toContain("Paragraph 1 of filler text. Edited.");
   for (const id of ["SPEC-00001", "SPEC-00002", "SPEC-00003", "SPEC-00004"]) expect(text).toContain(`<a id="${id}"`);
-  expect(text).toContain(`data-document-id="${DOC}"`);
+  expect(text).toContain(anchor("SPEC-00001", DOC));
 });
 
 test("typing # in a link target completes section IDs", async ({ page }) => {
@@ -123,6 +127,108 @@ test("Add section anchors lists the files, then anchors them", async ({ page, sp
   await expect(dialog.getByRole("list", { name: "Files to change" })).toContainText("specs/plain.md");
   await dialog.getByRole("button", { name: "Add anchors" }).click();
   await expect(dialog).toBeHidden();
-  expect(await specquer.read("specs/plain.md")).toMatch(/^<a id="SPEC-0000\d" data-document-id="[a-z0-9]+"><\/a>\n\n<a id="SPEC-0000\d"><\/a>\n# Plain/);
+  expect(await specquer.read("specs/plain.md")).toMatch(/^<a id="SPEC-0000\d" data-uid="[a-z0-9]+"><\/a>\n\n<a id="SPEC-0000\d" data-uid="[a-z0-9]+"><\/a>\n# Plain/);
   expect(await specquer.read("notes/n.md")).toBe("# Not sectioned\n");
+});
+
+/** Pastes text into a CodeMirror editor at its end, as the browser would from the clipboard. */
+async function pasteAtEnd(editor: import("@playwright/test").Locator, text: string) {
+  await editor.click();
+  await editor.press("ControlOrMeta+End");
+  await editor.evaluate((element, pasted) => {
+    const data = new DataTransfer();
+    data.setData("text/plain", pasted);
+    element.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+  }, text);
+}
+
+const details = `${anchor("SPEC-00003", "uidthree0003")}\n## Details`;
+
+test("a section copied within a document gets a new ID on save", async ({ page, specquer }) => {
+  await openFile(page, "specs", "anchored.md");
+  const editor = contentEditor(page);
+  await pasteAtEnd(editor, `\n${details.replace("Details", "Copied details")}\n`);
+  await expect(editor).toContainText('<a id=""></a>## Copied details');
+  await hideTab(page);
+  await expect(saveStatus(page)).toHaveText("Saved");
+  const text = await specquer.read("specs/anchored.md");
+  expect(text).toContain(details);
+  expect(text).toMatch(/<a id="SPEC-00005" data-uid="[a-z0-9]{12}"><\/a>\n## Copied details/);
+});
+
+test("a section copied from another document becomes a placeholder", async ({ page }) => {
+  await openFile(page, "specs", "plain.md");
+  const editor = contentEditor(page);
+  await pasteAtEnd(editor, `\n${details}\n`);
+  await expect(editor).toContainText('<a id=""></a>## Details');
+});
+
+test("a section cut and pasted keeps its ID", async ({ page, specquer }) => {
+  await openFile(page, "specs", "anchored.md");
+  const editor = contentEditor(page);
+  await editor.click();
+  await editor.press("ControlOrMeta+a");
+  // Cut and paste through the editor's clipboard events
+  await editor.evaluate((element) => {
+    const data = new DataTransfer();
+    element.dispatchEvent(new ClipboardEvent("cut", { clipboardData: data, bubbles: true, cancelable: true }));
+    (window as unknown as { clipboard: DataTransfer }).clipboard = data;
+  });
+  await expect(editor).toHaveText("");
+  await editor.evaluate((element) => {
+    const data = (window as unknown as { clipboard: DataTransfer }).clipboard;
+    element.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+  });
+  // The view follows the paste to the end; the editor's text has no line breaks
+  await expect(editor).toContainText(details.replace("\n", ""));
+  await typeAtEnd(editor, "\nMore.");
+  await hideTab(page);
+  await expect(saveStatus(page)).toHaveText("Saved");
+  expect(await specquer.read("specs/anchored.md")).toContain(details);
+});
+
+test("a duplicate made outside Specquer is reported and renumbered from its badge", async ({ page, specquer }) => {
+  await specquer.write("specs/plain.md", `${anchor("SPEC-00010", "plaindoc0001")}\n\n# Plain\n\n${details}\n`);
+  await openFile(page, "specs", "plain.md");
+  await view(page, "Preview").click();
+  const preview = page.getByTestId("preview");
+  const badge = preview.getByRole("button", { name: "Section SPEC-00003 (ID used more than once): copy its ID" });
+  await expect(badge).toBeVisible();
+  await badge.focus();
+  const tooltip = page.getByRole("tooltip");
+  await expect(tooltip).toContainText("Also used by a copy in specs/anchored.md");
+  await tooltip.getByRole("button", { name: "Renumber this one" }).click();
+  // The heading without an anchor gets SPEC-00011 in the same write
+  await expect(page.getByRole("status", { name: "Section changes" })).toContainText("SPEC-00003 in “Details” is now SPEC-00012.");
+  await expect(preview.getByRole("button", { name: "Section SPEC-00012: copy its ID" })).toBeVisible();
+  expect(await specquer.read("specs/plain.md")).toMatch(/<a id="SPEC-00012" data-uid="[a-z0-9]{12}"><\/a>\n## Details/);
+  expect(await specquer.read("specs/anchored.md")).toContain(details);
+});
+
+test("an edited ID is put back on save, with a notice", async ({ page, specquer }) => {
+  await openFile(page, "specs", "anchored.md");
+  await typeAtEnd(contentEditor(page), "\nMore.");
+  await hideTab(page);
+  await expect(saveStatus(page)).toHaveText("Saved");
+  const recorded = await specquer.read("specs/anchored.md");
+  await specquer.write("specs/anchored.md", recorded.replace('id="SPEC-00003"', 'id="SPEC-00099"'));
+  await page.reload();
+  await expect(contentEditor(page)).toContainText("Anchored");
+  await typeAtEnd(contentEditor(page), " Again.");
+  await hideTab(page);
+  await expect(saveStatus(page)).toHaveText("Saved");
+  await expect(page.getByRole("status", { name: "Section changes" })).toContainText("SPEC-00003 was put back");
+  expect(await specquer.read("specs/anchored.md")).toContain(details);
+  await page.getByRole("button", { name: "Dismiss" }).click();
+  await expect(page.getByRole("status", { name: "Section changes" })).toBeHidden();
+});
+
+test("Section problems lists duplicates, stray anchors and conflicts", async ({ page, specquer }) => {
+  await specquer.write("specs/plain.md", `# Plain\n\nText ${anchor("SPEC-00004", "uidfour00004")} moved.\n`);
+  await specquer.write("specs/links.md", "# Links\n<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> other\n");
+  await treeItem(page, "specs").click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Section problems…" }).click();
+  const dialog = page.getByRole("dialog", { name: "Section problems" });
+  await expect(dialog).toContainText("specs/plain.md, line 3: the anchor SPEC-00004 isn't in a section's place");
+  await expect(dialog).toContainText("specs/links.md holds merge conflict markers");
 });

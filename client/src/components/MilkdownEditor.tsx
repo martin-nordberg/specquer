@@ -3,6 +3,7 @@ import { history } from "@milkdown/kit/plugin/history";
 import { listener, listenerCtx } from "@milkdown/kit/plugin/listener";
 import { commonmark, htmlSchema } from "@milkdown/kit/preset/commonmark";
 import { gfm } from "@milkdown/kit/preset/gfm";
+import { Fragment, type Node, Slice } from "@milkdown/kit/prose/model";
 import { $view } from "@milkdown/kit/utils";
 import { useEffect, useRef } from "react";
 import { anchorTagSectionId, isAnchorCloseTag } from "@specquer/shared/markdown";
@@ -44,6 +45,41 @@ const sectionAnchorView = $view(htmlSchema.node, () => (node, view, getPos) => {
   return { dom, ignoreMutation: () => true };
 });
 
+/** The section IDs of the anchors in a document or fragment. */
+function sectionIdsIn(node: Node | Fragment): Set<string> {
+  const ids = new Set<string>();
+  node.descendants((child) => {
+    if (child.type.name !== "html") return true;
+    const id = anchorTagSectionId(String(child.attrs.value ?? ""));
+    if (id !== undefined) ids.add(id);
+    return false;
+  });
+  return ids;
+}
+
+/** The fragment with the open tags of anchors whose IDs are taken turned into placeholders. */
+function withPlaceholders(fragment: Fragment, taken: ReadonlySet<string>): Fragment {
+  const nodes: Node[] = [];
+  fragment.forEach((node) => {
+    if (node.type.name === "html") {
+      const id = anchorTagSectionId(String(node.attrs.value ?? ""));
+      nodes.push(id !== undefined && taken.has(id) ? node.type.create({ ...node.attrs, value: '<a id="">' }) : node);
+    } else nodes.push(node.isLeaf ? node : node.copy(withPlaceholders(node.content, taken)));
+  });
+  return Fragment.fromArray(nodes);
+}
+
+/**
+ * A pasted section anchor whose ID the document already holds is a copy: it becomes a
+ * placeholder, and the next save gives it a new ID (decision D4 of Step 003). Copies from other
+ * documents are left to the server, which reports them.
+ */
+export function placeholdersForPastedCopies(slice: Slice, doc: Node): Slice {
+  if (sectionIdsIn(slice.content).size === 0) return slice;
+  const taken = sectionIdsIn(doc);
+  return new Slice(withPlaceholders(slice.content, taken), slice.openStart, slice.openEnd);
+}
+
 /**
  * The WYSIWYG view (Milkdown). Milkdown rewrites Markdown it serializes (list markers, tables,
  * reference links), so its output is reported only after the user changes something; opening a
@@ -70,6 +106,7 @@ export function MilkdownEditor({ value, onChange, className }: MilkdownEditorPro
         ctx.update(editorViewOptionsCtx, (options) => ({
           ...options,
           attributes: { class: "markdown", "aria-label": "Markdown content (WYSIWYG)", spellcheck: "true" },
+          transformPasted: (slice, view) => placeholdersForPastedCopies(slice, view.state.doc),
         }));
         // Closer to the style most specs use
         ctx.update(remarkStringifyOptionsCtx, (options) => ({ ...options, bullet: "-" as const, rule: "-" as const }));

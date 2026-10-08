@@ -7,7 +7,8 @@ import {
   splitFrontmatter,
   toLf,
 } from "@specquer/shared/markdown";
-import type { Api } from "@/lib/api";
+import type { SectionNotice } from "@specquer/shared/api";
+import type { Api, SaveOutcome } from "@/lib/api";
 import { rebaseEdits } from "./edits";
 
 /**
@@ -38,6 +39,10 @@ export interface DocumentState {
   /** Set when a save found the file changed on disk; holds the version on disk. */
   conflict: { theirVersion: string } | null;
   error: string | null;
+  /** What the last save or renumbering changed beyond adding anchors, until dismissed. */
+  notices: SectionNotice[];
+  /** The version of the file on disk, as last read or written. */
+  version: string;
 }
 
 export type SaveResult = "clean" | "saved" | "conflict" | "error";
@@ -46,7 +51,7 @@ export type SaveResult = "clean" | "saved" | "conflict" | "error";
 export const AUTOSAVE_INTERVAL = 60_000;
 
 export class DocumentStore {
-  private state: DocumentState = { document: null, status: "saved", conflict: null, error: null };
+  private state: DocumentState = { document: null, status: "saved", conflict: null, error: null, notices: [], version: "" };
   private listeners = new Set<() => void>();
   /** The file's text as last read or written, byte for byte. */
   private savedText = "";
@@ -94,6 +99,8 @@ export class DocumentStore {
       status: "saved",
       conflict: null,
       error: null,
+      notices: [],
+      version,
     });
   }
 
@@ -105,7 +112,7 @@ export class DocumentStore {
 
   close(): void {
     this.edited = false;
-    this.set({ document: null, status: "saved", conflict: null, error: null });
+    this.set({ document: null, status: "saved", conflict: null, error: null, notices: [] });
   }
 
   /** Follows a rename of the open file (or a folder containing it). */
@@ -172,20 +179,61 @@ export class DocumentStore {
         this.set({ status: "conflict", conflict: { theirVersion: outcome.version } });
         return "conflict";
       }
-      this.version = outcome.version;
-      const edits = outcome.edits ?? [];
-      if (edits.length === 0) this.savedText = text;
-      else {
-        // The server added anchors: what it wrote is saved, and the editors get the anchors,
-        // mapped through anything typed while the request was under way
-        this.savedText = this.textFor(document.frontmatter, applyEdits(document.body, edits));
-        const current = this.state.document!;
-        const body = rebaseEdits(document.body, current.body, edits);
-        this.set({ document: { ...current, body, externalEdits: current.externalEdits + 1 } });
+      this.savedText = text;
+      this.saved(document.frontmatter, document.body, outcome);
+      return "saved";
+    } catch (err) {
+      this.set({ status: "error", error: (err as Error).message });
+      return "error";
+    }
+  }
+
+  /**
+   * Takes a successful write: what the server wrote (the `body` sent, with its edits) becomes the
+   * saved text, and the editors get the edits, mapped through anything typed while the request
+   * was under way.
+   */
+  private saved(frontmatter: string | null, body: string, outcome: Extract<SaveOutcome, { kind: "saved" }>): void {
+    this.version = outcome.version;
+    const edits = outcome.edits ?? [];
+    if (edits.length > 0) {
+      this.savedText = this.textFor(frontmatter, applyEdits(body, edits));
+      const current = this.state.document!;
+      this.set({ document: { ...current, body: rebaseEdits(body, current.body, edits), externalEdits: current.externalEdits + 1 } });
+    }
+    // Edits made while the request was under way are still unsaved
+    this.edited = this.text() !== this.savedText;
+    this.set({
+      status: this.edited ? "unsaved" : "saved",
+      error: null,
+      version: outcome.version,
+      ...(outcome.notices === undefined ? {} : { notices: outcome.notices }),
+    });
+  }
+
+  dismissNotices(): void {
+    if (this.state.notices.length > 0) this.set({ notices: [] });
+  }
+
+  /**
+   * Gives one occurrence of a duplicate ID in the open file a new number, saving first. The
+   * server rewrites the file; the editors get its edits.
+   */
+  async renumber(id: string, uid: string | null): Promise<SaveResult> {
+    const saved = await this.save();
+    if (saved === "conflict" || saved === "error") return saved;
+    const document = this.state.document;
+    if (document === null) return "clean";
+    // What is on disk now, as the editors hold it
+    const disk = splitFrontmatter(toLf(this.savedText));
+    try {
+      const outcome = await this.api.renumberSection(document.path, id, uid, this.version);
+      if (this.state.document?.path !== document.path) return "saved";
+      if (outcome.kind === "conflict") {
+        this.set({ status: "conflict", conflict: { theirVersion: outcome.version } });
+        return "conflict";
       }
-      // Edits made while the request was under way are still unsaved
-      this.edited = this.text() !== this.savedText;
-      this.set({ status: this.edited ? "unsaved" : "saved", error: null });
+      this.saved(disk.frontmatter, toLf(disk.body), outcome);
       return "saved";
     } catch (err) {
       this.set({ status: "error", error: (err as Error).message });

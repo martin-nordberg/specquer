@@ -7,6 +7,7 @@ import { CodeEditor, lineWrapping } from "./CodeEditor";
 import { MilkdownEditor } from "./MilkdownEditor";
 import { PREVIEW_DEBOUNCE, Preview, type ScrollTarget } from "./Preview";
 import { type SectionSearch, sectionCompletion } from "./section-completion";
+import { sectionEditing } from "./section-editing";
 
 const views: Array<{ type: ViewType; label: string; icon: typeof Eye }> = [
   { type: "text", label: "Text", icon: FileCode },
@@ -48,6 +49,10 @@ export interface ContentViewProps {
   onOpenFile: (path: string, hash?: string) => void;
   loadSections?: (path: string) => Promise<SectionInfo[]>;
   searchSections?: SectionSearch;
+  /** The file's version on disk; the preview reloads the badges' problems when it changes. */
+  savedVersion?: string;
+  /** Renumbers one occurrence of a duplicate ID in the open file. */
+  onRenumber?: (id: string, uid: string | null) => void;
   scrollTarget?: ScrollTarget;
 }
 
@@ -61,6 +66,8 @@ export function ContentView({
   onOpenFile,
   loadSections,
   searchSections,
+  savedVersion,
+  onRenumber,
   scrollTarget,
 }: ContentViewProps) {
   const pathRef = useRef(path);
@@ -75,6 +82,11 @@ export function ContentView({
         (query, target) => searchRef.current?.(query, target) ?? Promise.resolve([]),
         () => pathRef.current,
       ),
+      // A pasted anchor is a copy if another document holds its ID
+      sectionEditing(async (id) => {
+        const results = (await searchRef.current?.(id)) ?? [];
+        return results.some((result) => result.id === id && result.path !== pathRef.current);
+      }),
     ],
     [],
   );
@@ -85,6 +97,8 @@ export function ContentView({
       currentFile={path}
       onOpenFile={onOpenFile}
       loadSections={loadSections}
+      savedVersion={savedVersion}
+      onRenumber={onRenumber}
       scrollTarget={scrollTarget}
       debounce={debounce}
     />

@@ -34,7 +34,7 @@ Step 003 takes precedence over Step 002 and the specifications where they confli
 | Data files | Read once per session | Read again when their modification time changes |
 | Save | Uses the index as of the last scan | Brings the index up to date first; a file with conflict markers is written as sent |
 
-No data migration: Specquer hasn't been used outside this repository. This repository has no data files and no `data-document-id` anchors yet. The `WORK-` anchors in the Step 002 documents get their UIDs the next time they are saved or **Add section anchors** covers them.
+No data migration: Specquer hasn't been used outside this repository, and this repository has no data files and no `data-document-id` anchors yet.
 
 ## 3. Starting Point
 
@@ -249,3 +249,17 @@ Taken while planning; each is _Proposed_ and the work proceeds on it unless chan
 | Paste handling turns an intended move into a copy | A moved section gets a new ID | Only IDs that still exist elsewhere are converted, and the cut has removed the original by then |
 | An agent ignores the guide | Mangled anchors | The rules in §4.4 detect most damage; misplaced anchors (E6 in the analysis) stay undetectable |
 | Reading the data files again picks up a half-written file from Git | A damaged read | Damaged files are already tolerated and rebuilt; the next read, after the next change, recovers |
+
+## 8. Implementation Status
+
+All phases were carried out in October 2026. What differs from the plan, or was learned doing it:
+
+1. **Spike 1 (D3).** An unchanged scan takes about 55 ms on this repository and about 200 ms on a generated tree of 2,000 sectioned files with 40,000 sections, after a first scan of about 5 s. That is acceptable before a save, so the D3 fallback wasn't needed.
+2. **Spike 2 (D4).** WYSIWYG paste handling works through ProseMirror's `transformPasted`, but only for IDs the open document holds: the hook is synchronous, so the lookup in other documents stays in the text editor, and the server reports copies from other documents pasted in WYSIWYG.
+3. **Copies of whole files.** The table in §4.4 reports duplicates across documents. A document whose ID another file holds is a copy, though (the recorded path keeps the ID), so all its sections are renumbered automatically, as in Step 002, rather than reported one by one.
+4. **Identical copies within a document.** A copy with the same ID and UID can't be told from the original, so the first occurrence keeps the ID. Paste handling covers copies made in Specquer; a copy pasted above the original in another editor still takes the ID.
+5. **The preview's root anchor.** The preview used `data-document-id` to tell the root anchor from a heading's. It now uses source positions (a heading on the very next line), as `findSections` does.
+6. **Badges** take the UID from the anchor's `data-uid`, which the sanitizer passes through, so a badge identifies its occurrence even when one document holds an ID twice. The preview loads the document's sections when its anchors or the saved version change, for the problem state.
+7. **Data files read again.** A re-read also forgets the text last written for each file, so a file deleted by a branch switch is written again even if its content is unchanged.
+8. **The agent guide** in this repository's `CLAUDE.md` sits under a `## Section anchors` heading, with the same text and markers as the `AGENTS.md` block.
+9. **Tests.** End-to-end tests pass on Chrome and WebKit. The release build was checked: it creates sectioned files with 12-character UIDs.

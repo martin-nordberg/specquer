@@ -6,6 +6,8 @@ import type {
   DeletePreview,
   FileContent,
   SectionInfo,
+  SectionNotice,
+  SectionProblem,
   SectionSearchResult,
   Tree,
 } from "@specquer/shared/api";
@@ -55,8 +57,13 @@ async function json<T>(res: JsonResponse): Promise<T> {
   return (await res.json()) as T;
 }
 
-/** A save's outcome; `edits` are the anchors the server added, relative to the body sent. */
-export type SaveOutcome = { kind: "saved"; version: string; edits?: BodyEdit[] } | { kind: "conflict"; version: string };
+/**
+ * A save's outcome; `edits` are the anchors the server added, relative to the body sent, and
+ * `notices` what it changed beyond adding anchors.
+ */
+export type SaveOutcome =
+  | { kind: "saved"; version: string; edits?: BodyEdit[]; notices?: SectionNotice[] }
+  | { kind: "conflict"; version: string };
 
 export type CreateOutcome = { kind: "created"; path: string } | { kind: "exists"; message: string };
 
@@ -75,7 +82,26 @@ export interface Api {
   patchUiState(patch: UiStatePatch, options?: { keepalive?: boolean }): Promise<UiState>;
   getSections(path: string): Promise<SectionInfo[]>;
   searchSections(query: string, options?: { path?: string; limit?: number }): Promise<SectionSearchResult[]>;
-  anchorFolder(folder: string, dryRun: boolean): Promise<AnchorFolderResult>;
+  anchorFolder(folder: string, dryRun: boolean, addAgentGuide?: boolean): Promise<AnchorFolderResult>;
+  sectionProblems(folder: string): Promise<SectionProblem[]>;
+  /** Renumbers one occurrence of a duplicate ID; the edits are relative to the body on disk. */
+  renumberSection(path: string, id: string, uid: string | null, baseVersion: string): Promise<SaveOutcome>;
+}
+
+type SavedBody = { version: string; edits?: BodyEdit[]; notices?: SectionNotice[] };
+
+async function saveOutcome(res: JsonResponse): Promise<SaveOutcome> {
+  if (res.status === 409) {
+    const body = (await res.json()) as { version: string };
+    return { kind: "conflict", version: body.version };
+  }
+  const body = await json<SavedBody>(res);
+  return {
+    kind: "saved",
+    version: body.version,
+    ...(body.edits === undefined ? {} : { edits: body.edits }),
+    ...(body.notices === undefined ? {} : { notices: body.notices }),
+  };
 }
 
 export const httpApi: Api = {
@@ -87,13 +113,7 @@ export const httpApi: Api = {
   },
   async saveFile(path, text, baseVersion, options) {
     const keepalive = options?.keepalive === true && text.length < KEEPALIVE_LIMIT;
-    const res = await client.api.file.$put({ query: { path }, json: { text, baseVersion } }, { init: { keepalive } });
-    if (res.status === 409) {
-      const body = (await res.json()) as { version: string };
-      return { kind: "conflict", version: body.version };
-    }
-    const body = await json<{ version: string; edits?: BodyEdit[] }>(res);
-    return { kind: "saved", version: body.version, ...(body.edits === undefined ? {} : { edits: body.edits }) };
+    return saveOutcome(await client.api.file.$put({ query: { path }, json: { text, baseVersion } }, { init: { keepalive } }));
   },
   async create(parent, name, kind) {
     const res = await client.api.create.$post({ json: { parent, name, kind } });
@@ -132,7 +152,13 @@ export const httpApi: Api = {
     const query = { q, ...(options?.path === undefined ? {} : { path: options.path }), ...(options?.limit === undefined ? {} : { limit: String(options.limit) }) };
     return (await json<{ results: SectionSearchResult[] }>(await client.api.sections.search.$get({ query }))).results;
   },
-  async anchorFolder(folder, dryRun) {
-    return json<AnchorFolderResult>(await client.api.sections.anchor.$post({ json: { folder, dryRun } }));
+  async anchorFolder(folder, dryRun, addAgentGuide = false) {
+    return json<AnchorFolderResult>(await client.api.sections.anchor.$post({ json: { folder, dryRun, addAgentGuide } }));
+  },
+  async sectionProblems(folder) {
+    return (await json<{ problems: SectionProblem[] }>(await client.api.sections.problems.$get({ query: { folder } }))).problems;
+  },
+  async renumberSection(path, id, uid, baseVersion) {
+    return saveOutcome(await client.api.sections.renumber.$post({ json: { path, id, uid, baseVersion } }));
   },
 };

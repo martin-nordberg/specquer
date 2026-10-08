@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { join } from "node:path";
+import type { SectionInfo, SectionNotice, SectionProblem } from "@specquer/shared/api";
 import { findSections } from "@specquer/shared/markdown";
 import { tempRoot, testApp } from "../test-support.ts";
 
@@ -24,7 +25,7 @@ async function setup(files: Record<string, string>, options: { git?: boolean; co
   const save = async (path: string, text: string) => {
     const file = (await (await app.request(`/api/file?path=${encodeURIComponent(path)}`)).json()) as { version: string };
     const res = await app.request(`/api/file?path=${encodeURIComponent(path)}`, { method: "PUT", body: { text, baseVersion: file.version } });
-    return (await res.json()) as { version: string; edits?: Array<{ from: number; to: number; insert: string }> };
+    return (await res.json()) as { version: string; edits?: Array<{ from: number; to: number; insert: string }>; notices?: SectionNotice[] };
   };
   return { root: temp.root, ...app, read, exists, write, save };
 }
@@ -38,7 +39,7 @@ describe("saving", () => {
     const text = await read("docs/a.md");
     expect(ids(text)).toEqual(["REQ-00001", "REQ-00002", "REQ-00003"]);
     expect(result.edits?.length).toBe(3);
-    expect(text).toMatch(/^<a id="REQ-00001" data-document-id="[a-z0-9]+"><\/a>\n\n<a id="REQ-00002"><\/a>\n# Title/);
+    expect(text).toMatch(/^<a id="REQ-00001" data-uid="[a-z0-9]{12}"><\/a>\n\n<a id="REQ-00002" data-uid="[a-z0-9]{12}"><\/a>\n# Title/);
     // Saving again changes nothing
     const again = await save("docs/a.md", text);
     expect(again.edits).toBeUndefined();
@@ -50,7 +51,7 @@ describe("saving", () => {
     await save("docs/a.md", "﻿---\r\ntitle: A\r\n---\r\n# Title\r\n");
     const text = await read("docs/a.md");
     expect(text.startsWith("﻿---\r\ntitle: A\r\n---\r\n<a id=\"REQ-00001\"")).toBe(true);
-    expect(text).toContain('<a id="REQ-00002"></a>\r\n# Title\r\n');
+    expect(text).toMatch(/<a id="REQ-00002" data-uid="[a-z0-9]+"><\/a>\r\n# Title\r\n/);
     expect(text.replace(/\r\n/g, "").includes("\n")).toBe(false);
   });
 
@@ -90,7 +91,8 @@ describe("saving", () => {
     const { save, read } = await setup({ "docs/a.md": "" });
     await save("docs/a.md", "# A\n\n# B\n");
     const text = await read("docs/a.md");
-    const withoutB = text.replace(/<a id="REQ-00003"><\/a>\n# B\n/, "");
+    const withoutB = text.replace(/<a id="REQ-00003"[^>]*><\/a>\n# B\n/, "");
+    expect(withoutB).not.toBe(text);
     await save("docs/a.md", withoutB);
     await save("docs/a.md", `${await read("docs/a.md")}\n# C\n`);
     expect(ids(await read("docs/a.md"))).toEqual(["REQ-00001", "REQ-00002", "REQ-00004"]);
@@ -105,7 +107,7 @@ describe("saving", () => {
     await save("docs/copy.md", original);
     const copy = await read("docs/copy.md");
     expect(ids(copy)).toEqual(["REQ-00003", "REQ-00004"]);
-    const documentId = (text: string) => /data-document-id="([a-z0-9]+)"/.exec(text)?.[1];
+    const documentId = (text: string) => /^<a id="[^"]+" data-uid="([a-z0-9]+)"/.exec(text)?.[1];
     expect(documentId(copy)).not.toBe(documentId(original));
     expect(await read("docs/a.md")).toBe(original);
   });
@@ -163,8 +165,9 @@ describe("create, rename, delete", () => {
     expect(documents).toContain("path: docs/b.md");
     expect(documents).not.toContain("docs/sub/a.md");
     const sections = await read(".specquer/shared/REQ/sections.yaml");
-    expect(sections).not.toContain("REQ-00001");
-    expect(sections).toContain("REQ-00003");
+    expect(sections).not.toMatch(/id: REQ-00001, documentId/);
+    expect(sections).toMatch(/retired:\n(.*\n)*.*id: REQ-00001 \}/);
+    expect(sections).toMatch(/id: REQ-00003, documentId/);
   });
 });
 
@@ -198,5 +201,186 @@ describe("section queries and Add section anchors", () => {
     expect(await read("other/c.md")).toBe("# C\n");
     const again = await request("/api/sections/anchor", { method: "POST", body: { folder: "docs", dryRun: true } });
     expect(((await again.json()) as { files: string[] }).files).toEqual([]);
+  });
+});
+
+/** The anchor of the section with an ID, from a file's text. */
+const anchorOf = (text: string, id: string) => new RegExp(`<a id="${id}" data-uid="([a-z0-9]+)"></a>`).exec(text);
+
+describe("UIDs and conflicts", () => {
+  test("every anchor gets a 12-character UID; the root's is the document ID", async () => {
+    const { save, read } = await setup({ "docs/a.md": "" });
+    await save("docs/a.md", "# A\n\n* <a id=\"\"></a> item\n");
+    const text = await read("docs/a.md");
+    const sections = findSections(text);
+    expect(sections.map((s) => s.uid?.length)).toEqual([12, 12, 12]);
+    const documents = await read(".specquer/shared/documents.yaml");
+    expect(documents).toContain(`${sections[0]!.uid}: { path: docs/a.md }`);
+    expect(await read(".specquer/shared/REQ/sections.yaml")).toContain(`${sections[0]!.uid}: { id: REQ-00001, documentId: ${sections[0]!.uid} }`);
+  });
+
+  test("an ID added in another file outside Specquer is never issued again", async () => {
+    const { save, read, write } = await setup({ "docs/a.md": "", "docs/b.md": "" });
+    await save("docs/a.md", "# A\n");
+    // An agent adds a section with the next number to another file; no tree load follows
+    await write("docs/b.md", '<a id="REQ-00003"></a>\n# By an agent\n');
+    await save("docs/a.md", `${await read("docs/a.md")}\n# More\n`);
+    expect(ids(await read("docs/a.md"))).toEqual(["REQ-00001", "REQ-00002", "REQ-00004"]);
+  });
+
+  test("data files changed on disk while the server runs are read again", async () => {
+    const { save, read, write } = await setup({ "docs/a.md": "" });
+    await save("docs/a.md", "# A\n");
+    const sections = await read(".specquer/shared/REQ/sections.yaml");
+    // A pull brings a teammate's section in another file, a higher lastSequence and a retired number
+    await write("docs/b.md", '<a id="REQ-00040" data-uid="teamdoc00001"></a>\n\n<a id="REQ-00041" data-uid="teamsec00001"></a>\n# Theirs\n');
+    await write(".specquer/shared/documents.yaml", `${await read(".specquer/shared/documents.yaml")}  teamdoc00001: { path: docs/b.md }\n`);
+    await write(
+      ".specquer/shared/REQ/sections.yaml",
+      `${sections.replace("lastSequence: 2", "lastSequence: 50")}  teamdoc00001: { id: REQ-00040, documentId: teamdoc00001 }\n  teamsec00001: { id: REQ-00041, documentId: teamdoc00001 }\nretired:\n  gone00000001: { id: REQ-00050 }\n`,
+    );
+    await save("docs/a.md", `${await read("docs/a.md")}\n# Mine\n`);
+    expect(ids(await read("docs/a.md"))).toEqual(["REQ-00001", "REQ-00002", "REQ-00051"]);
+    const after = await read(".specquer/shared/REQ/sections.yaml");
+    expect(after).toContain("teamsec00001: { id: REQ-00041, documentId: teamdoc00001 }");
+    expect(after).toContain("gone00000001: { id: REQ-00050 }");
+  });
+
+  test("an edited ID is put back, with a notice", async () => {
+    const { save, read } = await setup({ "docs/a.md": "" });
+    await save("docs/a.md", "# A\n");
+    const text = await read("docs/a.md");
+    const result = await save("docs/a.md", text.replace('id="REQ-00002"', 'id="REQ-00099"'));
+    expect(await read("docs/a.md")).toBe(text);
+    expect(result.notices).toEqual([{ kind: "restored", id: "REQ-00099", newId: "REQ-00002", title: "A" }]);
+  });
+
+  test("a copy within a document is renumbered with a new UID, with a notice", async () => {
+    const { save, read } = await setup({ "docs/a.md": "" });
+    await save("docs/a.md", "# A\n");
+    const text = await read("docs/a.md");
+    const heading = /<a id="REQ-00002"[^>]*><\/a>\n# A\n/.exec(text)![0];
+    // Identical copies can't be told apart: the first keeps the ID (the editor turns pasted copies into placeholders)
+    const result = await save("docs/a.md", text.replace(heading, `${heading}\n${heading.replace("# A", "# Copy")}`));
+    const after = await read("docs/a.md");
+    expect(ids(after)).toEqual(["REQ-00001", "REQ-00002", "REQ-00003"]);
+    expect(anchorOf(after, "REQ-00003")![1]).not.toBe(anchorOf(after, "REQ-00002")![1]);
+    expect(result.notices).toEqual([{ kind: "renumbered", reason: "copy", id: "REQ-00002", newId: "REQ-00003", title: "Copy" }]);
+  });
+
+  test("a copy in another document is reported until the user renumbers it", async () => {
+    const { save, read, request } = await setup({ "docs/a.md": "", "docs/b.md": "" });
+    await save("docs/a.md", "# A\n");
+    await save("docs/b.md", "# B\n");
+    const heading = /<a id="REQ-00002"[^>]*><\/a>\n# A\n/.exec(await read("docs/a.md"))![0];
+    const result = await save("docs/b.md", `${await read("docs/b.md")}\n${heading}`);
+    expect(result.notices).toBeUndefined();
+    expect(ids(await read("docs/b.md"))).toEqual(["REQ-00003", "REQ-00004", "REQ-00002"]);
+
+    const problems = (await (await request("/api/sections/problems")).json()) as { problems: SectionProblem[] };
+    expect(problems.problems).toEqual([
+      {
+        kind: "duplicate",
+        id: "REQ-00002",
+        occurrences: [
+          { path: "docs/a.md", uid: anchorOf(await read("docs/a.md"), "REQ-00002")![1]!, title: "A", keeps: true },
+          { path: "docs/b.md", uid: anchorOf(await read("docs/a.md"), "REQ-00002")![1]!, title: "A", keeps: false },
+        ],
+      },
+    ]);
+    const listed = (await (await request("/api/sections?path=docs%2Fb.md")).json()) as { sections: SectionInfo[] };
+    expect(listed.sections[2]!.problem).toEqual({ kind: "duplicate", keeps: false, others: [{ path: "docs/a.md", title: "A" }] });
+
+    const file = (await (await request("/api/file?path=docs%2Fb.md")).json()) as { version: string };
+    const uid = anchorOf(await read("docs/b.md"), "REQ-00002")![1]!;
+    const renumbered = await request("/api/sections/renumber", { method: "POST", body: { path: "docs/b.md", id: "REQ-00002", uid, baseVersion: file.version } });
+    const body = (await renumbered.json()) as { edits: unknown[]; notices: SectionNotice[] };
+    expect(body.notices).toEqual([{ kind: "renumbered", reason: "duplicate", id: "REQ-00002", newId: "REQ-00005", title: "A" }]);
+    expect(ids(await read("docs/b.md"))).toEqual(["REQ-00003", "REQ-00004", "REQ-00005"]);
+    expect(anchorOf(await read("docs/b.md"), "REQ-00005")![1]).not.toBe(uid);
+    expect(((await (await request("/api/sections/problems")).json()) as { problems: unknown[] }).problems).toEqual([]);
+    // A stale version is refused
+    const stale = await request("/api/sections/renumber", { method: "POST", body: { path: "docs/b.md", id: "REQ-00003", uid: null, baseVersion: file.version } });
+    expect(stale.status).toBe(409);
+  });
+
+  test("two branches' sections with one number are reported as a collision", async () => {
+    const { save, read, write, request } = await setup({ "docs/a.md": "", "docs/b.md": "" });
+    await save("docs/a.md", "# A\n");
+    await save("docs/b.md", "# B\n");
+    // Each branch added REQ-00005 to its own document
+    await write("docs/a.md", `${await read("docs/a.md")}\n<a id="REQ-00005" data-uid="branchone001"></a>\n# One\n`);
+    await write("docs/b.md", `${await read("docs/b.md")}\n<a id="REQ-00005" data-uid="branchtwo001"></a>\n# Two\n`);
+    const problems = (await (await request("/api/sections/problems?folder=docs")).json()) as { problems: SectionProblem[] };
+    expect(problems.problems.map((p) => [p.kind, "id" in p ? p.id : ""])).toEqual([["collision", "REQ-00005"]]);
+    // Saving either file leaves both alone
+    expect((await save("docs/b.md", await read("docs/b.md"))).notices).toBeUndefined();
+    expect(ids(await read("docs/b.md"))).toEqual(["REQ-00003", "REQ-00004", "REQ-00005"]);
+  });
+
+  test("a retired number typed again is renumbered; a restored section keeps its ID and UID", async () => {
+    const { save, read } = await setup({ "docs/a.md": "" });
+    await save("docs/a.md", "# A\n\n# B\n");
+    const text = await read("docs/a.md");
+    const b = /<a id="REQ-00003"[^>]*><\/a>\n# B\n/.exec(text)![0];
+    await save("docs/a.md", text.replace(b, ""));
+    expect(await read(".specquer/shared/REQ/sections.yaml")).toMatch(/retired:\n.*id: REQ-00003 \}/);
+    // Restored, as by git restore: kept
+    await save("docs/a.md", text);
+    expect(await read("docs/a.md")).toBe(text);
+    expect(await read(".specquer/shared/REQ/sections.yaml")).not.toContain("retired");
+    // Deleted again, then the number typed by hand: renumbered
+    await save("docs/a.md", text.replace(b, ""));
+    const result = await save("docs/a.md", `${await read("docs/a.md")}\n<a id="REQ-00003"></a>\n# Typed\n`);
+    expect(ids(await read("docs/a.md"))).toEqual(["REQ-00001", "REQ-00002", "REQ-00004"]);
+    expect(result.notices).toEqual([{ kind: "renumbered", reason: "reused", id: "REQ-00003", newId: "REQ-00004", title: "Typed" }]);
+  });
+
+  test("a file with conflict markers is saved as sent and reported", async () => {
+    const { save, read, request } = await setup({ "docs/a.md": "" });
+    const text = "# A\n<<<<<<< HEAD\n# Ours\n=======\n# Theirs\n>>>>>>> other\n";
+    const result = await save("docs/a.md", text);
+    expect(await read("docs/a.md")).toBe(text);
+    expect(result.notices).toEqual([{ kind: "not-anchored" }]);
+    const problems = (await (await request("/api/sections/problems")).json()) as { problems: SectionProblem[] };
+    expect(problems.problems).toEqual([{ kind: "conflict-markers", path: "docs/a.md" }]);
+    const dry = await request("/api/sections/anchor", { method: "POST", body: { folder: "", dryRun: true } });
+    expect(((await dry.json()) as { files: string[] }).files).toEqual([]);
+  });
+
+  test("stray anchors are reported", async () => {
+    const { save, read, write, request } = await setup({ "docs/a.md": "" });
+    await save("docs/a.md", "# A\n");
+    await write("docs/a.md", (await read("docs/a.md")).replace("# A", "Inserted paragraph.\n\n# A"));
+    const problems = (await (await request("/api/sections/problems")).json()) as { problems: SectionProblem[] };
+    expect(problems.problems).toEqual([{ kind: "stray", path: "docs/a.md", id: "REQ-00002", line: 3 }]);
+  });
+});
+
+describe("the agent guide", () => {
+  test("is added to AGENTS.md only when asked, and only once", async () => {
+    const { request, read, exists } = await setup({ "docs/a.md": "# A\n" });
+    const dry = (await (await request("/api/sections/anchor", { method: "POST", body: { folder: "", dryRun: true, addAgentGuide: true } })).json()) as {
+      agentGuide: boolean;
+    };
+    expect(dry.agentGuide).toBe(false);
+    expect(await exists("AGENTS.md")).toBe(false);
+    await request("/api/sections/anchor", { method: "POST", body: { folder: "", dryRun: false } });
+    expect(await exists("AGENTS.md")).toBe(false);
+    const run = (await (await request("/api/sections/anchor", { method: "POST", body: { folder: "", dryRun: false, addAgentGuide: true } })).json()) as {
+      agentGuide: boolean;
+    };
+    expect(run.agentGuide).toBe(true);
+    const text = await read("AGENTS.md");
+    expect(text).toContain("## Section anchors");
+    await request("/api/sections/anchor", { method: "POST", body: { folder: "", dryRun: false, addAgentGuide: true } });
+    expect(await read("AGENTS.md")).toBe(text);
+  });
+
+  test("is appended to an existing AGENTS.md", async () => {
+    const { request, read } = await setup({ "docs/a.md": "# A\n", "AGENTS.md": "# Agents\n\nBe careful.\n" });
+    await request("/api/sections/anchor", { method: "POST", body: { folder: "docs", dryRun: false, addAgentGuide: true } });
+    const text = await read("AGENTS.md");
+    expect(text.startsWith("# Agents\n\nBe careful.\n\n<!-- specquer:section-anchors -->\n")).toBe(true);
   });
 });

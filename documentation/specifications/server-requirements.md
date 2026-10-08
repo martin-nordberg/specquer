@@ -38,7 +38,7 @@ specquer [root] [--port <n>] [--no-open]
 | Route | Behavior |
 | ----- | -------- |
 | `GET /api/file?path=` | Returns the file's text and its **version** (SHA-256 of its bytes). |
-| `PUT /api/file?path=` | Body `{ text, baseVersion }`. Writes the text if the file's current version equals `baseVersion`; otherwise answers `409` with the current version and writes nothing. Returns the new version. For a sectioned file, the anchors are added and corrected first (§7) and the response also carries `edits`, relative to the body sent. |
+| `PUT /api/file?path=` | Body `{ text, baseVersion }`. Writes the text if the file's current version equals `baseVersion`; otherwise answers `409` with the current version and writes nothing. Returns the new version. For a sectioned file, the anchors are added and corrected first (§7) and the response also carries `edits`, relative to the body sent, and `notices` for what changed beyond adding anchors (a copy renumbered, an edited ID put back, a reused number, a copied UID). A sectioned file with merge conflict markers is written as sent, with a notice. |
 | `POST /api/create` | Body `{ parent, name, kind }` (`kind` is `file` or `folder`; `parent` is `""` for the root). Creates an `.md` file or an empty folder in `parent`, which must be an existing folder. A new file is empty, or holds its root anchor if it is sectioned. `409` if the name is taken. Answers `201` with the new path. |
 | `POST /api/rename` | Body `{ path, newName }`. Renames a file or folder within its folder. `409` if the name is taken. Returns the new path and the updated UI state. |
 | `GET /api/entry/delete-preview?path=` | Lists the files a delete would remove (up to 500, with the total count) and those not committed to Git, or `null` outside Git. |
@@ -72,18 +72,22 @@ The model is specified in [Data Architecture](data-architecture.md) §3.
 
 | Route | Behavior |
 | ----- | -------- |
-| `GET /api/sections?path=` | The sections of one document, for badge tooltips: ID, UID (`null` for a duplicate), kind, title and heading level. |
+| `GET /api/sections?path=` | The sections of one document, for badges: ID, UID (from the anchor; `null` for a section renumbered on the next save), kind, title, heading level, and the problem when its ID is also used elsewhere (the other occurrences, and whether this one keeps the ID). |
 | `GET /api/sections/search?q=&limit=&path=` | Sections whose ID or title starts with (or else contains) `q`, across documents or in the document at `path`, for link completion; at most `limit` (default 50, at most 200). |
-| `POST /api/sections/anchor` | Body `{ folder, dryRun }`. **Add section anchors**: returns the sectioned files under the folder whose anchors would change, and unless `dryRun` changes them. |
+| `POST /api/sections/anchor` | Body `{ folder, dryRun, addAgentGuide }`. **Add section anchors**: returns the sectioned files under the folder whose anchors would change, and unless `dryRun` changes them. With `addAgentGuide` (and not `dryRun`) it also appends the section anchor rules for coding agents to the root folder's `AGENTS.md`, creating it if needed. The response says whether `AGENTS.md` holds the rules (`agentGuide`). |
+| `GET /api/sections/problems?folder=` | The problems in a folder's sectioned files: duplicate and colliding IDs waiting for the user, stray anchors, and files with merge conflict markers. |
+| `POST /api/sections/renumber` | Body `{ path, id, uid, baseVersion }`. Gives one occurrence of a duplicate or colliding ID a new number, rewriting the file as a save would. `409` if the file is no longer at `baseVersion`. Returns the new version, the `edits` (relative to the body on disk) and `notices`. |
 
 ## 7. Section Anchors and Data Files
 
 1. Which files are sectioned, and the prefix for their new sections, comes from `.specquer/shared/section-prefixes.config.yaml`; without it no file is sectioned.
-2. The server keeps an index of the sectioned files and of `.specquer/shared/documents.yaml` and `.specquer/shared/<prefix>/sections.yaml`. It is brought up to date in the background at startup and after each tree load, by reading only files whose modification time or size changed. This never writes a file.
+2. The server keeps an index of the sectioned files and of `.specquer/shared/documents.yaml` and `.specquer/shared/<prefix>/sections.yaml`. It is brought up to date in the background at startup and after each tree load, by reading only files whose modification time or size changed. This never writes a file. Saving, creating, renumbering, listing problems and **Add section anchors** bring it up to date first, so files changed outside Specquer are never missed. The data files are read again when they change on disk (a pull, a branch switch).
 3. Section IDs are allocated on the server only, one update at a time, so two tabs can never get the same number. Numbers are never reused.
-4. Documents and data files are written only when the user changes something: saving, creating, renaming or deleting through the API, and **Add section anchors**. The data files then hold the whole reconciled state.
-5. Renames and deletes update the paths in `documents.yaml`, and drop the documents (and their sections) that are gone or no longer match the configuration.
+4. Documents and data files are written only when the user changes something: saving, creating, renaming or deleting through the API, renumbering a duplicate, and **Add section anchors**. The data files then hold the whole reconciled state.
+5. Renames and deletes update the paths in `documents.yaml`, and drop the documents that are gone or no longer match the configuration; their sections are retired, so they are recognized if they come back.
 6. Data files are written atomically and only when their content changes; damaged or conflicted data files never stop the server.
+7. Saving fixes what is certain (a copy within a document or of a whole file, an edited ID, a reused retired number, a copied UID) and says so in `notices`. A duplicate across documents and a collision of two sections with one ID are reported and renumbered only when the user asks.
+8. A sectioned file with merge conflict markers is never anchored until they are resolved.
 
 The model, recognition rules, data files and conflict rules are specified in [Data Architecture](data-architecture.md) §2.
 

@@ -97,3 +97,5 @@
   & img { @apply size-full; }
 }
 .markdown .section-badge { text-decoration: none; }
+/* An ID used more than once: a warning ring until the user renumbers one */
+.section-badge-problem { @apply ring-2 ring-warning; }

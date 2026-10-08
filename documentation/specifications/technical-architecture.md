@@ -65,7 +65,7 @@ The shared package holds everything both sides need. It must run unchanged in th
 | API | `@specquer/shared/api` | Hono router (`createApiRouter`) with every route, Zod request schemas, response types |
 | Paths | `@specquer/shared/paths` | Workspace path and name validation (relative, `/`-separated, no `..`, no `.git` or `.specquer`) |
 | Markdown | `@specquer/shared/markdown` | Front matter split and join, YAML syntax check (`yaml` package), the preview pipeline, finding and adding section anchors; see [Data Architecture](data-architecture.md) §1 and §2 |
-| Sections | `@specquer/shared/sections` | Section ID format: parse and format |
+| Sections | `@specquer/shared/sections` | Section ID and UID formats; the section anchor rules for coding agents |
 | UI state | `@specquer/shared/uistate` | Zod schema, defaults and pure update functions; see [Data Architecture](data-architecture.md) §3 |
 
 | Aspect | Decision |
@@ -88,7 +88,7 @@ The router's type is what the client's typed Hono client uses, so the client get
 | API | Mounts the router from `shared`, with handlers for the file-system service and the UI-state store |
 | Schemas | Zod, from `shared` |
 | UI state | `.specquer/user/uistate.yaml` under the root folder, read and written with `Bun.YAML` |
-| Sections | `SectionIndex` (`server/src/sections/`): an in-memory index of the sectioned files and the data files in `.specquer/shared/`, which the `yaml` package reads and writes (it keeps key order and writes one flow mapping per line); document IDs and section UIDs are CUID2s (`@paralleldrive/cuid2`); see [Data Architecture](data-architecture.md) §2 |
+| Sections | `SectionIndex` (`server/src/sections/`): an in-memory index of the sectioned files and the data files in `.specquer/shared/`, which the `yaml` package reads and writes (it keeps key order and writes one flow mapping per line); document IDs and section UIDs are 12-character CUID2s (`@paralleldrive/cuid2`'s `init({ length: 12 })`) carried in the anchors' `data-uid`; the data files are read again when they change on disk; see [Data Architecture](data-architecture.md) §2 |
 | Security | Session token, Host and Origin checks, Content-Security-Policy; see [Security](security.md) |
 | AI features | Delegated to `agent` (not used yet) |
 | Development port | 3000 |

@@ -10,6 +10,8 @@ import {
   type DeletePreview,
   type FileContent,
   type SectionInfo,
+  type SectionNotice,
+  type SectionProblem,
   type SectionSearchResult,
   type Tree,
   anchorFolderSchema,
@@ -17,7 +19,9 @@ import {
   entryQuerySchema,
   fileQuerySchema,
   renameSchema,
+  renumberSectionSchema,
   saveFileSchema,
+  sectionProblemsSchema,
   sectionSearchSchema,
 } from "./schemas.ts";
 
@@ -43,7 +47,7 @@ export class ApiError extends Error {
  * that was sent.
  */
 export type SaveResult =
-  | { ok: true; version: string; edits?: BodyEdit[] }
+  | { ok: true; version: string; edits?: BodyEdit[]; notices?: SectionNotice[] }
   | { ok: false; reason: "conflict"; version: string };
 
 export type CreateResult = { ok: true; path: string } | { ok: false; reason: "exists" };
@@ -62,7 +66,18 @@ export interface ApiHandlers {
   patchUiState(patch: UiStatePatch): Promise<UiState>;
   getSections(path: string): Promise<SectionInfo[]>;
   searchSections(query: string, limit: number, path?: string): Promise<SectionSearchResult[]>;
-  anchorFolder(folder: string, dryRun: boolean): Promise<AnchorFolderResult>;
+  anchorFolder(folder: string, dryRun: boolean, addAgentGuide: boolean): Promise<AnchorFolderResult>;
+  sectionProblems(folder: string): Promise<SectionProblem[]>;
+  renumberSection(path: string, id: string, uid: string | null, baseVersion: string): Promise<SaveResult>;
+}
+
+/** A successful save's response body: the new version, and the edits and notices if any. */
+function saveBody(result: Extract<SaveResult, { ok: true }>) {
+  return {
+    version: result.version,
+    ...(result.edits === undefined ? {} : { edits: result.edits }),
+    ...(result.notices === undefined ? {} : { notices: result.notices }),
+  };
 }
 
 /** Validation errors use the same JSON shape as other errors. */
@@ -93,7 +108,7 @@ export function createApiRouter(handlers: ApiHandlers) {
       const { text, baseVersion } = c.req.valid("json");
       const result = await handlers.saveFile(c.req.valid("query").path, text, baseVersion);
       if (!result.ok) return c.json({ error: "conflict", version: result.version }, 409);
-      return c.json({ version: result.version, ...(result.edits === undefined ? {} : { edits: result.edits }) }, 200);
+      return c.json(saveBody(result), 200);
     })
     .post("/create", validate("json", createSchema), async (c) => {
       const { parent, name, kind } = c.req.valid("json");
@@ -135,8 +150,17 @@ export function createApiRouter(handlers: ApiHandlers) {
       return c.json({ results: await handlers.searchSections(q, limit, path) });
     })
     .post("/sections/anchor", validate("json", anchorFolderSchema), async (c) => {
-      const { folder, dryRun } = c.req.valid("json");
-      return c.json(await handlers.anchorFolder(folder, dryRun));
+      const { folder, dryRun, addAgentGuide } = c.req.valid("json");
+      return c.json(await handlers.anchorFolder(folder, dryRun, addAgentGuide));
+    })
+    .get("/sections/problems", validate("query", sectionProblemsSchema), async (c) => {
+      return c.json({ problems: await handlers.sectionProblems(c.req.valid("query").folder) });
+    })
+    .post("/sections/renumber", validate("json", renumberSectionSchema), async (c) => {
+      const { path, id, uid, baseVersion } = c.req.valid("json");
+      const result = await handlers.renumberSection(path, id, uid, baseVersion);
+      if (!result.ok) return c.json({ error: "conflict", version: result.version }, 409);
+      return c.json(saveBody(result), 200);
     });
 }
 

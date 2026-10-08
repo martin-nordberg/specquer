@@ -1,4 +1,4 @@
-import type { Root } from "hast";
+import type { Root, RootContent } from "hast";
 import { toJsxRuntime } from "hast-util-to-jsx-runtime";
 import { type ComponentProps, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
@@ -43,6 +43,17 @@ export function resolveDocumentLink(href: string, currentFile: string): { path: 
   }
 }
 
+/** The IDs of the section anchors marked in a tree, as one key. */
+function sectionAnchorKey(tree: Root): string {
+  const ids: string[] = [];
+  const visit = (node: Root | RootContent) => {
+    if (node.type === "element" && node.properties.dataSectionAnchor !== undefined) ids.push(`${String(node.properties.id)}/${String(node.properties.dataUid)}`);
+    if ("children" in node) node.children.forEach(visit);
+  };
+  visit(tree);
+  return ids.join(" ");
+}
+
 /** A request to scroll the preview to a section; `request` changes for each new request. */
 export interface ScrollTarget {
   sectionId: string;
@@ -54,16 +65,31 @@ export interface PreviewProps {
   currentFile: string;
   /** Opens another document; `hash` is the link's fragment (a section ID), if any. */
   onOpenFile: (path: string, hash?: string) => void;
-  /** Loads a document's sections, for the badges' tooltips. */
+  /** Loads a document's sections, for the badges' tooltips and problems. */
   loadSections?: (path: string) => Promise<SectionInfo[]>;
+  /** Changes when the file was saved, so the badges' problems are loaded again. */
+  savedVersion?: string;
+  /** Renumbers one occurrence of a duplicate ID in the current file. */
+  onRenumber?: (id: string, uid: string | null) => void;
   scrollTarget?: ScrollTarget;
   /** Delay before rendering changes; 0 renders at once. */
   debounce?: number;
   className?: string;
 }
 
-export function Preview({ markdown, currentFile, onOpenFile, loadSections, scrollTarget, debounce = 0, className }: PreviewProps) {
+export function Preview({
+  markdown,
+  currentFile,
+  onOpenFile,
+  loadSections,
+  savedVersion,
+  onRenumber,
+  scrollTarget,
+  debounce = 0,
+  className,
+}: PreviewProps) {
   const [tree, setTree] = useState<Root | null>(null);
+  const [sections, setSections] = useState<SectionInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
   const latest = useRef(0);
   const container = useRef<HTMLDivElement>(null);
@@ -90,16 +116,39 @@ export function Preview({ markdown, currentFile, onOpenFile, loadSections, scrol
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [markdown, debounce]);
 
+  // The server's view of the sections, for problems: loaded when the anchors or the saved file change
+  const anchorKey = useMemo(() => (tree === null ? "" : sectionAnchorKey(tree)), [tree]);
+  useEffect(() => {
+    if (loadSections === undefined || anchorKey === "") return;
+    let current = true;
+    loadSections(currentFile)
+      .then((result) => current && setSections(result))
+      .catch(() => undefined);
+    return () => {
+      current = false;
+    };
+  }, [loadSections, currentFile, anchorKey, savedVersion]);
+
   const content = useMemo(() => {
     if (tree === null) return null;
-    const Link = ({ href, children, ...props }: ComponentProps<"a"> & { node?: unknown; "data-section-anchor"?: string }) => {
+    const Link = ({ href, children, ...props }: ComponentProps<"a"> & { node?: unknown; "data-section-anchor"?: string; "data-uid"?: string }) => {
       delete props.node;
       if (props["data-section-anchor"] !== undefined && typeof props.id === "string") {
         // The anchor stays (invisible) as the scroll target; the badge stands for it
+        const id = props.id.slice(CLOBBER_PREFIX.length);
+        const uid = props["data-uid"];
+        const info = sections.find((section) => section.id === id && (uid === undefined || section.uid === uid));
         return (
           <>
             <a {...props} />
-            <SectionBadge sectionId={props.id.slice(CLOBBER_PREFIX.length)} path={currentFile} loadSections={loadSections} />
+            <SectionBadge
+              sectionId={id}
+              {...(uid === undefined ? {} : { uid })}
+              path={currentFile}
+              loadSections={loadSections}
+              problem={info?.problem}
+              {...(onRenumber === undefined ? {} : { onRenumber: () => onRenumber(id, uid ?? null) })}
+            />
           </>
         );
       }
@@ -127,7 +176,7 @@ export function Preview({ markdown, currentFile, onOpenFile, loadSections, scrol
       );
     };
     return toJsxRuntime(tree, { Fragment, jsx, jsxs, components: { a: Link } }) as ReactNode;
-  }, [tree, currentFile, onOpenFile, loadSections]);
+  }, [tree, currentFile, onOpenFile, loadSections, sections, onRenumber]);
 
   // Scroll to a requested section once it has been rendered
   useEffect(() => {
