@@ -1,7 +1,11 @@
+<a id="SPEC-00084" data-uid="crzxf49hslqn"></a>
+
+<a id="SPEC-00085" data-uid="ltoun5582va0"></a>
 # Specquer Technical Architecture
 
 This document records the technology choices for Specquer and the rules that follow from them. For a summary of the system, see the [Architecture Overview](overview.md).
 
+<a id="SPEC-00086" data-uid="r1510k1tdffs"></a>
 ## 1. Principles
 
 1. **One language.** All code is TypeScript.
@@ -9,6 +13,7 @@ This document records the technology choices for Specquer and the rules that fol
 3. **One contract.** The client and the server share a single route definition and a single set of schemas. Neither is the source of truth for the other; both depend on the shared package.
 4. **One deliverable.** Specquer ships as a single executable that contains the server and the client.
 
+<a id="SPEC-00087" data-uid="z2h2dy7murwi"></a>
 ## 2. Platform
 
 | Aspect | Decision |
@@ -19,6 +24,7 @@ This document records the technology choices for Specquer and the rules that fol
 | Type checking | Strict mode, including `noUncheckedIndexedAccess` and `verbatimModuleSyntax` |
 | Testing | `bun test` for unit and component tests; Playwright for end-to-end tests (§11) |
 
+<a id="SPEC-00088" data-uid="pqyx6ltyz5l3"></a>
 ## 3. Repository Structure
 
 The repository is a Bun workspace with five packages.
@@ -31,6 +37,7 @@ The repository is a Bun workspace with five packages.
 | `./client` | `@specquer/client` | Front end: browser user interface |
 | `./documentation` | `@specquer/documentation` | Documentation site, including these specifications |
 
+<a id="SPEC-00089" data-uid="use8kv701n8t"></a>
 ### 3.1 Package Dependencies
 
 ```
@@ -49,6 +56,7 @@ server ─────► agent
 - `shared` depends on no other workspace package.
 - `documentation` is independent of the application packages.
 
+<a id="SPEC-00090" data-uid="fp6n58m1lmra"></a>
 ### 3.2 Dependency Rules
 
 - **Isolated installs.** Bun installs this workspace in isolated mode, so each package can load only the dependencies it declares itself. Any package a package imports, directly or through a tool that expects it next to itself, must be declared in that package's own `package.json`.
@@ -56,6 +64,7 @@ server ─────► agent
 - **React in the server.** Bun applies React Fast Refresh to the client only when `react` can be resolved from the server package, so `server` declares `react` as a development dependency, on the same version as `client`.
 - **Tailwind in the server.** The Tailwind bundler plugin runs in the server package (from `server/bunfig.toml` and `server/build.ts`), so `server` declares `bun-plugin-tailwind` and `tailwindcss` as development dependencies.
 
+<a id="SPEC-00091" data-uid="m6vvr2jiweuy"></a>
 ## 4. Shared Package
 
 The shared package holds everything both sides need. It must run unchanged in the browser, in a Web Worker and in Bun, so it uses no `Bun.*` or DOM APIs.
@@ -78,6 +87,7 @@ The shared package holds everything both sides need. It must run unchanged in th
 
 The router's type is what the client's typed Hono client uses, so the client gets compile-time checking of paths, parameters, request bodies and responses without importing any server code.
 
+<a id="SPEC-00092" data-uid="vebs3f9h3h75"></a>
 ## 5. Back End
 
 | Aspect | Decision |
@@ -95,6 +105,7 @@ The router's type is what the client's typed Hono client uses, so the client get
 | Development port | 3000 |
 | Development mode | `bun --hot` (reloads on change) |
 
+<a id="SPEC-00093" data-uid="tfowa3wagi64"></a>
 ### 5.1 Routing
 
 `Bun.serve()` and Hono share the work:
@@ -104,6 +115,7 @@ The router's type is what the client's typed Hono client uses, so the client get
 
 The command line, the file-system rules and the API are specified in [Server Requirements](server-requirements.md).
 
+<a id="SPEC-00094" data-uid="zibabwgaafzu"></a>
 ## 6. AI Agent
 
 | Aspect | Decision |
@@ -118,10 +130,12 @@ The command line, the file-system rules and the API are specified in [Server Req
 | Used by | `server`, which exposes agent features through API routes |
 | Features | Summaries of sections (Step 004): `config.ts` (the configuration schema and merging), `model.ts` (the chat model for a configuration), `summarize.ts` (the prompt, plain-text output, and the fallback for long sections) |
 
+<a id="SPEC-00095" data-uid="bfd2gvoja5mj"></a>
 ### 6.1 Package Rationale
 
 The AI functionality runs on the server and could live inside `./server`. It is kept in its own package to make its AI-centric role explicit and to keep model, prompt and tool code apart from HTTP handling. The server stays responsible for routes, and the agent package for talking to language models.
 
+<a id="SPEC-00096" data-uid="zfxuu9i64jd6"></a>
 ### 6.2 LangChain Usage
 
 - The JavaScript implementation is used, in the same Bun process as the server. Python LangChain is not used, so the system keeps one language and one executable.
@@ -131,6 +145,7 @@ The AI functionality runs on the server and could live inside `./server`. It is 
 - Tests use a fake model (`FakeListChatModel` from `@langchain/core/utils/testing` in `agent`, a stub in `server`), and the end-to-end tests a fake OpenAI-compatible server (`e2e/fake-model.ts`), so no test calls a real model or needs a key.
 - LangSmith tracing is off. `langchain` depends on `langsmith`, which sends traces to LangSmith only when tracing environment variables (such as `LANGSMITH_TRACING`) are set; Specquer does not set them.
 
+<a id="SPEC-00097" data-uid="wjnprm2r7abj"></a>
 ### 6.3 Summary Request Flow
 
 ```
@@ -147,6 +162,7 @@ Preview ─ outline of saved text
 
 The client sends saved text only, and the server never reads files for summaries. The details are in [Data Architecture](data-architecture.md) §4.
 
+<a id="SPEC-00098" data-uid="yk5wgoalz22d"></a>
 ## 7. Front End
 
 | Aspect | Decision |
@@ -170,12 +186,14 @@ The client sends saved text only, and the server never reads files for summaries
 
 The user interface is specified in [Client Requirements](client-requirements.md) and [Information Architecture](info-architecture.md).
 
+<a id="SPEC-00099" data-uid="g17okl13l8fx"></a>
 ### 7.1 Build Tool Rationale
 
 Bun's bundler compiles React JSX and TypeScript itself, so the client needs no separate build tool. The back end imports `client/index.html` and passes it to `Bun.serve()` as a route. During development Bun bundles the client on each request, with hot module replacement and React Fast Refresh. For a release, `server/build.ts` bundles the client from the same import and embeds it in the executable, which satisfies the single-deliverable principle. Requests that do not match a client route go to Hono.
 
 The trade-off is a smaller plugin ecosystem than Vite's. Bun's frontend plugins are configured in `bunfig.toml` (`server/bunfig.toml` loads the Tailwind plugin for the development server), and the `bun build` CLI does not support them, which is why the release build is a script calling `Bun.build()` (§10).
 
+<a id="SPEC-00100" data-uid="pf7cawuy1vf3"></a>
 ### 7.2 Type Checking
 
 The client has its own `client/tsconfig.json`, which extends the root configuration and changes these settings:
@@ -186,10 +204,12 @@ The client has its own `client/tsconfig.json`, which extends the root configurat
 
 The root configuration excludes `./client`, so type checking runs in three passes: the root configuration, `client/tsconfig.json`, and `client/tsconfig.test.json` for the client's tests (the client's settings plus Bun's types).
 
+<a id="SPEC-00101" data-uid="w5s8irdj8t83"></a>
 ### 7.3 Preview Worker
 
 Parsing Markdown is most of the cost of a preview render (about 80 ms of 100 ms for a 2,400-line spec), so the preview parses in a Web Worker and the main thread only turns the resulting HTML syntax tree into React elements. Bun's HTML bundling does not bundle workers, so the server builds the worker (`client/src/preview/preview-worker.ts`) with `Bun.build()` and serves it at `/_specquer/preview-worker.js`. The worker build uses the `worker` export condition, because some dependencies' browser builds use the DOM, which workers lack. The release build embeds the worker script. If the worker can't start, the preview parses on the main thread.
 
+<a id="SPEC-00102" data-uid="r2ww926dia8b"></a>
 ## 8. Documentation
 
 | Aspect | Decision |
@@ -201,8 +221,10 @@ Parsing Markdown is most of the cost of a preview render (about 80 ms of 100 ms 
 | Favicon | `documentation/public/favicon.svg`, a gray variant of the app's favicon generated from `client/src/theme/logo.ts`, linked in the VitePress `head` config with the `/specquer/` base written out |
 | Direct dependencies | `vitepress` and `vue` (`vue` is required because installs are isolated; see §3.2) |
 
+<a id="SPEC-00103" data-uid="tvut2sk3km3q"></a>
 ## 9. Development Environment
 
+<a id="SPEC-00104" data-uid="qa1sysrpbpls"></a>
 ### 9.1 Ports
 
 Each development server has a fixed port. A server whose port is taken fails to start instead of moving to another port (VitePress uses `strictPort`; `Bun.serve()` fails when its port is taken).
@@ -212,10 +234,12 @@ Each development server has a fixed port. A server whose port is taken fails to 
 | 3000 | Back end (Hono) and client |
 | 5174 | Documentation development server (VitePress) |
 
+<a id="SPEC-00105" data-uid="x790ro079hkc"></a>
 ### 9.2 Development Workflow
 
 A single root command (`bun run dev`) starts the back end under `bun --hot`, with the repository itself as the root folder. It serves both the API and the client on port 3000, so during development, as in production, the client and the API come from the same process and address.
 
+<a id="SPEC-00106" data-uid="tuv5mm8u8vpt"></a>
 ## 10. Deployment
 
 | Aspect | Decision |
@@ -229,6 +253,7 @@ A single root command (`bun run dev`) starts the back end under `bun --hot`, wit
 
 In production the back end serves the client from assets embedded in the executable, not from files on disk. `bun run build` runs `server/build.ts`: it builds the preview worker, then calls `Bun.build()` with `compile`, the Tailwind plugin and `NODE_ENV` defined as `production`, which turns off development mode in `Bun.serve()`. The output is `server/dist/specquer`.
 
+<a id="SPEC-00107" data-uid="g783j2n244hf"></a>
 ## 11. Testing
 
 | Layer | Tool | Location | Command |

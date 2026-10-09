@@ -1,5 +1,5 @@
 # Specquer's sections for one prefix, by unique ID; written by Specquer. Commit this file.
-lastSequence: 38
+lastSequence: 107
 sections:
   zp0zh8v7la11: { id: SPEC-00001, documentId: zp0zh8v7la11 }
   aktuc2n0mul5: { id: SPEC-00002, documentId: zp0zh8v7la11 }
@@ -39,3 +39,72 @@ sections:
   x9pynsmcyb9v: { id: SPEC-00036, documentId: iy4rl3v8on0h }
   a1ji7t4zjjgj: { id: SPEC-00037, documentId: iy4rl3v8on0h }
   hxls9q5i5br9: { id: SPEC-00038, documentId: iy4rl3v8on0h }
+  hqhb8pujtp2h: { id: SPEC-00039, documentId: hqhb8pujtp2h }
+  j3ujxrx9s2cl: { id: SPEC-00040, documentId: hqhb8pujtp2h }
+  n5x7fnnix37v: { id: SPEC-00041, documentId: hqhb8pujtp2h }
+  s48d8v9jo15g: { id: SPEC-00042, documentId: hqhb8pujtp2h }
+  arb991i3e6ej: { id: SPEC-00043, documentId: hqhb8pujtp2h }
+  u5s5qfu4wurh: { id: SPEC-00044, documentId: hqhb8pujtp2h }
+  o3bvckrfj01t: { id: SPEC-00045, documentId: hqhb8pujtp2h }
+  b3odkybydlfb: { id: SPEC-00046, documentId: hqhb8pujtp2h }
+  w748uemplxzf: { id: SPEC-00047, documentId: hqhb8pujtp2h }
+  v328rz9e2tip: { id: SPEC-00048, documentId: hqhb8pujtp2h }
+  g5tal9mne58o: { id: SPEC-00049, documentId: hqhb8pujtp2h }
+  drv6ct4jpecs: { id: SPEC-00050, documentId: hqhb8pujtp2h }
+  z5ma56k27geg: { id: SPEC-00051, documentId: hqhb8pujtp2h }
+  u4ps6ydi8prg: { id: SPEC-00052, documentId: hqhb8pujtp2h }
+  t3nnmebbri6x: { id: SPEC-00053, documentId: hqhb8pujtp2h }
+  r7go3dfjt7wm: { id: SPEC-00054, documentId: hqhb8pujtp2h }
+  vcjbkxfhmoor: { id: SPEC-00055, documentId: hqhb8pujtp2h }
+  vb26hxtvldyd: { id: SPEC-00056, documentId: hqhb8pujtp2h }
+  gnv4h0oi8xrd: { id: SPEC-00057, documentId: gnv4h0oi8xrd }
+  lm9qeggt0uj9: { id: SPEC-00058, documentId: gnv4h0oi8xrd }
+  txeqm4i8rcgi: { id: SPEC-00059, documentId: gnv4h0oi8xrd }
+  vag98ceqt5ej: { id: SPEC-00060, documentId: gnv4h0oi8xrd }
+  jzz3ij6qofw5: { id: SPEC-00061, documentId: gnv4h0oi8xrd }
+  t34ybwudslp2: { id: SPEC-00062, documentId: t34ybwudslp2 }
+  hcx5vkka0808: { id: SPEC-00063, documentId: t34ybwudslp2 }
+  iqgf4njjhp4m: { id: SPEC-00064, documentId: t34ybwudslp2 }
+  q5dau5z14uck: { id: SPEC-00065, documentId: t34ybwudslp2 }
+  atxgrltcqpql: { id: SPEC-00066, documentId: t34ybwudslp2 }
+  dcqj07fp73a2: { id: SPEC-00067, documentId: t34ybwudslp2 }
+  elbjr28seyhr: { id: SPEC-00068, documentId: t34ybwudslp2 }
+  mxun8hb7jbnj: { id: SPEC-00069, documentId: t34ybwudslp2 }
+  cj8b93fcfnht: { id: SPEC-00070, documentId: t34ybwudslp2 }
+  y8jklshrw984: { id: SPEC-00071, documentId: t34ybwudslp2 }
+  ipvsb7onaku1: { id: SPEC-00072, documentId: t34ybwudslp2 }
+  dtnurz41yejv: { id: SPEC-00073, documentId: dtnurz41yejv }
+  unvuw5mk0cjh: { id: SPEC-00074, documentId: dtnurz41yejv }
+  sb2taf3fhmvs: { id: SPEC-00075, documentId: dtnurz41yejv }
+  h9hdfvo6dcom: { id: SPEC-00076, documentId: dtnurz41yejv }
+  i1pnvwdznkri: { id: SPEC-00077, documentId: dtnurz41yejv }
+  lp2g1616i6v2: { id: SPEC-00078, documentId: dtnurz41yejv }
+  zoiamab59gay: { id: SPEC-00079, documentId: dtnurz41yejv }
+  eift7pjses41: { id: SPEC-00080, documentId: dtnurz41yejv }
+  y8x093ygagyo: { id: SPEC-00081, documentId: dtnurz41yejv }
+  p3j1jhs04fnl: { id: SPEC-00082, documentId: dtnurz41yejv }
+  xukyl7a3b43e: { id: SPEC-00083, documentId: dtnurz41yejv }
+  crzxf49hslqn: { id: SPEC-00084, documentId: crzxf49hslqn }
+  ltoun5582va0: { id: SPEC-00085, documentId: crzxf49hslqn }
+  r1510k1tdffs: { id: SPEC-00086, documentId: crzxf49hslqn }
+  z2h2dy7murwi: { id: SPEC-00087, documentId: crzxf49hslqn }
+  pqyx6ltyz5l3: { id: SPEC-00088, documentId: crzxf49hslqn }
+  use8kv701n8t: { id: SPEC-00089, documentId: crzxf49hslqn }
+  fp6n58m1lmra: { id: SPEC-00090, documentId: crzxf49hslqn }
+  m6vvr2jiweuy: { id: SPEC-00091, documentId: crzxf49hslqn }
+  vebs3f9h3h75: { id: SPEC-00092, documentId: crzxf49hslqn }
+  tfowa3wagi64: { id: SPEC-00093, documentId: crzxf49hslqn }
+  zibabwgaafzu: { id: SPEC-00094, documentId: crzxf49hslqn }
+  bfd2gvoja5mj: { id: SPEC-00095, documentId: crzxf49hslqn }
+  zfxuu9i64jd6: { id: SPEC-00096, documentId: crzxf49hslqn }
+  wjnprm2r7abj: { id: SPEC-00097, documentId: crzxf49hslqn }
+  yk5wgoalz22d: { id: SPEC-00098, documentId: crzxf49hslqn }
+  g17okl13l8fx: { id: SPEC-00099, documentId: crzxf49hslqn }
+  pf7cawuy1vf3: { id: SPEC-00100, documentId: crzxf49hslqn }
+  w5s8irdj8t83: { id: SPEC-00101, documentId: crzxf49hslqn }
+  r2ww926dia8b: { id: SPEC-00102, documentId: crzxf49hslqn }
+  tvut2sk3km3q: { id: SPEC-00103, documentId: crzxf49hslqn }
+  qa1sysrpbpls: { id: SPEC-00104, documentId: crzxf49hslqn }
+  x790ro079hkc: { id: SPEC-00105, documentId: crzxf49hslqn }
+  tuv5mm8u8vpt: { id: SPEC-00106, documentId: crzxf49hslqn }
+  g783j2n244hf: { id: SPEC-00107, documentId: crzxf49hslqn }

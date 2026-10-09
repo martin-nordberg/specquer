@@ -1,7 +1,11 @@
+<a id="WORK-00150" data-uid="on22s0wjxfzw"></a>
+
+<a id="WORK-00151" data-uid="olgd2vhzj4oj"></a>
 # Step 003 - Implementation Plan
 
 _Plan for [Section Anchor Conflicts](section-anchor-conflicts.md), the analysis whose recommendations (§6) and decisions (§7) serve as this step's requirements. Drafted October 2026._
 
+<a id="WORK-00152" data-uid="yepe4z9n5d5k"></a>
 ## 1. Summary
 
 Step 003 makes section identity travel with the text and stops Specquer from settling conflicts on stale or guessed information:
@@ -18,6 +22,7 @@ Link checking (recommendation 9 of the analysis) is left for a later step.
 
 There are seven phases (§5). Decisions taken while planning are in §6, marked _Proposed_; the work proceeds on them unless they are changed.
 
+<a id="WORK-00153" data-uid="ot8lvauodrwx"></a>
 ## 2. Precedence
 
 Step 003 takes precedence over Step 002 and the specifications where they conflict:
@@ -36,6 +41,7 @@ Step 003 takes precedence over Step 002 and the specifications where they confli
 
 No data migration: Specquer hasn't been used outside this repository, and this repository has no data files and no `data-document-id` anchors yet.
 
+<a id="WORK-00154" data-uid="eegioox3k12n"></a>
 ## 3. Starting Point
 
 - **Recognition** (`shared/src/markdown/sections.ts`): `anchorAt` reads `id` and `data-document-id` from an anchor's open tag. `findSections` treats the first block's anchor as the root anchor if it has a `data-document-id` or no heading follows on the next line. `anchorEdits` takes an `AnchorPlan` with new IDs by section index and the document ID. `rootAnchorText(id, documentId)` writes a new file's anchor.
@@ -45,8 +51,10 @@ No data migration: Specquer hasn't been used outside this repository, and this r
 - **Section index** (`section-index.ts`): `scan` runs at startup and on tree loads, which follow only Specquer's own create, rename and delete. `save` indexes only the file being saved. Section UIDs for the badge tooltip come from `sections.yaml`.
 - **Client:** `CodeEditor` takes extensions once, when created (`ContentView.tsx` builds them in a `useMemo`). `SectionBadge` shows the ID, path and UID. `AnchorDialog` is the **Add section anchors** dialog. There is no toast or notice component yet.
 
+<a id="WORK-00155" data-uid="sjkrr26127hk"></a>
 ## 4. Proposed Design
 
+<a id="WORK-00156" data-uid="wvgp9pb4cax7"></a>
 ### 4.1 Anchors
 
 ```html
@@ -61,6 +69,7 @@ No data migration: Specquer hasn't been used outside this repository, and this r
 - **UID format** moves to `shared/src/sections/uids.ts`: `isUid` (`^[a-z][a-z0-9]{1,63}$`, so existing 24-character values stay valid) and `UID_LENGTH = 12`. The server creates UIDs with `init({ length: UID_LENGTH })`. `data.ts` and `section-index.ts` use `isUid` instead of their own checks.
 - An invalid `data-uid` counts as missing. A placeholder (`<a id=""></a>`) may carry no UID or any UID; as now, it asks for an ID.
 
+<a id="WORK-00157" data-uid="ehul46gup4rf"></a>
 ### 4.2 Recognition (`shared`)
 
 - `FoundAnchor` gets `uid?: string` and `uidAttribute?: Range`, which replace `documentId` and `documentIdAttribute`. `FoundSection` gets `uid: string | null`.
@@ -70,6 +79,7 @@ No data migration: Specquer hasn't been used outside this repository, and this r
 - **`AnchorPlan`** becomes `{ ids: Map<number, string>; uids: Map<number, string> }`, by section index. `ids` gives new or restored IDs, and `uids` gives new or corrected UIDs (the root's UID is the document ID). `anchorEdits` inserts missing anchors with both attributes, replaces `id` and `data-uid` values, and adds a missing `data-uid` after `id`. `rootAnchorText(id, uid)` writes `<a id="…" data-uid="…"></a>` and a blank line.
 - **Preview:** the sanitizer already allows `data-*` on `a`. Tests change from `data-document-id` to `data-uid`.
 
+<a id="WORK-00158" data-uid="pb4nnlh2c6ak"></a>
 ### 4.3 Data Files (`server/src/sections/data.ts`)
 
 ```yaml
@@ -92,6 +102,7 @@ retired:
 - **`retired`:** a section whose UID no scanned document holds moves from `sections` to `retired` when the data files are next written. A retired UID that turns up again (a restore) moves back. Appended, one entry per line, read with the same tolerance for conflict markers. When both sides of a merge leave the same UID in `sections` and in `retired`, live wins.
 - **Reading again:** `DataFiles` records each file's modification time and size when it reads or writes it. `changed()` checks them, and the folder listing for new prefixes. `SectionIndex.load` reads the data files again when anything changed. The index's in-memory data is replaced, but numbers already issued in this session are kept: `lastSequence` takes the higher of the two.
 
+<a id="WORK-00159" data-uid="tgi8hu5l6vxe"></a>
 ### 4.4 Reconciliation (`server/src/sections/reconcile.ts`)
 
 Input: per document, its path, whether it is **frozen** (it has conflict markers), and its sections as `{ id: string | null, uid: string | null }`. The root section's `uid` is the document ID. Output: the reconciled data, per-document fixes, and problems.
@@ -120,6 +131,7 @@ Sections, in this order:
 - Problems are also produced for stray anchors (from `analyzeBody`) and for frozen documents.
 - Renumbering a duplicate or collision that the user confirms is a fix requested from outside, `renumber: { path, index }`, applied like any other.
 
+<a id="WORK-00160" data-uid="p3tuafegtgmh"></a>
 ### 4.5 Section Index (`server/src/sections/section-index.ts`)
 
 - **Up-to-date index:** `save`, `create`, `anchorFolder`, `problems` and `renumber` start with the scan's stat pass (`scanFiles`): it lists the Markdown files, stats them, and reads only the changed ones. The cost is measured in Phase 0 (D3).
@@ -129,6 +141,7 @@ Sections, in this order:
 - **`problems(folder)`** returns the problems for the sectioned files in a folder: duplicates and collisions (with every occurrence's path and title), stray anchors, and frozen files.
 - **`renumber(path, uid, baseVersion)`** gives one occurrence of a duplicate or collision a new ID (and a new UID for a copy). The file is rewritten as a save would, with the version check. The edits are returned.
 
+<a id="WORK-00161" data-uid="k7lc92rn040f"></a>
 ### 4.6 API (`shared/src/api`)
 
 | Change | Details |
@@ -138,6 +151,7 @@ Sections, in this order:
 | `GET /api/sections/problems?folder=` | `{ problems: SectionProblem[] }` |
 | `POST /api/sections/renumber` | Body `{ path, uid, baseVersion }`. Returns a `SaveResult` with the edits |
 
+<a id="WORK-00162" data-uid="v67gosv86l5s"></a>
 ### 4.7 Client
 
 - **Paste handling** (`client/src/components/section-paste.ts`, a CodeMirror extension created once in `ContentView`):
@@ -151,6 +165,7 @@ Sections, in this order:
 - **Notices:** after a save with `notices`, a dismissible line under the file path says what changed ("SPEC-00012 was a copy and is now SPEC-00261"), and **Problems…** opens the dialog (D5).
 - **Problems dialog** (`ProblemsDialog.tsx`): **Section problems…** in the tree's context menu, next to **Add section anchors…**. Lists the problems in the folder. Each occurrence opens its file at the section, and duplicates and collisions have **Renumber**.
 
+<a id="WORK-00163" data-uid="xkz7aasy0fzu"></a>
 ### 4.8 Agent Guide
 
 A block of text with the anchor rules for coding agents, in `shared/src/sections/agent-guide.ts` so that the client can show it and the server can write it:
@@ -160,27 +175,32 @@ A block of text with the anchor rules for coding agents, in `shared/src/sections
 - This repository's `CLAUDE.md` gets the block in Phase 5.
 - **Add section anchors** offers to append it to the root folder's `AGENTS.md` (created if missing), between marker comments so it is added only once. Specquer never changes the file without that confirmation (D6).
 
+<a id="WORK-00164" data-uid="naa5pz6u2hd6"></a>
 ## 5. Phases
 
 Each phase lists its tasks and what "done" means. Tests are written within each phase.
 
+<a id="WORK-00165" data-uid="rhj8ew5jdel3"></a>
 ### Phase 0 - Spikes
 
 1. **The cost of an up-to-date index.** Time `scanFiles` on this repository, and on a generated tree of 2,000 sectioned files, when nothing changed. *Done when* the numbers are known and D3 is confirmed or changed.
 2. **WYSIWYG paste** (D4). A Milkdown `transformPasted` hook that rewrites pasted anchors. *Done when* a paste in WYSIWYG turns a duplicate anchor into a placeholder, or the fallback is chosen.
 
+<a id="WORK-00166" data-uid="gsdlhlc5pwky"></a>
 ### Phase 1 - Anchors and Recognition (`shared`)
 
 - `uids.ts` (§4.1); `FoundAnchor` and `FoundSection` with UIDs; the root anchor rule with `isDocumentUid`; `analyzeBody` with stray anchors; `hasConflictMarkers`; `AnchorPlan` with `ids` and `uids`; `rootAnchorText(id, uid)`.
 - Tests in `sections.test.ts`: `data-uid` in every anchor form; adding and replacing it; attribute order; the root anchor with and without a recorded UID, and with the blank line deleted; strays in each position; conflict markers versus setext headings; stability (a second run makes no edits). Update `preview.test.ts`.
 - *Done when* `bun test shared` and the type-check pass.
 
+<a id="WORK-00167" data-uid="b76a9my64hcv"></a>
 ### Phase 2 - Data Files and Reconciliation (`server`)
 
 - Data files with root entries and `retired`; `changed()`; reading again in `load` (§4.3).
 - `reconcile` per §4.4, with a test per row of the table, plus frozen documents, restores across a write, and merge leftovers in `retired`.
 - *Done when* the reconciliation and data tests pass, including a test that a data file changed on disk is used by the next save.
 
+<a id="WORK-00168" data-uid="p5uzdqac6l4l"></a>
 ### Phase 3 - Server Integration and API
 
 - The stat pass before save, create, anchoring, problems and renumbering. Conflict-marker saves. Notices in `SaveResult`. 12-character UIDs. `problems` and `renumber` with their routes.
@@ -195,6 +215,7 @@ Each phase lists its tasks and what "done" means. Tests are written within each 
   - a restored section keeping its UID
   - a file with conflict markers saved as sent
 
+<a id="WORK-00169" data-uid="sno4tnbmf9m9"></a>
 ### Phase 4 - Client
 
 - Paste handling, muted UIDs, problem badges with **Renumber this one**, notices, the problems dialog.
@@ -204,11 +225,13 @@ Each phase lists its tasks and what "done" means. Tests are written within each 
   - a cut and paste keeps the ID
   - a duplicate created outside Specquer is reported and renumbered from the badge
 
+<a id="WORK-00170" data-uid="qokje2pualll"></a>
 ### Phase 5 - Agent Guide
 
 - The guide text, its block in this repository's `CLAUDE.md`, and the `AGENTS.md` offer in **Add section anchors** (§4.8).
 - *Done when* a component test covers the offer and an API test shows the block is appended once.
 
+<a id="WORK-00171" data-uid="lnybl1b59wct"></a>
 ### Phase 6 - Documentation
 
 - Link the analysis and this plan in the VitePress sidebar (done while planning).
@@ -228,6 +251,7 @@ Each phase lists its tasks and what "done" means. Tests are written within each 
 - `CLAUDE.md`: the sections module description (problems, renumbering, data files read again), and the agent guide block from Phase 5.
 - A Step 003 implementation status section at the end of this plan.
 
+<a id="WORK-00172" data-uid="pr81gzoissfq"></a>
 ## 6. Decision Points
 
 Taken while planning; each is _Proposed_ and the work proceeds on it unless changed.
@@ -240,6 +264,7 @@ Taken while planning; each is _Proposed_ and the work proceeds on it unless chan
 - **D6. The agent guide's file.** _Proposed:_ `AGENTS.md` at the root folder, the name most coding agents read, offered from **Add section anchors**. This repository puts it in `CLAUDE.md`, which it already has.
 - **D7. Stray anchors.** _Proposed:_ reported only. A quick fix that moves a stray anchor to the next heading is left for later, because guessing the intended heading wrongly is worse than leaving the anchor.
 
+<a id="WORK-00173" data-uid="sezjiexlrj30"></a>
 ## 7. Risks
 
 | Risk | Impact | Mitigation |
@@ -250,6 +275,7 @@ Taken while planning; each is _Proposed_ and the work proceeds on it unless chan
 | An agent ignores the guide | Mangled anchors | The rules in §4.4 detect most damage; misplaced anchors (E6 in the analysis) stay undetectable |
 | Reading the data files again picks up a half-written file from Git | A damaged read | Damaged files are already tolerated and rebuilt; the next read, after the next change, recovers |
 
+<a id="WORK-00174" data-uid="zec3dr1loz18"></a>
 ## 8. Implementation Status
 
 All phases were carried out in October 2026. What differs from the plan, or was learned doing it:

@@ -1,5 +1,9 @@
+<a id="REF-00003" data-uid="b2j6fcpzpax2"></a>
+
+<a id="REF-00004" data-uid="h67ddhju91ui"></a>
 # References on Spec-Driven Development
 
+<a id="REF-00005" data-uid="o1snxnyvts85"></a>
 ## Web Sites
 
 * [AI Unified Process](https://unifiedprocess.ai/)
@@ -16,11 +20,13 @@
 * [Spec Kit Blog](https://github.blog/ai-and-ml/generative-ai/spec-driven-development-with-ai-get-started-with-a-new-open-source-toolkit/)
 * [Wikipedia](https://en.wikipedia.org/wiki/Specification-driven_development)
 
+<a id="REF-00006" data-uid="nmee5butza1l"></a>
 ## Books
 
 * [AI Unified Process](https://unifiedprocess.ai/publications.html)
 * [Spec Driven Development](https://leanpub.com/b/the3softwaredevelopmentpainsintheaiage#book-ai-era)
 
+<a id="REF-00007" data-uid="dus2k7f3jbj8"></a>
 ## Tools
 
 * [AI DLC](https://github.com/awslabs/aidlc-workflows)

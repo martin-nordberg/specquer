@@ -25,3 +25,6 @@ documents:
   rkxbb6vpvyi0: { path: documentation/work-items/step-003-section-uids/section-anchor-conflicts.md }
   n8w0w4eq2ka6: { path: documentation/work-items/step-004-hierarchical-summarization/implementation-plan.md }
   hopyomttch3i: { path: documentation/work-items/step-004-hierarchical-summarization/requirements.md }
+  ayb5s5zujrfq: { path: documentation/notes/agent-delegated-summaries.md }
+  hk5zithc6w2e: { path: documentation/work-items/step-005-summarization-changes/summary-design-changes.md }
+  og5be2z982hk: { path: documentation/work-items/step-005-summarization-changes/implementation-plan.md }

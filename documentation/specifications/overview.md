@@ -1,5 +1,9 @@
+<a id="SPEC-00057" data-uid="gnv4h0oi8xrd"></a>
+
+<a id="SPEC-00058" data-uid="lm9qeggt0uj9"></a>
 # Specquer Architecture — Overview
 
+<a id="SPEC-00059" data-uid="txeqm4i8rcgi"></a>
 ## Application Purpose
 
 * Specquer is a software development tool for viewing, reviewing, and summarizing software
@@ -12,6 +16,7 @@
         - specification of the intended overall state of a system, and
         - specification of incremental changes to the system - use cases/stories/tasks/units of work.
 
+<a id="SPEC-00060" data-uid="vag98ceqt5ej"></a>
 ## Users
 
 The following are expected user categories for Specquer:
@@ -21,6 +26,7 @@ The following are expected user categories for Specquer:
 * _Testers_ reviewing specs and creating test plans and test cases.
 * _Coding Agents_ that create or edit specs from user prompts from humans in the above categories.
 
+<a id="SPEC-00061" data-uid="jzz3ij6qofw5"></a>
 ## Architecture
 
 Specquer runs as a Bun web server launched from a local file system.

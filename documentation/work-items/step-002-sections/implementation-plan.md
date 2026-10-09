@@ -1,8 +1,12 @@
+<a id="WORK-00102" data-uid="edeyktmu17ex"></a>
+
+<a id="WORK-00103" data-uid="lv7ubatjld23"></a>
 # Step 002 - Implementation Plan
 
 _Plan for [Step 002 requirements](requirements.md): section anchors, section and document IDs,
 and links to sections. Drafted October 2026._
 
+<a id="WORK-00104" data-uid="nfdii2ppdyns"></a>
 ## 1. Summary
 
 Step 002 gives every section of a sectioned Markdown file a permanent ID. The server keeps two
@@ -18,6 +22,7 @@ the planned checks were already done while planning (§9). Section 6 lists the d
 while planning; they are marked _Proposed_ and the work proceeds on them unless changed. Section 7
 lists the few points that need the author's confirmation.
 
+<a id="WORK-00105" data-uid="crij6xggsqg9"></a>
 ## 2. Precedence and Conflicts
 
 Step 002 takes precedence over Step 001 and the specifications where they conflict:
@@ -30,6 +35,7 @@ Step 002 takes precedence over Step 001 and the specifications where they confli
 | Raw `<a id>` anchors | Rendered as invisible anchors by the preview | Section anchors are rendered as badges |
 | Preview links | `#id` and relative `.md` links | Also links to a section of another document, which open the document and scroll to the section |
 
+<a id="WORK-00106" data-uid="nxc7cmf8nabt"></a>
 ## 3. Starting Point
 
 - **Markdown:** `shared/src/markdown/` has front matter split and join and the preview pipeline (remark-parse, remark-gfm, remark-frontmatter, remark-rehype, rehype-raw, rehype-sanitize). The sanitizer prefixes `id` and `name` with `user-content-` and allows `data-*` on `<a>`, so `<a id="REQ-00001" data-document-id="…">` survives as `<a id="user-content-REQ-00001" data-document-id="…">`. There is no section tree yet (Step 001 decision D13).
@@ -37,8 +43,10 @@ Step 002 takes precedence over Step 001 and the specifications where they confli
 - **Client:** `DocumentStore` keeps the open file as front matter and body; `CodeEditor` replaces its whole document when its `value` changes from outside, which loses the cursor; the preview renders hast through `hast-util-to-jsx-runtime` with a component map.
 - **Repository:** `.specquer/shared/section-prefixes.config.yaml` exists, with keys for the folders of `documentation/` and no `"**/*"` key, and the Step 002 documents already contain hand-written `WORK-` anchors.
 
+<a id="WORK-00107" data-uid="an24fwbqkmq5"></a>
 ## 4. Proposed Design
 
+<a id="WORK-00108" data-uid="ic63ub0dvx10"></a>
 ### 4.1 Package Responsibilities
 
 | Package | New in Step 002 |
@@ -50,6 +58,7 @@ Step 002 takes precedence over Step 001 and the specifications where they confli
 The server owns ID allocation, so two browser tabs or a tab and the background scan can never hand
 out the same number.
 
+<a id="WORK-00109" data-uid="v2dz1wkuuowp"></a>
 ### 4.2 Recognizing Sections
 
 Sections are found in the body (the file without front matter, with `\n` line endings) from the
@@ -91,6 +100,7 @@ Formats: root `<a id="X" data-document-id="C"></a>` plus a blank line; ATX headi
 on the line before; setext heading `<a id="X"></a> ` at the start of its first line; list item
 `<a id="X"></a> ` before the content.
 
+<a id="WORK-00110" data-uid="pji1pkk4618m"></a>
 ### 4.3 Data Files
 
 `.specquer/shared/documents.yaml`:
@@ -118,6 +128,7 @@ sections:
 - `lastSequence` makes numbers permanent. A merge conflict on it is resolved by the server taking
   the highest value it can find (stored, in `sections.yaml`, in the documents).
 
+<a id="WORK-00111" data-uid="feb0ajn57214"></a>
 ### 4.4 Section Index and Reconciliation
 
 `SectionIndex` (server) holds, in memory: the configuration, the data files, and for each
@@ -147,6 +158,7 @@ sectioned document its path, document ID, sections and modification time.
   reported in the log and its key ignored. The YAML is read with the `yaml` package's document
   API so key order is kept even for keys that look like numbers.
 
+<a id="WORK-00112" data-uid="xub13nn43c30"></a>
 ### 4.5 Save, Create, Rename and Delete
 
 - **Save** (`PUT /api/file`): after the version check, if the file is sectioned the server splits
@@ -163,6 +175,7 @@ sectioned document its path, document ID, sections and modification time.
   the same steps as a save. Files changed on disk during the run are re-read, never overwritten
   blindly.
 
+<a id="WORK-00113" data-uid="w1x6numwsklq"></a>
 ### 4.6 API Additions
 
 | Route | Purpose |
@@ -174,6 +187,7 @@ sectioned document its path, document ID, sections and modification time.
 
 All are defined in `shared` like the existing routes, with Zod schemas.
 
+<a id="WORK-00114" data-uid="wk11ldljdwyr"></a>
 ### 4.7 Client
 
 - **Applying save edits.** `DocumentStore` keeps the body it sent. When a save returns edits, it
@@ -202,10 +216,12 @@ All are defined in `shared` like the existing routes, with Zod schemas.
   space for the root): a dialog shows the dry run's count and list of files, and the open file is
   saved first.
 
+<a id="WORK-00115" data-uid="gdeh5m5pdrhz"></a>
 ## 5. Phases
 
 Each phase lists its tasks and what "done" means. Tests are written within each phase.
 
+<a id="WORK-00116" data-uid="o3itjilojgay"></a>
 ### Phase 0 - Spikes
 
 1. **Badges in Milkdown** (D6). A Milkdown node view for inline `html` nodes that renders a
@@ -218,6 +234,7 @@ Each phase lists its tasks and what "done" means. Tests are written within each 
 3. **CUID2 in the release build.** `@paralleldrive/cuid2` (3.3.0) in the compiled executable.
    *Done when* `bun run build` produces an executable that generates IDs.
 
+<a id="WORK-00117" data-uid="veky53i6xpai"></a>
 ### Phase 1 - Section Domain (`shared`)
 
 - Section ID and prefix format, parse and format, with tests (`[A-Z][A-Z0-9]{1,4}`, five or more
@@ -229,6 +246,7 @@ Each phase lists its tasks and what "done" means. Tests are written within each 
 - *Done when* applying `anchorEdits` and finding sections again is stable (a second run produces
   no edits).
 
+<a id="WORK-00118" data-uid="j24eg0l1jmm8"></a>
 ### Phase 2 - Data Files and Index (`server`)
 
 - Configuration loading and glob matching (D2).
@@ -240,6 +258,7 @@ Each phase lists its tasks and what "done" means. Tests are written within each 
 - *Done when* the reconciliation tests pass and a scan of this repository's documents builds the
   index without writing any file.
 
+<a id="WORK-00119" data-uid="tcahbrn8ae9i"></a>
 ### Phase 3 - Server Integration and API
 
 - Save with anchor edits and the `edits` response; create with a root anchor; rename and delete
@@ -249,6 +268,7 @@ Each phase lists its tasks and what "done" means. Tests are written within each 
   renumbered on save), a file moved outside Specquer (path updated, IDs kept), deleting a folder,
   and the dry run.
 
+<a id="WORK-00120" data-uid="sf4tohq80uzb"></a>
 ### Phase 4 - Client: Saving and Badges
 
 - `DocumentStore` and `CodeEditor` changes from §4.7 (Phase 0 spike 2).
@@ -257,12 +277,14 @@ Each phase lists its tasks and what "done" means. Tests are written within each 
 - *Done when* component tests cover the badge and end-to-end tests show anchors appearing on save
   with the cursor in place, and badges in the preview and split views.
 
+<a id="WORK-00121" data-uid="iutxhry9i0ut"></a>
 ### Phase 5 - Links and Command
 
 - Completion source, section link navigation, the **Add section anchors…** menu item and dialog.
 - *Done when* end-to-end tests complete a link to a section of another document, follow it in the
   preview, and run the command on a folder.
 
+<a id="WORK-00122" data-uid="ge927xs5ff2e"></a>
 ### Phase 6 - Documentation
 
 - Link the requirements and this plan in the VitePress sidebar (done while planning).
@@ -272,6 +294,7 @@ Each phase lists its tasks and what "done" means. Tests are written within each 
   `yaml` on the server, the index).
 - Update `CLAUDE.md` for the new modules.
 
+<a id="WORK-00123" data-uid="m2na9z5qikyw"></a>
 ## 6. Decision Points
 
 Taken while planning; each is _Proposed_ and the work proceeds on it unless changed.
@@ -301,6 +324,7 @@ Taken while planning; each is _Proposed_ and the work proceeds on it unless chan
 - **D8. Titles in completion.** _Proposed:_ the heading text for heading sections, the first eight
   words of a list item, and the file name for a root section; kept in memory only.
 
+<a id="WORK-00124" data-uid="hlz3n4n3s2ui"></a>
 ## 7. Open Questions
 
 1. **Nested lists.** The answer "nested lists may NOT be treated as sections" is read as: items of
@@ -358,6 +382,7 @@ Taken while planning; each is _Proposed_ and the work proceeds on it unless chan
     updated. Should the requirements' Section Conflict Resolution state this rule?
     A: Yes, that is the desired behavior, newly enabled with the documentId idea.
 
+<a id="WORK-00125" data-uid="sqhks3lomssa"></a>
 ## 8. Risks
 
 | Risk | Impact | Mitigation |
@@ -370,8 +395,10 @@ Taken while planning; each is _Proposed_ and the work proceeds on it unless chan
 | Saving changes more than the user typed | Surprise diffs | Only anchors change, only in sectioned files; the command asks first; viewing and scanning never write |
 | A broad configuration (`"**/*"`) | Anchors in files that aren't specs | Question 2; no built-in default |
 
+<a id="WORK-00126" data-uid="cyp5bfa5peeq"></a>
 ## 9. Implementation Notes
 
+<a id="WORK-00127" data-uid="q1apjsy4zwax"></a>
 ### 9.1 Checked While Planning
 
 1. **Parsing anchors** (remark-parse with GFM, as in `shared`): an anchor line directly before an
@@ -392,6 +419,7 @@ Taken while planning; each is _Proposed_ and the work proceeds on it unless chan
    `@codemirror/lang-markdown` and becomes a direct dependency of `client`; `@codemirror/merge`
    is added for `diff`.
 
+<a id="WORK-00128" data-uid="n597oenk7n9m"></a>
 ## 10. Implementation Status
 
 All phases were carried out in October 2026. What differs from the plan, or was learned doing it:

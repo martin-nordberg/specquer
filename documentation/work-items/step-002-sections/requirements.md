@@ -1,8 +1,12 @@
+<a id="WORK-00129" data-uid="q3bm12jcb88o"></a>
+
+<a id="WORK-00130" data-uid="h9v0i5zbpprt"></a>
 # Sections
 
 _Step 002 requirements. The [implementation plan](implementation-plan.md) records the design and
 the decisions taken while planning._
 
+<a id="WORK-00131" data-uid="zws50w5id2uc"></a>
 ## Definitions
 
 **Section** - One of the following:
@@ -82,6 +86,7 @@ A **known prefix** is one that is a value in the prefix configuration or already
 `sections.yaml`. An ID with any other prefix is renumbered with the file's prefix (see Section
 Conflict Resolution).
 
+<a id="WORK-00132" data-uid="i8cfb9xs7s77"></a>
 ## Purpose of Sections
 
 The following functionality will be built upon sections as Specquer evolves:
@@ -93,6 +98,7 @@ The following functionality will be built upon sections as Specquer evolves:
 * Sections have attached metadata like status, priority, owner, etc.
 * Sections have a role when document change history is displayed in a granular way.
 
+<a id="WORK-00133" data-uid="mqsm0gi7xc25"></a>
 ## Functionality for This Work Item
 
 * Read and write the configuration and data files for documents and sections.
@@ -101,11 +107,13 @@ The following functionality will be built upon sections as Specquer evolves:
 * Out of scope, left for future work: section attributes, summarization, review comment threads,
   change history, a user interface for turning a list into sections, and SQLite.
 
+<a id="WORK-00134" data-uid="fb2l4dr9qzxm"></a>
 ## Configuration
 
 All of Specquer's shared files live in `.specquer/shared/`, which is committed to Git (unlike
 `.specquer/user/`).
 
+<a id="WORK-00135" data-uid="b8p6xqfzigob"></a>
 ### Prefixes
 
 `.specquer/shared/section-prefixes.config.yaml` says which files are sectioned and which prefix
@@ -135,6 +143,7 @@ New sections use the prefix for the file's current path. A file moved to a folde
 prefix keeps its existing section IDs, and its new sections get the new prefix, so one file can
 mix prefixes.
 
+<a id="WORK-00136" data-uid="o039fi98ojz0"></a>
 ## Document Data
 
 `.specquer/shared/documents.yaml` lists every sectioned document:
@@ -145,6 +154,7 @@ mix prefixes.
 The document ID is also stored in the file itself, in the root anchor's `data-document-id`
 attribute, so a document keeps its identity when it is moved or renamed outside Specquer.
 
+<a id="WORK-00137" data-uid="q2r228wstc3j"></a>
 ## Section Data
 
 For each prefix, `.specquer/shared/<prefix>/sections.yaml` holds:
@@ -161,8 +171,10 @@ in the file is taken to be the older one and wins.
 
 The server keeps an in-memory index of these files and of the sections found in the documents.
 
+<a id="WORK-00138" data-uid="l45ih2httjlv"></a>
 ## Section Anchor Insertion
 
+<a id="WORK-00139" data-uid="gsjookex8juv"></a>
 ### Timing
 
 Viewing a file never changes it. Specquer inserts and corrects section anchors:
@@ -185,6 +197,7 @@ holds the whole reconciled state, including fixes found by the background readin
 The editor shows the anchors inserted on save at once, without losing the cursor position or
 treating them as unsaved changes.
 
+<a id="WORK-00140" data-uid="blnnr1lv769c"></a>
 ### ID Generation
 
 For each new section the server takes the next sequence number for the prefix and generates a
@@ -201,6 +214,7 @@ be, unless it is already taken or its prefix isn't known; then it is renumbered.
 
 Insertion keeps each file's line endings and byte-order mark, as saving does.
 
+<a id="WORK-00141" data-uid="o3eja9lnnwua"></a>
 ### Document Conflict Resolution
 
 Whenever external changes are possible, Specquer resolves conflicts between the documents and
@@ -217,6 +231,7 @@ Whenever external changes are possible, Specquer resolves conflicts between the 
 * A document whose path no longer matches the prefix configuration (a key removed or changed): its
   entry and its sections' entries are removed. The anchors stay in the file, untouched.
 
+<a id="WORK-00142" data-uid="ccbhop2aqdjr"></a>
 ### Section Conflict Resolution
 
 * The same section ID used more than once in one document: the first occurrence keeps it, and
@@ -235,8 +250,10 @@ Fixes that change a document are made when it is next saved or when **Add sectio
 covers it. Until then the index records the duplicates. Fixes to the data files alone are written
 with the next change that writes them (see Timing).
 
+<a id="WORK-00143" data-uid="hgrd7l5k76nh"></a>
 ## User Interface Additions
 
+<a id="WORK-00144" data-uid="vrjtmkiayhie"></a>
 ### Badges
 
 * In the preview and split views, a badge appears at the start of each section heading, between
@@ -250,6 +267,7 @@ with the next change that writes them (see Timing).
   settled by a spike at the start of the work; if it can't, the WYSIWYG view is marked
   experimental and warns before editing a sectioned file.
 
+<a id="WORK-00145" data-uid="zqefp0kql1nd"></a>
 ### Links to Sections
 
 * In the text editor, typing `#` inside a Markdown link target offers completion of section IDs,
@@ -258,6 +276,7 @@ with the next change that writes them (see Timing).
 * Following a link to a section of another document in the preview opens that document and
   scrolls to the section.
 
+<a id="WORK-00146" data-uid="s1byb2urx4no"></a>
 ## Changes to Existing Functionality
 
 * When a file or folder is renamed, `documents.yaml` is updated with the new paths.
@@ -265,6 +284,7 @@ with the next change that writes them (see Timing).
   obsolete entries.
 * **New file** creates a sectioned file with its root anchor instead of empty.
 
+<a id="WORK-00147" data-uid="oab1zt796h1i"></a>
 ## Documentation Updates
 
 * Link this document and the implementation plan in the VitePress navigation.

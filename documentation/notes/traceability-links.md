@@ -1,3 +1,6 @@
+<a id="NOTE-00016" data-uid="dx2r7acuwbse"></a>
+
+<a id="NOTE-00017" data-uid="f1j0eq5r303m"></a>
 # Requirements Traceability Links Between Markdown Sections <a name="obj001" status="draft"></a>
 
 _Notes from October 2026._
@@ -6,6 +9,7 @@ _Notes from October 2026._
 
 Rendering behavior was checked against GitHub's documented rules, since GitHub is where people will most often read these files without Specquer.
 
+<a id="NOTE-00018" data-uid="t05fztl90k83"></a>
 ## The Choices <a name="obj002"></a>
 
 1. **How a target is marked:** how a section gets an invisible ID.
@@ -16,6 +20,7 @@ Rendering behavior was checked against GitHub's documented rules, since GitHub i
 6. **What attributes targets carry:** status, creation details and similar metadata.
 7. **Where attributes live:** inline in the Markdown, or in files under `.specquer`.
 
+<a id="NOTE-00019" data-uid="re9n5d0ncrls"></a>
 ### 1. Marking the Target (Invisible) <a name="obj003"></a>
 
 | Option | Example (in the heading line) | GitHub | Other renderers | Works as a real `#` anchor |
@@ -29,6 +34,7 @@ Rendering behavior was checked against GitHub's documented rules, since GitHub i
 - **Put the marker on the heading line itself.** A marker on the line before the heading would, by the specification's own section definition, belong to the *previous* section, and would get separated when sections are cut and pasted.
 - **Option A is the only one that is both invisible and a real anchor everywhere.** Option E needs no markup at all, but only works if Specquer keeps links up to date (see "Rewording" below).
 
+<a id="NOTE-00020" data-uid="qm8nq9b9o9jj"></a>
 ### 2. Writing the Link (Visible) <a name="obj004"></a>
 
 | Option | Example | Readable without Specquer | Survives file moves | Survives heading rewording |
@@ -44,6 +50,7 @@ Rendering behavior was checked against GitHub's documented rules, since GitHub i
 - **Option e breaks the "user-visible links" requirement.**
 - **Option b deserves a closer look.** The paths live in one block of definitions per file, so a file move means Specquer rewrites a few lines at the end, not links scattered through the prose. The body text stays clean, like `see [Password rules][r7k2]`.
 
+<a id="NOTE-00021" data-uid="ss68kgs7vlij"></a>
 ### 3. What IDs Look Like <a name="obj005"></a>
 
 | Style | Example | Pros | Cons |
@@ -56,6 +63,7 @@ Rendering behavior was checked against GitHub's documented rules, since GitHub i
 - **Short random IDs fit Specquer best.** Parallel work items and coding agents creating sections make collisions a real risk.
 - **Since the targets are invisible, Specquer can show each ID as a small badge with "copy link"** in its own UI. People can still cite `r7k2` in commits or tickets without the ID cluttering the Markdown.
 
+<a id="NOTE-00022" data-uid="ai5bdh8o0wg6"></a>
 ### 4. What Links Carry <a name="obj006"></a>
 
 - **A link type.** Traceability links usually have a type: *refines*, *implements*, *verifies*, *derives from*, *conflicts with*. In standard Markdown the cleanest place for it is the link's **title attribute**, which renders as a tooltip:
@@ -72,6 +80,7 @@ Rendering behavior was checked against GitHub's documented rules, since GitHub i
 
   OpenFastTrace does a lighter version in the Markdown itself: its IDs include a revision number (`req~name~1`), and links to an older revision are reported as outdated.
 
+<a id="NOTE-00023" data-uid="j40r264l6crq"></a>
 ### 5. Making IDs Optionally Visible <a name="obj013"></a>
 
 "Optionally visible" can mean two different things, and they need different mechanisms:
@@ -79,6 +88,7 @@ Rendering behavior was checked against GitHub's documented rules, since GitHub i
 - **A reader's display choice:** the Markdown is identical either way, and each reader chooses whether to see IDs.
 - **An author's choice:** the Markdown itself makes an ID visible, including in renderers Specquer doesn't control, such as GitHub.
 
+<a id="NOTE-00024" data-uid="qsawy4zn4aan"></a>
 #### Visibility as a Display Choice (No Change to the Markdown)
 
 - **In Specquer:** the renderer reads the marker and shows the ID however the reader prefers: hidden, a small badge beside the heading, or a badge only on hover. The badge offers "copy link" and "copy ID". The preference lives in `.specquer/uistate.yaml`, like the other UI state.
@@ -87,6 +97,7 @@ Rendering behavior was checked against GitHub's documented rules, since GitHub i
 
 This is the cleanest form of optional visibility, because nobody's choice changes the files or creates Git diffs.
 
+<a id="NOTE-00025" data-uid="me5b68s3bc7v"></a>
 #### Visibility as an Author's Choice (in the Markdown)
 
 | Technique | Example | Visible on GitHub | Drawbacks |
@@ -99,6 +110,7 @@ This is the cleanest form of optional visibility, because nobody's choice change
 - **Both the "text inside the anchor" techniques change the slug.** That matters only for links that use slugs; links that use the ID are unaffected. It is still a reason to prefer the empty anchor plus display-time visibility.
 - **Separating a stable key from a display label settles much of the "REQ-12" debate.** The random `name` is the key that links use and that never changes. An optional `data-label` holds a human-friendly ID, such as `REQ-12` or `AUTH-PWD-3`, which Specquer shows in badges and reports and which can be renumbered or regrouped without breaking any link. Labels are optional and only need to be unique where a team wants them to be.
 
+<a id="NOTE-00026" data-uid="tgqwvgagb9ky"></a>
 ### 6. Attributes on Targets <a name="obj014"></a>
 
 Once a target has a marker, the marker is a natural place for metadata about the section:
@@ -107,6 +119,7 @@ Once a target has a marker, the marker is a natural place for metadata about the
 ## Password rules <a name="r7k2" data-status="draft" data-created-at="2026-10-06T12:00-04:00" data-created-by="MN"></a>
 ```
 
+<a id="NOTE-00027" data-uid="wsr292d90cy7"></a>
 #### Syntax
 
 - **Use `data-` names.** Attributes such as `status` or `created-at` are not valid HTML on an `<a>` element, and could clash with real attributes added later. `data-status`, `data-created-at` and so on are valid, and are kept by VitePress (checked) and by Specquer's own renderer.
@@ -114,6 +127,7 @@ Once a target has a marker, the marker is a natural place for metadata about the
 - **Pick one naming style.** Hyphens (`data-created-at`, `data-created-by`) are the HTML convention; mixing them with underscores (`created_by`) invites mistakes. Specquer can check attribute names against a list in its configuration.
 - **Include a time zone in timestamps.** `2026-10-06T12:00` is ambiguous across a distributed team. Use an offset or UTC: `2026-10-06T12:00-04:00` or `2026-10-06T16:00Z`.
 
+<a id="NOTE-00028" data-uid="jquzloy61m6g"></a>
 #### Which Attributes Belong in the Markdown
 
 | Attribute | Fit | Reasoning |
@@ -127,6 +141,7 @@ Once a target has a marker, the marker is a natural place for metadata about the
 
 A useful rule: **put in the Markdown what people decide; derive from Git or the database what tools can work out.**
 
+<a id="NOTE-00029" data-uid="f2urjt309439"></a>
 #### Behaviors Specquer Would Add
 
 - **Inheritance.** A `data-status` on a document's top heading (as on this note's title) could apply to every section below it unless a section sets its own. The rule needs to be explicit, and the UI should show whether a value is set or inherited.
@@ -134,16 +149,19 @@ A useful rule: **put in the Markdown what people decide; derive from Git or the 
 - **Filters and reports.** For example: show only draft sections, list approved requirements that have suspect links, or show sections by owner.
 - **Display.** The status can change how a section looks, such as a "Draft" badge or a muted style, in the same way IDs are shown on request.
 
+<a id="NOTE-00030" data-uid="u1b9hg0oesv0"></a>
 #### Risks
 
 - **Long heading lines.** Several attributes make headings hard to read in the plain text view. Specquer's CodeMirror view could fold the marker to a small placeholder; other editors will show it in full.
 - **WYSIWYG editing.** Milkdown has to preserve unknown inline HTML in headings exactly (see open question 11 of the Ideas specification). If it drops or rewrites the marker, IDs and attributes are lost silently.
 - **Moving attributes out later.** If the attributes become too heavy, they can move out of the Markdown into files keyed by ID, leaving only `<a name>` in the Markdown. Keeping the key separate from the attributes keeps that option open. Decision 7 compares the two placements.
 
+<a id="NOTE-00031" data-uid="d2txvbddk5v8"></a>
 ### 7. Where Attributes Live: Inline or in `.specquer` <a name="obj015"></a>
 
 Attributes can be stored **inline**, as `data-*` attributes on the marker, or **externally**, in files under `.specquer` keyed by the target ID. Only the ID has to stay in the Markdown either way.
 
+<a id="NOTE-00032" data-uid="pexqbs0c1a1t"></a>
 #### External Storage Must Be Committed Text
 
 Status and similar attributes are shared decisions, so they must travel with the repository. That rules out two external places:
@@ -163,6 +181,7 @@ There are three ways to lay out those files:
 
 If attributes are stored externally, **one file per target** is the best layout. The number of files is large but harmless, and the files never need to move.
 
+<a id="NOTE-00033" data-uid="pcymzg2h898c"></a>
 #### Inline vs External, Criterion by Criterion
 
 | Criterion | Inline (`data-*` on the marker) | External (`.specquer/shared/targets/<id>.yaml`) |
@@ -180,6 +199,7 @@ If attributes are stored externally, **one file per target** is the best layout.
 | Large or structured data (review history, approvals, comments, rationale) | **Poor:** heading lines can't hold it | **Good:** YAML handles lists, nested records and long text |
 | Querying inside Specquer | Same either way: Specquer indexes both into its SQLite cache | Same |
 
+<a id="NOTE-00034" data-uid="s6lgjzyldwg9"></a>
 #### The Deciding Question: Who Writes It, and How Often?
 
 The criteria sort attributes by who writes them, how often they change, and how large they are:
@@ -192,6 +212,7 @@ The criteria sort attributes by who writes them, how often they change, and how 
 
 This hybrid keeps headings short (usually just an ID and a status) while keeping heavy and tool-owned data out of the Markdown and away from editors that might damage it.
 
+<a id="NOTE-00035" data-uid="zh4noi4gs0mg"></a>
 #### Costs of the Hybrid
 
 - **Two places to look.** Specquer's UI hides the split by showing all attributes of a target together, but people outside Specquer need to know the rule.
@@ -199,6 +220,7 @@ This hybrid keeps headings short (usually just an ID and a status) while keeping
 - **Committing both together.** Specquer must write both files on save and warn when a commit includes one but not the other. A Git pre-commit check can enforce it.
 - **Cleanup only from the default branch.** External records whose target no longer exists are removed only when the target is missing on the main branch, not just in the working copy, and only after confirmation.
 
+<a id="NOTE-00036" data-uid="eqjvuv3ad71f"></a>
 ## Problems the Design Must Handle <a name="obj007"></a>
 
 - **Copy and paste duplicates IDs.** Copying a section copies its marker. Specquer has to detect duplicate IDs and assign a fresh one to the copy. The **identity algorithm** decides which section is the original.
@@ -207,6 +229,7 @@ This hybrid keeps headings short (usually just an ID and a status) while keeping
 - **Requirements smaller than a section.** Specs often state requirements as list items ("- The system shall …"), not headings. Option A works on a list item too: `- <a name="q8m1"></a>The system shall…`. It has to be decided whether only sections can be targets, or list items as well.
 - **Moving between files.** With options a and b, a target moving to another file breaks the path even though the ID is unchanged. Specquer can fix it because it finds IDs by searching, not by path. Links are then rewritten on save, or reported as broken.
 
+<a id="NOTE-00037" data-uid="ikhtvpewojcg"></a>
 ## Checks and Reports (the "Auditing" Part of the Scope) <a name="obj008"></a>
 
 Once targets have IDs and links have types, Specquer can produce traceability reports:
@@ -219,11 +242,13 @@ Once targets have IDs and links have types, Specquer can produce traceability re
 
 Testers are one of the listed user groups, and this is the view they would use.
 
+<a id="NOTE-00038" data-uid="khoe9iolaq9d"></a>
 ## Existing Tools Worth Studying <a name="obj009"></a>
 
 - **[OpenFastTrace](https://github.com/itsallcode/openfasttrace):** Markdown requirements, with an ID in backticks directly under the heading (`` `req~ai.example~1` ``) and keywords like "Needs: impl". Code links back to requirements with comments such as `// [impl->req~ai.example~1]`. The IDs include revision numbers to flag outdated links. ([An example in practice, from JabRef](https://devdocs.jabref.org/requirements).)
 - **Doorstop, StrictDoc and Sphinx-needs:** requirement items stored in Git with fixed IDs and typed links. They are useful for checking which link types and reports matter, though their formats aren't plain Markdown.
 
+<a id="NOTE-00039" data-uid="cpcf1bvmvosx"></a>
 ## Recommended Combination (a Starting Point for Debate) <a name="obj010"></a>
 
 1. **Target:** an empty HTML anchor on the heading line, `## Password rules <a name="r7k2"></a>`. Invisible everywhere and a real anchor everywhere.
@@ -242,6 +267,7 @@ Testers are one of the listed user groups, and this is the view they would use.
 6. **Database:** computed back-links, suspect-link tracking by content hash, and checks for duplicate and broken IDs.
 7. **Fallback:** where Specquer *can't* rewrite the Markdown, the identity algorithm finds the target that moved or was reworded and offers a fix.
 
+<a id="NOTE-00040" data-uid="cwh8osph0jgr"></a>
 ## Points Still to Debate <a name="obj011"></a>
 
 - **Invisible or visible IDs.** In regulated fields, visible IDs like "REQ-12" are part of how people talk ("does this cover REQ-12?"). Is a badge in Specquer's UI enough, or should IDs be visible in the Markdown?
@@ -255,6 +281,7 @@ Testers are one of the listed user groups, and this is the view they would use.
 - **Inline, external or both.** Is the hybrid's rule (people's decisions inline, tool records external) worth having two places to look? Or should everything go to one place: all inline for simplicity and context, or all external for clean Markdown and safety from editors?
 - **Committed `.specquer` content.** External attributes require a committed part of `.specquer`. Is that acceptable, and how is its consistency with the Markdown enforced (Specquer warnings, a pre-commit check)?
 
+<a id="NOTE-00041" data-uid="vymxedhjbo3d"></a>
 ## Sources <a name="obj012"></a>
 
 - [GitHub: Basic writing and formatting syntax (section links, custom anchors, HTML comments)](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax)

@@ -1,7 +1,11 @@
+<a id="SPEC-00073" data-uid="dtnurz41yejv"></a>
+
+<a id="SPEC-00074" data-uid="unvuw5mk0cjh"></a>
 # Specquer Server Requirements
 
 Requirements for the back end (`server/`). They come from [Step 001](/work-items/step-001-doc-editing/requirements) and its [implementation plan](/work-items/step-001-doc-editing/implementation-plan), and [Step 002](/work-items/step-002-sections/requirements) (sections). Security is specified separately in [Security](security.md).
 
+<a id="SPEC-00075" data-uid="sb2taf3fhmvs"></a>
 ## 1. Command Line
 
 ```
@@ -13,6 +17,7 @@ specquer [root] [--port <n>] [--no-open]
 3. **`--no-open`**: don't open a browser. For a future desktop shell or a coding agent, which read the URL from the output instead.
 4. Arguments are parsed with `parseArgs` from `node:util`. Unknown options or more than one root are errors.
 
+<a id="SPEC-00076" data-uid="h9hdfvo6dcom"></a>
 ## 2. Launch
 
 1. The server listens on `127.0.0.1` only.
@@ -21,6 +26,7 @@ specquer [root] [--port <n>] [--no-open]
 4. Under `bun --hot` (development) the token is kept and the browser is opened at most once per process.
 5. The development command (`bun run dev`) serves the repository itself on port 3000.
 
+<a id="SPEC-00077" data-uid="i1pnvwdznkri"></a>
 ## 3. File Tree
 
 `GET /api/tree` returns the folders and Markdown files under the root.
@@ -33,6 +39,7 @@ specquer [root] [--port <n>] [--no-open]
 6. Folders come before files; names sort naturally, ignoring case.
 7. Each tree load also starts a background scan of the sectioned files (§7), which writes nothing.
 
+<a id="SPEC-00078" data-uid="lp2g1616i6v2"></a>
 ## 4. Files
 
 | Route | Behavior |
@@ -52,6 +59,7 @@ specquer [root] [--port <n>] [--no-open]
 6. "Not committed" means new, modified, deleted or ignored according to `git status --porcelain --untracked-files=all --ignored=matching`.
 7. Errors are JSON: `{ error, message }`.
 
+<a id="SPEC-00079" data-uid="zoiamab59gay"></a>
 ## 5. UI State
 
 | Route | Behavior |
@@ -68,6 +76,7 @@ specquer [root] [--port <n>] [--no-open]
 
 The model is specified in [Data Architecture](data-architecture.md) §3.
 
+<a id="SPEC-00080" data-uid="eift7pjses41"></a>
 ## 6. Sections
 
 | Route | Behavior |
@@ -78,6 +87,7 @@ The model is specified in [Data Architecture](data-architecture.md) §3.
 | `GET /api/sections/problems?folder=` | The problems in a folder's sectioned files: duplicate and colliding IDs waiting for the user, stray anchors, and files with merge conflict markers. |
 | `POST /api/sections/renumber` | Body `{ path, id, uid, baseVersion }`. Gives one occurrence of a duplicate or colliding ID a new number, rewriting the file as a save would. `409` if the file is no longer at `baseVersion`. Returns the new version, the `edits` (relative to the body on disk) and `notices`. |
 
+<a id="SPEC-00081" data-uid="y8x093ygagyo"></a>
 ## 7. Section Anchors and Data Files
 
 1. Which files are sectioned, and the prefix for their new sections, comes from `.specquer/shared/section-prefixes.config.yaml`; without it no file is sectioned.
@@ -91,6 +101,7 @@ The model is specified in [Data Architecture](data-architecture.md) §3.
 
 The model, recognition rules, data files and conflict rules are specified in [Data Architecture](data-architecture.md) §2.
 
+<a id="SPEC-00082" data-uid="p3j1jhs04fnl"></a>
 ## 8. Summaries
 
 | Route | Behavior |
@@ -108,6 +119,7 @@ The model, recognition rules, data files and conflict rules are specified in [Da
 
 The rules for summaries are specified in [Data Architecture](data-architecture.md) §4.
 
+<a id="SPEC-00083" data-uid="xukyl7a3b43e"></a>
 ## 9. Other Routes
 
 | Route | Behavior |

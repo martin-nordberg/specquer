@@ -1,6 +1,10 @@
+<a id="IDEA-00001" data-uid="aciqejdm8xn2"></a>
 
+
+<a id="IDEA-00002" data-uid="rqtm5qgydqa2"></a>
 # Ideas
 
+<a id="IDEA-00003" data-uid="x95pbejz3peq"></a>
 ## Purpose
 
 * Specquer is a software development tool for viewing, reviewing, and summarizing software
@@ -13,6 +17,7 @@
     - specification of the intended overall state of a system, and
     - specification of incremental changes to the system - use cases/stories/tasks/units of work.
 
+<a id="IDEA-00004" data-uid="w8pdiuom7x1d"></a>
 ## Scope
 
 **In Scope**: Everything around creating, editing, evolving, reviewing, navigating, linking, and 
@@ -20,6 +25,7 @@ auditing specification documents and their history.
 
 **Out of Scope**: Code generation from those specs. (Specquer works side by side with coding agents)
 
+<a id="IDEA-00005" data-uid="tzodpxnyjutd"></a>
 ## Users
 
 The following are expected user categories for Specquer:
@@ -29,6 +35,7 @@ The following are expected user categories for Specquer:
 * _Testers_ reviewing specs and creating test plans and test cases.
 * _Coding Agents_ that create or edit specs from user prompts from humans in the above categories.
 
+<a id="IDEA-00006" data-uid="qiwxt4uu9v63"></a>
 ## Execution Context
 
 * Specquer focuses on a collection of Markdown files kept in a folder structure in Git.
@@ -42,11 +49,13 @@ The following are expected user categories for Specquer:
   - TBD configuration settings
   - The cached Markdown database of spec document nodes, sections, interrelations, etc.
 
+<a id="IDEA-00007" data-uid="qkvqir9w2z0f"></a>
 ## Markdown Documentation Viewer
 
 The primary view of Specquer consists of a typical split pane with folder structure on the left 
 and a selected file open on the right.
 
+<a id="IDEA-00008" data-uid="pw2zirkspgbc"></a>
 ### Left Pane
 
 * The left pane shows a typical tree view of folders and files.
@@ -58,6 +67,7 @@ and a selected file open on the right.
 * Individual folders can be expanded or collapsed; their collapse state is remembered in folder 
   .specquer/uistate.yaml.
 
+<a id="IDEA-00009" data-uid="s87a72i1ly7z"></a>
 ### Right Pane
 
 * The right pane document view can be switched between four view type options:
@@ -74,6 +84,7 @@ and a selected file open on the right.
 * Browser back and forward navigation covers changes to the focused/editable file.
 * Changes to the right pane view type also show up in the browser history.
 
+<a id="IDEA-00010" data-uid="e4oszwudsl9n"></a>
 ## Automated Summarization
 
 * In the styled preview pane, each section in the heading hierarchy can be summarized with AI.
@@ -102,6 +113,7 @@ and a selected file open on the right.
   whenever the corresponding summarized content changes. The preview functionality makes use of cached
   summaries.
 
+<a id="IDEA-00011" data-uid="yn8vsw8mjv3v"></a>
 ## Dual View of Specifications
 
 * Spec files managed through Specquer can have arbitrary names and folder structure except as
@@ -112,6 +124,7 @@ and a selected file open on the right.
   Specquer's AI agent is responsible (when requested) for updating the non-work item specifications 
   to incorporate the changes from the work item across the system specification as a whole.
 
+<a id="IDEA-00012" data-uid="wqammihb66id"></a>
 ## Markdown Database
 
 * Specquer keeps a local database that caches the information Specquer generates about the spec
@@ -129,8 +142,10 @@ and a selected file open on the right.
 
 ---
 
+<a id="IDEA-00013" data-uid="w8z2iz9w4ous"></a>
 ## Open Questions
 
+<a id="IDEA-00014" data-uid="l3rmexzob433"></a>
 ### Overall
 
 1. **First version.** The fragment-identity database and work-item synchronization are by far the hardest parts. Could a first version deliver the viewer, editing and summaries with simple content-hash caching, and add fragment identity, traceability and work-item synchronization later?
@@ -138,6 +153,7 @@ and a selected file open on the right.
 3. **Coding agents as users.** How do coding agents work with Specquer: by editing the Markdown files directly while Specquer reacts to the changes, or through an interface Specquer provides (such as an HTTP API, a CLI or an MCP server)? Can agents use summaries and traceability links too?
 4. **Requirements traceability.** Is section identity written into the Markdown or inferred by Specquer? Traceability links target sections, and ordinary links to heading anchors break when a heading is reworded. An explicit ID in the Markdown, such as an HTML comment after the heading (`<!-- id: REQ-12 -->`) or an ID in the heading text (`### REQ-12 Password rules`), is stable and travels with every clone, but is visible in the files and must be maintained. IDs kept only in the database leave the files clean, but are only as reliable as the fragment-identity algorithm, and travel with the repository only if `.specquer` is committed (see question 7).
 
+<a id="IDEA-00015" data-uid="mhrh17u1tr2g"></a>
 ### Execution Context
 
 5. **Root folder and Git.** Must the working directory be the root of a Git repository, or can it be a subfolder of one? What happens if it is not in a Git repository at all?
@@ -145,6 +161,7 @@ and a selected file open on the right.
 7. **Is `.specquer` committed?** Is `.specquer` committed and shared with the team, or ignored by Git? It mixes per-user state (`uistate.yaml`) with a cache that could be shared. If the cache is never committed, fragment identity and traceability links must be rebuildable deterministically from Git history. Should the per-user and shared parts be separated, with Specquer adding the right `../../.gitignore` entries?
 8. **Network exposure.** The browser UI can write files in the working directory. Does the server listen only on `localhost`? Can several Specquer instances run at once (in different repositories) on different ports?
 
+<a id="IDEA-00016" data-uid="did9q1uhmslw"></a>
 ### Markdown Documentation Viewer
 
 9. **Folder pane filtering.** Besides showing only `.md` files, does the folder pane respect `../../.gitignore`, and hide `.specquer`, `node_modules` and folders with no Markdown files?
@@ -156,6 +173,7 @@ and a selected file open on the right.
 15. **Split-view synchronization.** Should the split view keep the preview scrolled to the part being edited? Synchronized scrolling needs a map from rendered elements back to source positions. Remark's syntax tree has positions, but react-markdown hides most of them. Is synchronization per section good enough?
 16. **Links, images and search.** Do relative links between documents open them in Specquer, and do heading anchors scroll to the section? Are images shown? Is there search, across files or by section?
 
+<a id="IDEA-00017" data-uid="sssjqq2t0b8k"></a>
 ### Automated Summarization
 
 17. **Which views show summaries?** Do summaries and collapsing appear only in the read-only styled view, or also in the split view's preview and the WYSIWYG view? If the WYSIWYG view can be collapsed, can summarized sections be edited?
@@ -168,6 +186,7 @@ and a selected file open on the right.
 24. **Trust signals.** Should summaries be marked as AI-generated, show when they are stale, and offer a one-click way to see the source text?
 25. **Section collapse state.** Is section collapse state stored in `.specquer/uistate.yaml` like folder collapse state, per document? Does it appear in browser history?
 
+<a id="IDEA-00018" data-uid="hollde1p9tu9"></a>
 ### Dual View of Specifications
 
 26. **Work item structure.** Is the `work-items` folder name fixed or configurable? Can work items be nested, or grouped (for example by release)? Does a work item have a required file or structure, such as a main spec file?
@@ -177,6 +196,7 @@ and a selected file open on the right.
 30. **Changes in the other direction.** If the system specification is edited directly (not through a work item), does anything flow back to open work items, or flag them as out of date?
 31. **Traceability between the views.** After incorporation, are work-item sections linked to the system sections they changed, so that a reviewer can see why a requirement exists and which work item introduced it?
 
+<a id="IDEA-00019" data-uid="ni0fy2qapi53"></a>
 ### Markdown Database
 
 32. **Uncommitted changes and branches.** Identity is preserved from one Git commit to the next, but autosave edits the working tree between commits. Do summaries, links and identity apply to uncommitted content? How are branches handled, given that a fragment can have different histories on different branches?

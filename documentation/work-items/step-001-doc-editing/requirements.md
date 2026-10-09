@@ -1,5 +1,9 @@
+<a id="WORK-00084" data-uid="khm5xtgxdc0q"></a>
+
+<a id="WORK-00085" data-uid="dxnesm5xz7nt"></a>
 # Specquer Development - Step 001 - Simple Markdown file editor/browser
 
+<a id="WORK-00086" data-uid="sjvx3gkkxsu8"></a>
 ## Execution Context
 
 * Specquer focuses on a collection of Markdown files kept in a folder structure in Git.
@@ -21,11 +25,13 @@
 * When Specquer creates folder .specquer/user, it also creates .specquer/user/.gitignore containing
   `*`, so that per-user state is never committed to Git. An existing .gitignore there is left unchanged.
 
+<a id="WORK-00087" data-uid="uhr6f2ece8v6"></a>
 ## Markdown Documentation Viewer
 
 The primary (and so far only) view of Specquer consists of a typical split pane with folder structure on the left
 and a selected file open on the right.
 
+<a id="WORK-00088" data-uid="sn2pgvl4ckmg"></a>
 ### Left Pane
 
 * The left pane shows a typical tree view of folders and files.
@@ -51,6 +57,7 @@ and a selected file open on the right.
   doesn't show, and warns about files that aren't committed to Git.
 * Single clicking a file opens it in the right pane (below)
 
+<a id="WORK-00089" data-uid="q7y2r1n3qr4u"></a>
 ### Right Pane
 
 * The right pane is split vertically into three components, stacked top to bottom:
@@ -58,6 +65,7 @@ and a selected file open on the right.
   - Frontmatter
   - Markdown Content
 
+<a id="WORK-00090" data-uid="odc9b2wi7n1a"></a>
 #### File Path
 
 * The file path is shown starting from the root folder.
@@ -73,6 +81,7 @@ and a selected file open on the right.
   expanded folders, per-file settings); deleting one removes them.
 * The path is built with a shadcn breadcrumb component.
 
+<a id="WORK-00091" data-uid="peqos2oizeti"></a>
 #### Frontmatter
 
 * The YAML frontmatter for the file is edited in its own distinct text area.
@@ -87,6 +96,7 @@ and a selected file open on the right.
   to the file; clearing the editor removes the block.
 * Frontmatter is not validated against any schema. Invalid YAML is kept and saved as typed.
 
+<a id="WORK-00092" data-uid="htcrocv2m8b8"></a>
 #### Markdown Content
 
 * The right pane Markdown content view can be switched between four view type options:
@@ -111,8 +121,10 @@ and a selected file open on the right.
 * If the file changed on disk since it was opened (for example by a coding agent), saving doesn't
   overwrite it. A dialog offers to reload the file from disk or to keep the user's version.
 
+<a id="WORK-00093" data-uid="si5tiyv4s907"></a>
 ## Front End
 
+<a id="WORK-00094" data-uid="ndjn3z33ia86"></a>
 ### Technologies
 
 The following front end technologies are used:
@@ -127,6 +139,7 @@ The following front end technologies are used:
 * Milkdown 
 * yaml (front matter validation in the browser)
 
+<a id="WORK-00095" data-uid="s2igihugi3ik"></a>
 ### Theme
 
 The following CSS colors predominate for normal components of the application:
@@ -154,14 +167,17 @@ The application has light mode and dark mode user-switchable.
 * Text colors on colored backgrounds are chosen automatically for contrast (at least 4.5:1, WCAG AA).
 
 
+<a id="WORK-00096" data-uid="w8iujhaoncgp"></a>
 ## Back End
 
+<a id="WORK-00097" data-uid="v6on0rc1na8t"></a>
 ### Technologies
 
 * Bun
 * Hono
 * Bun.YAML
 
+<a id="WORK-00098" data-uid="kykekvicqjiy"></a>
 ### Security
 
 Harden the localhost server, since it can edit files: 
@@ -173,6 +189,7 @@ Harden the localhost server, since it can edit files:
 Markdown files are untrusted input. Raw HTML in them is rendered in the preview only after
 sanitizing (rehype-sanitize with a strict list of allowed tags and attributes).
 
+<a id="WORK-00099" data-uid="kwmrexty77w3"></a>
 ## Shared
 
 * Make it easy to add a shell later. The UI should rely only on HTTP to its own server (no browser-only
@@ -184,6 +201,7 @@ sanitizing (rehype-sanitize with a strict list of allowed tags and attributes).
   Note that this refers to the Markdown content, not the server only details of reading and writing files.
 * Use a shared domain model for user UI state since it is read by the client and written by the server.
 
+<a id="WORK-00100" data-uid="g74ia13xnrhr"></a>
 ## Testing
 
 * Tests are written in three layers:
@@ -196,6 +214,7 @@ sanitizing (rehype-sanitize with a strict list of allowed tags and attributes).
 * End-to-end tests run against Chrome, and also against WebKit, the engine a future desktop
   shell would use on macOS and Linux.
 
+<a id="WORK-00101" data-uid="sa7ls5qy43ri"></a>
 ## Changes to system documentation
 
 * Update technical-architecture.md to cover the technologies mentioned here.

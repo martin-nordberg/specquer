@@ -1,5 +1,9 @@
+<a id="REF-00008" data-uid="c50dtk0gu7qt"></a>
+
+<a id="REF-00009" data-uid="kbwrn5lx5sc9"></a>
 # References For Specquer Technologies
 
+<a id="REF-00010" data-uid="ekt58xgy6kci"></a>
 # Technology Home Pages
 * [Bun](https://bun.com/docs)
 * [CodeMirror](https://codemirror.net/)
@@ -14,5 +18,6 @@
 * [VitePress](https://vitepress.dev/)
 * [Zod](https://zod.dev/)
 
+<a id="REF-00011" data-uid="qiof107l299k"></a>
 # Useful Technology-Specific Links
 * [Remark AST Viewer](https://astexplorer.net/)

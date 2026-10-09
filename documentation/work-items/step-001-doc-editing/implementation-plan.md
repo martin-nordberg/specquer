@@ -1,13 +1,18 @@
+<a id="WORK-00054" data-uid="m25jr3fkti2j"></a>
+
+<a id="WORK-00055" data-uid="k8icnnvddv0b"></a>
 # Step 001 - Implementation Plan
 
 _Plan for [Step 001 requirements](requirements.md): a simple Markdown file editor and browser. Drafted October 2026._
 
+<a id="WORK-00056" data-uid="rsviy1de0n28"></a>
 ## 1. Summary
 
 Step 001 turns the empty scaffolding into a working local tool: a Bun server, launched in a folder, serving a React UI with a file tree, file and folder rename and delete, a path breadcrumb with recent files, a front matter editor and four Markdown views (CodeMirror, split, preview, Milkdown), with autosave and UI state persisted in `.specquer/user/uistate.yaml`. It also hardens the localhost server, sets up the shared Markdown and UI-state domains, adds unit and browser tests, and adds seven specification documents.
 
 The work is split into seven phases. Phase 0 is a set of short spikes to settle the riskiest technical questions before the main build. Sections 6 and 7 record the decisions and the answers to the open questions; all of them are settled, and the requirements have been updated to match.
 
+<a id="WORK-00057" data-uid="wt2nj65wzffm"></a>
 ## 2. Precedence and Conflicts
 
 Step 001 takes precedence over earlier documents where they conflict. Known conflicts:
@@ -23,6 +28,7 @@ Step 001 takes precedence over earlier documents where they conflict. Known conf
 | Role of `shared` | API contract only ([technical architecture](/specifications/technical-architecture) §3–4) | Also the Markdown domain and the UI-state domain |
 | Back-end routing | "Hono … replaces `Bun.serve()` routing" (technical architecture §5) | The code uses `Bun.serve()` for the client route and Hono for everything else; §5 needs correcting (Phase 6) |
 
+<a id="WORK-00058" data-uid="hvk6x6u171pg"></a>
 ## 3. Starting Point
 
 - `server/src/index.ts`: `Bun.serve()` on port 3000, serving `client/index.html` at `/` and passing everything else to an empty Hono app. No security measures yet.
@@ -31,8 +37,10 @@ Step 001 takes precedence over earlier documents where they conflict. Known conf
 - `agent/`: LangChain placeholder. **Not used in Step 001.**
 - No tests, no `bunfig.toml`, no `.specquer` handling.
 
+<a id="WORK-00059" data-uid="w67i0qjtm3id"></a>
 ## 4. Proposed Design
 
+<a id="WORK-00060" data-uid="jqeruz4icsrf"></a>
 ### 4.1 Package Responsibilities
 
 | Package | New in Step 001 |
@@ -43,6 +51,7 @@ Step 001 takes precedence over earlier documents where they conflict. Known conf
 
 `shared` must stay runnable in both the browser and Bun, so it cannot use `Bun.*` APIs. YAML parsing needed on the client side (for example to warn about invalid front matter) therefore needs a portable YAML library (see D6).
 
+<a id="WORK-00061" data-uid="upoq4jihump5"></a>
 ### 4.2 API Sketch (all under `/api`, defined in `shared`)
 
 | Route | Purpose |
@@ -56,6 +65,7 @@ Step 001 takes precedence over earlier documents where they conflict. Known conf
 
 The server deals in whole file text. Splitting into front matter and body happens in `shared` on the client, so the exact bytes of the file (line endings, trailing newline) are preserved on save.
 
+<a id="WORK-00062" data-uid="fyilugaasbuh"></a>
 ### 4.3 UI-State Model (Sketch)
 
 ```ts
@@ -78,6 +88,7 @@ Paths are relative to the root, using `/`. Renaming a file or folder in Specquer
 
 Per-user state must never be committed. When Specquer first creates `.specquer/user/`, it also writes `.specquer/user/.gitignore` containing a single `*`, which makes Git ignore everything in that folder, including the `.gitignore` itself. Specquer never overwrites an existing `.gitignore` there and never changes the repository's own `.gitignore` files. Files already committed under `.specquer/user/` stay tracked until someone removes them from Git; Specquer can warn about that but doesn't fix it.
 
+<a id="WORK-00063" data-uid="oy6kwy5tkynm"></a>
 ### 4.4 Security Design
 
 - **Listen only on the loopback interface** (`hostname: "127.0.0.1"`) and launch with an `http://127.0.0.1:<port>/` URL, which avoids `localhost` resolving to IPv6 first.
@@ -89,6 +100,7 @@ Per-user state must never be committed. When Specquer first creates `.specquer/u
 
 These rules go into the new `specifications/security.md`.
 
+<a id="WORK-00064" data-uid="ynt5dxkfxrv7"></a>
 ### 4.5 Command Line and Launch
 
 Decided in answer to Q1:
@@ -105,6 +117,7 @@ specquer [root] [--port <n>] [--no-open]
 - **Parsing** uses `parseArgs` from `node:util`, which Bun supports, so no argument-parsing dependency is needed.
 - **Security note.** Passing the token-bearing URL to the opener command makes it briefly visible in the operating system's process list to other local users. This is acceptable for a single-user workstation tool and is recorded in `security.md`.
 
+<a id="WORK-00065" data-uid="jlajttf19yih"></a>
 ### 4.6 Theme and Colors
 
 The requirements give each color a purpose (Q10). All colors live in **one** TypeScript module, `client/src/theme/palette.ts`, which produces CSS custom properties for both modes; Tailwind and shadcn read only those properties.
@@ -142,10 +155,12 @@ The requirements give each color a purpose (Q10). All colors live in **one** Typ
 
 The values above were computed while planning; the module recomputes them, so changing a light-mode color updates everything else. The light/dark choice follows the browser's `prefers-color-scheme` until the user picks one, which is then saved in `uistate.yaml` (Q11).
 
+<a id="WORK-00066" data-uid="l1m44psyd4t0"></a>
 ## 5. Phases
 
 Each phase lists its tasks and what "done" means. Tests are written within each phase, not left to the end.
 
+<a id="WORK-00067" data-uid="jyu98j5v71j6"></a>
 ### Phase 0 - Spikes (settle risks first)
 
 Short, throwaway experiments, each ending with a recorded decision:
@@ -156,6 +171,7 @@ Short, throwaway experiments, each ending with a recorded decision:
 4. **Browser tests under Bun.** _Done while planning; see D7._ All three candidates passed the same test (clicks and typing into a `contenteditable` element) with Bun 1.4.2 on Linux and the system Chrome: `@playwright/test` under `bun --bun`, the `playwright` library inside `bun test`, and `Bun.WebView`.
 5. **CodeMirror in Bun's bundle.** `@uiw/react-codemirror` (or plain CodeMirror 6) with `@codemirror/lang-markdown` and `@codemirror/lang-yaml`, including theming from the shared colors.
 
+<a id="WORK-00068" data-uid="dp6ccmjcd2w3"></a>
 ### Phase 1 - Foundations
 
 - `shared`: package layout (`src/api`, `src/paths`, `src/markdown`, `src/uistate`), exports, unit tests.
@@ -165,6 +181,7 @@ Short, throwaway experiments, each ending with a recorded decision:
 - Server: command line and launch from §4.5 (root argument, opening the browser, `--no-open`, `--port`), security middleware from §4.4, launch output with the token URL, `uistate.yaml` read and write with `Bun.YAML`, creating `.specquer/user/.gitignore` with the folder (§4.3).
 - *Done when* unit tests cover the shared domains and security checks, and requests without the token, with a wrong Host or a foreign Origin are rejected.
 
+<a id="WORK-00069" data-uid="fvgzfldzs89y"></a>
 ### Phase 2 - File-System API
 
 - Tree listing, read, write with version check, rename, delete, all confined to the root.
@@ -172,6 +189,7 @@ Short, throwaway experiments, each ending with a recorded decision:
 - Update UI state on rename and delete.
 - *Done when* each route has tests against a temporary folder, including attempts to escape the root and conflicting saves.
 
+<a id="WORK-00070" data-uid="f7mn8390kzqd"></a>
 ### Phase 3 - App Shell and Left Pane
 
 - Layout: resizable split pane (left fraction persisted); theme from §4.6 with the palette in one module; light/dark switch that follows the browser until the user chooses, then persists the choice.
@@ -179,6 +197,7 @@ Short, throwaway experiments, each ending with a recorded decision:
 - Context menus on folders and files: Rename and Delete with shadcn dialogs (text box, "Rename"/"Delete" and "Cancel" buttons). Rename edits only the name: for files the `.md` extension is fixed and shown outside the text box. A name collision or an invalid name keeps the dialog open with an error in the error color.
 - *Done when* the tree reflects the root folder and rename and delete work end to end, with UI state updated.
 
+<a id="WORK-00071" data-uid="mmnvtos4vnvm"></a>
 ### Phase 4 - Right Pane
 
 - **File path:** shadcn breadcrumb from the root, leading folders shown as "…" when space runs out; once another file has been opened, it becomes a dropdown of up to ten recent files (Q5).
@@ -193,6 +212,7 @@ Short, throwaway experiments, each ending with a recorded decision:
 - **Autosave:** before opening another file, when the tab loses focus (`visibilitychange`), and every 60 seconds if there are changes. Saves send the base version; a `409` shows a conflict message (D8). On page close, a final save is attempted with `fetch(…, { keepalive: true })`.
 - *Done when* a file can be opened, edited in each view, switched between views and saved without unintended changes.
 
+<a id="WORK-00072" data-uid="hqu2yqbdgv9f"></a>
 ### Phase 5 - Component and End-to-End Tests
 
 Unit tests are written in every phase. This phase adds the two browser-facing layers from D7:
@@ -202,6 +222,7 @@ Unit tests are written in every phase. This phase adds the two browser-facing la
 - Both run against a temporary root folder with fixture specs.
 - *Done when* `bun test` runs the unit and component tests and one package script runs the end-to-end tests, both from the repository root.
 
+<a id="WORK-00073" data-uid="qqe99361u2rr"></a>
 ### Phase 6 - Documentation
 
 Required by Step 001:
@@ -216,6 +237,7 @@ Also found while planning:
 - The sidebar entry "Step 001" links to `/work-items/step-001/todo`, which doesn't exist (see Q12).
 - Update `CLAUDE.md` for the new commands (tests, release build) and conventions.
 
+<a id="WORK-00074" data-uid="p9gz5o660yxp"></a>
 ## 6. Decision Points
 
 All decision points are decided: D3, D7 and D14 as described in each, the others as recommended. The phase each one affects is in brackets.
@@ -241,6 +263,7 @@ All decision points are decided: D3, D7 and D14 as described in each, the others
 - **D14. Text on the `secondary` and `warning` colors** [Phase 3]. _Decided:_ option (a), dark text on `secondary` and `warning`, chosen automatically (§4.6). Light text on `secondary` (`#5fc9f3`) would reach only 1.81:1. The requirements have been updated to match.
 - **D15. Raw HTML in the preview** [Phase 4]. _Decided: as recommended._ Files may contain raw HTML, such as the traceability anchors `<a name="r7k2" data-status="draft"></a>` from the [traceability note](/notes/traceability-links). Tested while planning with react-markdown's pipeline, which B shares: by default the HTML is **shown as literal text** inside headings; skipping it removes the anchors; `rehype-raw` with `rehype-sanitize` renders a real, invisible anchor and strips dangerous attributes such as `onerror`. The sanitizer renames `name="r7k2"` to `user-content-r7k2` against DOM clobbering, as GitHub does, so in-page links need the same prefix. Recommended: `rehype-raw` plus `rehype-sanitize` with a strict list of allowed tags and attributes (including `a[name]` and `data-*`), and links to `#id` rewritten to `#user-content-id`.
 
+<a id="WORK-00075" data-uid="hn0p94qs63yk"></a>
 ## 7. Open Questions
 
 1. **Root folder override.** _Resolved:_ an optional `root` argument (defaulting to the working directory) is supported, and Specquer opens the browser automatically on launch, with `--no-open` to skip it. See §4.5.
@@ -257,6 +280,7 @@ All decision points are decided: D3, D7 and D14 as described in each, the others
 12. **Work-item navigation.** _Resolved:_ "Step 001" now lists `requirements.md` and this plan in the sidebar, and the top navigation's "Work Items" opens the requirements.
 13. **Multiple windows.** _Resolved:_ last write wins for `uistate.yaml`. File saves still use the version check (D8).
 
+<a id="WORK-00076" data-uid="fjywpp9khet8"></a>
 ## 8. Risks
 
 | Risk | Impact | Mitigation |
@@ -269,10 +293,12 @@ All decision points are decided: D3, D7 and D14 as described in each, the others
 | Deleting folders with hidden files | Lost work | D10 |
 | Autosave overwriting an agent's changes | Lost work | Version check (D8) |
 
+<a id="WORK-00077" data-uid="ehsxtg7wgvfg"></a>
 ## 9. Implementation Notes
 
 Recorded while implementing the plan (October 2026).
 
+<a id="WORK-00078" data-uid="lnmc0amjhlpf"></a>
 ### 9.1 Spike Results (Phase 0)
 
 1. **Tailwind and shadcn under Bun:** works. `server/bunfig.toml` loads `bun-plugin-tailwind` for the development server. The shadcn components were copied by hand into `client/src/components/ui` (D2), using the unified `radix-ui` package, with the `@/` alias in `client/tsconfig.json`, which Bun's bundler also reads.
@@ -281,6 +307,7 @@ Recorded while implementing the plan (October 2026).
 4. **Browser tests under Bun:** as found while planning (D7). Two further findings: happy-dom replaces Bun's `fetch`, `Request` and `Response` when registered globally, which breaks the server tests that `bun test` runs in the same process, so the preload restores Bun's versions; and Playwright's WebKit needs system libraries (`libmanette`) that must be installed with `sudo`.
 5. **CodeMirror in Bun's bundle:** works, as plain CodeMirror 6 with a small wrapper (D4), themed through the palette's CSS custom properties so light and dark mode need no rebuild.
 
+<a id="WORK-00079" data-uid="klprzkz60jxn"></a>
 ### 9.2 Findings
 
 - **Web Workers aren't bundled.** Bun's HTML bundling leaves `new Worker(new URL("./worker.ts", import.meta.url))` untouched, so the worker loads in development but not in production. The server now builds the preview worker with `Bun.build()` and serves it at `/_specquer/preview-worker.js`; the release build embeds it. The worker build needs the `worker` export condition, because the browser build of `decode-named-character-reference` (used by micromark) uses `document`.

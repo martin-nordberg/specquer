@@ -1,19 +1,19 @@
-<a id=""></a>
+<a id="NOTE-00042" data-uid="ayb5s5zujrfq"></a>
 
-<a id=""></a>
+<a id="NOTE-00043" data-uid="yrrc98qafhaw"></a>
 # Summaries Delegated to a Coding Agent
 
 _Notes from October 2026._
 
 **Summary:** Specquer could hand summarizing to a coding agent (Claude Code, Codex) running next to it, instead of calling a chat model itself. LangChain can do this about as easily as the Vercel AI SDK, but delegation is slower, costs more and carries more risk than the current per-section design. If the goal is better summaries, a frontier provider package behind the existing configuration gets most of the gain. Delegation pays off mainly for setup without an API key and for summarizing a whole document with the repository as context. For that, an MCP server that the user's own agent calls is a cleaner design than wrapping the agent as a model.
 
-<a id=""></a>
+<a id="NOTE-00044" data-uid="nlizn5nyi1t6"></a>
 ## Two Designs
 
 1. **The agent stands in for the model.** For each summary request, Specquer runs a headless agent (the Claude Agent SDK's `query()`, `claude -p`, `codex exec`) and reads back the text. Specquer stays in charge, and its cache, call queue and API stay as they are.
 2. **The agent is a peer.** The user's own running agent session does the work. Specquer offers the work through an MCP server (tools such as "list stale summaries" and "write summary") or through files, and the agent pulls it. Specquer never calls a model.
 
-<a id=""></a>
+<a id="NOTE-00045" data-uid="jl5qe6923xow"></a>
 ## Vercel AI SDK and LangChain
 
 The Vercel AI SDK makes the first design easy through community providers (`ai-sdk-provider-claude-code`, `ai-sdk-provider-codex-cli`). They make the agent look like a model, so `generateText({ model: claudeCode("sonnet") })` works.
@@ -25,7 +25,7 @@ As far as we know, LangChain.js has no packaged equivalent; check again before b
 
 For the first design the framework hardly matters: either way it's one adapter. The second design needs no framework at all, only an MCP server in `server`.
 
-<a id=""></a>
+<a id="NOTE-00046" data-uid="z1suvb5ptbpk"></a>
 ## Performance
 
 - **Startup cost per call:** every agent run starts a process and sends a large system prompt (tool definitions, `CLAUDE.md` or `AGENTS.md`). Even with prompt caching, that means seconds and thousands of tokens per call, against roughly a second for a direct chat completion.
@@ -34,7 +34,7 @@ For the first design the framework hardly matters: either way it's one adapter. 
 - **Shared rate limits:** if the agent runs on the user's subscription, summaries use up the same allowance as their interactive coding work.
 - **Fewer calls with a peer:** in the second design, an agent that already has the repository in context can write all the summaries in one session.
 
-<a id=""></a>
+<a id="NOTE-00047" data-uid="srv6vw90saix"></a>
 ## Complexity and Risk
 
 - **Prompt injection with tools:** `summarize.ts` already treats spec text as untrusted, because a spec can steer the model. A coding agent has file-write and shell tools, so the same prompt injection can get actions run on the machine. The tools would have to be turned off (`allowedTools` and `disallowedTools` in the Agent SDK, `--sandbox read-only` in Codex). Once they are, what's left is mostly an expensive chat model.
@@ -43,14 +43,14 @@ For the first design the framework hardly matters: either way it's one adapter. 
 - **A fuzzier cache key:** today the key is the model plus `PROMPT_VERSION`. Agent output also depends on the agent's version, its instruction files and the state of the repository.
 - **Subscription terms:** before relying on a user's Claude or ChatGPT plan login for Specquer's own calls, check the vendor's current terms for third-party apps.
 
-<a id=""></a>
+<a id="NOTE-00048" data-uid="fjd587ci0u2c"></a>
 ## Benefits
 
 - **No API key to set up:** the agent's existing login is reused, and it likely brings a stronger model than Gemma.
 - **Repository context:** the agent can read the glossary and linked sections, and keep a document's summaries consistent across levels in one pass. That suits Step 004's hierarchy.
 - **A natural fit for the peer design:** the user's agent could write summaries while working on a spec, and the summaries could even be committed.
 
-<a id=""></a>
+<a id="NOTE-00049" data-uid="f80ywv4ilsol"></a>
 ## Conclusion
 
 As a replacement for the current on-demand, per-section summaries, the first design is slower, costlier and riskier than what Specquer has now, and LangChain makes it no harder than the Vercel AI SDK would.

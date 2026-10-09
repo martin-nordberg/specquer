@@ -1,9 +1,13 @@
+<a id="NOTE-00001" data-uid="aa5s6iueggr8"></a>
+
+<a id="NOTE-00002" data-uid="k3s3wfxsegwa"></a>
 # Database Choice for the Markdown Database
 
 _Notes from October 2026._
 
 **Summary:** use **SQLite through Bun's built-in `bun:sqlite`**, as one database file at `.specquer/cache.db`. It is the only one of the top choices that needs no extra dependency and still works inside the single executable, and it covers everything the [Ideas](/notes/ideas) specification describes so far. The open questions (especially question 7, on whether `.specquer` is committed) may later add a second store for the parts that must be shared through Git.
 
+<a id="NOTE-00003" data-uid="exo59dikiogc"></a>
 ## What the Database Has to Do
 
 From the Ideas specification:
@@ -16,6 +20,7 @@ From the Ideas specification:
 - **Links:** traceability between sections, and between work items and the system specification.
 - **Probably later:** search across specs (open question 16) and embeddings for similarity.
 
+<a id="NOTE-00004" data-uid="bxcfsyly0jm7"></a>
 ## The Four Candidates
 
 | | **SQLite (`bun:sqlite`)** | **PGlite** (Postgres compiled to WebAssembly) | **DuckDB** | **Plain files** (JSON/YAML in `.specquer`) |
@@ -37,6 +42,7 @@ From the Ideas specification:
 
 PGlite and DuckDB could probably be made to work by shipping files beside the binary, but that breaks the "one deliverable" principle.
 
+<a id="NOTE-00005" data-uid="z88j6ontbdfl"></a>
 ## Why SQLite
 
 - **It fits the architecture.** No new dependency, it is in the single executable, and it is already the prescribed choice in `CLAUDE.md` ("`bun:sqlite` for SQLite").
@@ -45,12 +51,14 @@ PGlite and DuckDB could probably be made to work by shipping files beside the bi
 - **Similarity doesn't need a vector database yet.** Fragment matching can start with text techniques in TypeScript (word shingles with MinHash or Jaccard, then a diff on the candidate pairs). If embeddings are added later, store them as BLOBs and compare them by brute force in TypeScript: a few thousand sections take milliseconds. That avoids the `sqlite-vec` problems with extension files and with macOS.
 - **Its limits are acceptable.** The file is binary, so it can't be meaningfully committed or merged. That is fine while it is a cache.
 
+<a id="NOTE-00006" data-uid="oeshvbybga6z"></a>
 ## When the Other Options Would Win
 
 - **PGlite:** if embeddings or heavy relational queries become central *and* shipping its files beside the executable, or embedding them by hand, is acceptable.
 - **DuckDB:** for analysis over many commits, such as churn per section or how requirements evolve, run as a separate reporting step. It is not a good main store.
 - **Plain files:** for whatever must be **shared through Git**. If question 7 decides that fragment identity, traceability links or summaries must travel with the repository, keep those in small text files (one per document or work item) that diff and merge cleanly. SQLite stays the rebuildable index over them. This hybrid is likely where the design ends up.
 
+<a id="NOTE-00007" data-uid="y4h1ryeoqlpr"></a>
 ## Possible Table Layout
 
 - `revisions(commit, parent, time)`

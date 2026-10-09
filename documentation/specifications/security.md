@@ -1,9 +1,13 @@
+<a id="SPEC-00062" data-uid="t34ybwudslp2"></a>
+
+<a id="SPEC-00063" data-uid="hcx5vkka0808"></a>
 # Specquer Security
 
 Specquer is a local web server that can read, write, rename and delete files under its root folder. Anything that can talk to it can do the same, so the server is protected against other websites in the user's browser, other machines on the network and malicious content in the Markdown files themselves.
 
 The rules below are implemented in `server/src/security.ts`, `server/src/files.ts`, `server/src/summaries/` and the shared preview pipeline, and are covered by unit tests (`server/src/security.test.ts`, `server/src/files.test.ts`, `shared/src/markdown/preview.test.ts`) and end-to-end tests (`e2e/launch.spec.ts`, `e2e/views.spec.ts`).
 
+<a id="SPEC-00064" data-uid="iqgf4njjhp4m"></a>
 ## 1. Threats
 
 | Threat | Example | Protection |
@@ -17,12 +21,14 @@ The rules below are implemented in `server/src/security.ts`, `server/src/files.t
 | Specs sent to a third party | Summaries send section text to a model provider | Opt-in configuration, saved text only, keys only in the environment (§9) |
 | Prompt injection | A spec tells the model to answer with a link or HTML | Summaries rendered as plain text, labeled as AI-generated (§9) |
 
+<a id="SPEC-00065" data-uid="q5dau5z14uck"></a>
 ## 2. Network
 
 - The server listens on `127.0.0.1` only, never on all interfaces.
 - The launch URL uses `http://127.0.0.1:<port>/`, which avoids `localhost` resolving to IPv6 first.
 - The server sets `reusePort: false`, so a second Specquer can't bind the same port and share its connections; it falls back to a free port instead.
 
+<a id="SPEC-00066" data-uid="atxgrltcqpql"></a>
 ## 3. Session Token
 
 - At startup the server generates a token: 32 random bytes, base64url-encoded. Under `bun --hot` it is kept for the life of the process.
@@ -33,6 +39,7 @@ The rules below are implemented in `server/src/security.ts`, `server/src/files.t
 - Tokens are compared in constant time.
 - **Known exposure:** opening the browser passes the launch URL, token included, to the operating system's opener (`xdg-open`, `open`, `start`), so it is briefly visible in the process list to other local users. This is acceptable for a single-user workstation tool. `--no-open` avoids it.
 
+<a id="SPEC-00067" data-uid="dcqj07fp73a2"></a>
 ## 4. Host and Origin Checks
 
 - **Host:** every request handled by Hono must have a `Host` header of `127.0.0.1:<port>` or `localhost:<port>`; anything else gets `403`. This defeats DNS rebinding, where the browser would send the attacker's host name.
@@ -40,6 +47,7 @@ The rules below are implemented in `server/src/security.ts`, `server/src/files.t
 - API responses carry `Cache-Control: no-store` and `X-Content-Type-Options: nosniff`.
 - **Limitation:** the bundled client's scripts and stylesheets are served by `Bun.serve()`'s routes, which bypass Hono, so the Host check doesn't cover them. They contain only the public client code, never user data.
 
+<a id="SPEC-00068" data-uid="elbjr28seyhr"></a>
 ## 5. Path Confinement
 
 - Every path the API receives is validated by the shared path rules: relative to the root, `/`-separated, no `..`, no absolute or drive paths, no backslashes or control characters, and no `.git` or `.specquer` segment.
@@ -50,6 +58,7 @@ The rules below are implemented in `server/src/security.ts`, `server/src/files.t
 - The root folder itself can't be renamed or deleted.
 - `.specquer/` stays out of reach of the file API. The server itself reads `.specquer/shared/section-prefixes.config.yaml` and writes the section data files, `.specquer/shared/documents.yaml` and `.specquer/shared/<prefix>/sections.yaml`, at fixed paths: a prefix is a folder name only if it matches `[A-Z][A-Z0-9]{1,4}`, so it can't name another folder.
 
+<a id="SPEC-00069" data-uid="mxun8hb7jbnj"></a>
 ## 6. Rendering Untrusted Markdown
 
 Spec files may contain raw HTML (traceability anchors such as `<a name="r7k2" data-status="draft"></a>`). Since the page can write files, script in a spec would be able to write files too.
@@ -61,6 +70,7 @@ Spec files may contain raw HTML (traceability anchors such as `<a name="r7k2" da
 - Section badges show the section ID and paths as text, never as HTML.
 - Links to other `.md` files open them in Specquer; other links open in a new tab with `rel="noopener noreferrer"`.
 
+<a id="SPEC-00070" data-uid="cj8b93fcfnht"></a>
 ## 7. Content-Security-Policy
 
 The page is sent with:
@@ -78,6 +88,7 @@ frame-ancestors 'none'
 - In development, `connect-src` also allows the hot-reload WebSocket.
 - The page also gets `Referrer-Policy: no-referrer` and `Cache-Control: no-store`.
 
+<a id="SPEC-00071" data-uid="y8jklshrw984"></a>
 ## 8. Protecting the User's Work
 
 - **Saves check the version.** The client sends the content hash of the version its edits are based on. If the file changed on disk since (a coding agent, another editor or another tab), the server answers `409` and doesn't write; the user chooses between reloading from disk and keeping their version.
@@ -86,6 +97,7 @@ frame-ancestors 'none'
 - **Delete preview.** Before deleting, the dialog lists every file that will be deleted, including files the tree doesn't show, and names the files not committed to Git (new, modified or ignored). Outside a Git repository it warns that nothing can be recovered.
 - **Per-user state stays out of Git.** `.specquer/user/` gets a `.gitignore` containing `*` when Specquer creates it.
 
+<a id="SPEC-00072" data-uid="ipvsb7onaku1"></a>
 ## 9. Summaries and the Model Provider
 
 Summaries in the preview (Step 004) are the server's only outbound network calls.

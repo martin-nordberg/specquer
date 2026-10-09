@@ -1,9 +1,13 @@
+<a id="NOTE-00008" data-uid="uew7n9oins9k"></a>
+
+<a id="NOTE-00009" data-uid="xpodllb2mmcu"></a>
 # Platform Choice: Bun Server and Browser vs Tauri vs Electrobun
 
 _Notes from October 2026._
 
 **Summary:** keep the current Bun server and browser design for now; it fits Specquer's own specification best. Write the UI so that a desktop shell could wrap it later, and don't adopt Electrobun 2.x yet.
 
+<a id="NOTE-00010" data-uid="or4n6du2s5ne"></a>
 ## Electrobun Right Now
 
 - **2.0 is a different product from 1.x.** The author dropped Bun as the foundation after Bun's move from Zig to Rust, and wrote a new JavaScript runtime, **Cottontail** (JavaScriptCore plus Zig, compatible with Node and Bun "where it makes sense"). It is now the default for the main process. Bun is still an option, alongside Zig, Rust, Go and Odin. ([blog post](https://blackboard.sh/blog/electrobun-2-0/))
@@ -16,12 +20,14 @@ _Notes from October 2026._
   - Builds crash intermittently (#564).
 - **It no longer fits as well.** Electrobun 1.x was attractive because its main process *was* Bun: the server would have moved in unchanged. With Cottontail as the default, Specquer's Bun-specific code (`Bun.serve` HTML imports, `bun:sqlite`, `Bun.file`) would need checking against Cottontail. Choosing Bun instead brings back exactly the dependency the Electrobun author decided not to rely on.
 
+<a id="NOTE-00011" data-uid="c0dxb8ph4vkr"></a>
 ## Bun Itself
 
 The pinned Bun 1.4.2 is from after the Rust rewrite: reports say 1.4.0 was the first Rust release and 1.3.14 the last Zig one ([i-programmer](https://www.i-programmer.info/news/98-languages/19132-bun-14-rewritten-in-rust.html), [The Register](https://www.theregister.com/devops/2026/05/14/anthropics-bun-rust-rewrite-merged-at-speed-of-ai/5240381)). Reports differ on how fast it was done and how much was reviewed: the [Hacker News thread](https://news.ycombinator.com/item?id=48246917) describes a merge in days with little review, while [InfoQ](https://infoq.com/news/2026/09/bun-AI-rewrite-zig-rust-4-months) says four months of work. Upstream reports 128 old bugs fixed and slightly better performance.
 
 Specquer depends on Bun far more than Electrobun did (runtime, bundler, single executable, dev server), so the concern that drove Electrobun away applies here too. The risk is lower because Specquer pins a version (in `mise.toml`) and doesn't embed Bun's internals. Still, keep 1.3.14 in mind as a fallback, and add tests that would catch a regression in a Bun upgrade.
 
+<a id="NOTE-00012" data-uid="m8m5by3s2lvf"></a>
 ## Comparison
 
 | | Current (Bun server + browser) | Tauri 2 | Electrobun 2 |
@@ -40,6 +46,7 @@ Specquer depends on Bun far more than Electrobun did (runtime, bundler, single e
 | Local security | **Specquer's job**: the server can write files, so it needs a localhost-only listener, a per-session token and Origin/Host checks (against DNS rebinding) | Capability-based permissions built in | Basic |
 | Installers, signing, auto-update | Built by hand (or ship the CLI binary only) | Built in | Built in |
 
+<a id="NOTE-00013" data-uid="gjeay1t0qkn4"></a>
 ## How This Maps to Specquer's Specification
 
 - **Points for the current design:**
@@ -50,6 +57,7 @@ Specquer depends on Bun far more than Electrobun did (runtime, bundler, single e
   - Business analysts and testers are also listed users. For them, a double-clickable app with an installer and a folder picker is friendlier than `cd repo && specquer`. If that audience matters, Tauri with a Bun sidecar is the safer shell today.
   - It costs a Rust toolchain and gives up most of Tauri's size advantage, but it reuses the same server and UI unchanged.
 
+<a id="NOTE-00014" data-uid="c5iz8aj9575r"></a>
 ## Recommendation
 
 1. **Keep the current architecture.** It is the only option that is single-language and single-executable today, and it fits the specification.
@@ -57,6 +65,7 @@ Specquer depends on Bun far more than Electrobun did (runtime, bundler, single e
 3. **Harden the localhost server now,** whatever is decided, since it can edit files: listen on localhost only, require a random session token in the launch URL, and check the Origin and Host headers.
 4. **Look at Electrobun again in a few months.** Check whether Cottontail handles `Bun.serve` HTML imports and `bun:sqlite`, whether the issues above get fixed, and whether releases slow down.
 
+<a id="NOTE-00015" data-uid="pobof50hkhdq"></a>
 ## Sources
 
 - [Electrobun 2.0 blog post (Blackboard)](https://blackboard.sh/blog/electrobun-2-0/)

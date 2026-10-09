@@ -1,18 +1,24 @@
+<a id="SPEC-00039" data-uid="hqhb8pujtp2h"></a>
+
+<a id="SPEC-00040" data-uid="j3ujxrx9s2cl"></a>
 # Specquer Client Requirements
 
 Requirements for the browser user interface (`client/`). They come from [Step 001](/work-items/step-001-doc-editing/requirements), its [implementation plan](/work-items/step-001-doc-editing/implementation-plan), [New File and Folder](/work-items/step-001-doc-editing/new-file-folder) [Step 002](/work-items/step-002-sections/requirements) (sections) and [Step 003](/work-items/step-003-section-uids/implementation-plan) (section UIDs and conflicts). The screen layout is in [Information Architecture](info-architecture.md).
 
+<a id="SPEC-00041" data-uid="n5x7fnnix37v"></a>
 ## 1. General
 
 1. The UI talks only to its own server over HTTP, through the typed API client. It uses no browser-only APIs it can't do without, so a desktop shell (Tauri, Electrobun) can host it later.
 2. Paths and names are validated with the same functions the server uses (`@specquer/shared/paths`).
 3. Technologies: React, Tailwind CSS, shadcn components, CodeMirror, Milkdown, the shared unified/remark/rehype pipeline with `hast-util-to-jsx-runtime`, Hono's client, Zod and `yaml`.
 
+<a id="SPEC-00042" data-uid="s48d8v9jo15g"></a>
 ## 2. Layout
 
 1. The window is split into a folder pane on the left and a file pane on the right, with a drag bar between them.
 2. Dragging the bar (or pressing the arrow keys on it) changes the folder pane's width, as a fraction of the window between 10% and 70%. The fraction persists in the UI state.
 
+<a id="SPEC-00043" data-uid="arb991i3e6ej"></a>
 ## 3. Folder Tree
 
 1. The tree starts at the root folder and shows folders and `.md` files only, as listed by the server (see [Server Requirements](server-requirements.md) §3). Empty folders are shown too, so a new folder appears at once.
@@ -21,6 +27,7 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 4. Single-clicking a file opens it in the file pane. The open file is highlighted with the navigation color.
 5. Right-clicking a folder or file opens a context menu with **Rename…** and **Delete…**. For a folder, the menu starts with **New file…**, **New folder…**, **Add section anchors…** and **Section problems…**. Right-clicking the empty space below the last entry (or in an empty tree) offers the same four for the root folder.
 
+<a id="SPEC-00044" data-uid="u5s5qfu4wurh"></a>
 ### 3.1 Rename
 
 1. A modal dialog has a text box with the current name, a **Rename** button and a **Cancel** button.
@@ -30,6 +37,7 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 5. A name already used by a file or folder in the same folder keeps the dialog open with "A file or folder with that name already exists."
 6. Unsaved changes to the open file are saved first if the rename affects it. After the rename, the open file follows its new path and the UI state is updated (see [Data Architecture](data-architecture.md) §3.4).
 
+<a id="SPEC-00045" data-uid="o3bvckrfj01t"></a>
 ### 3.2 New File and New Folder
 
 1. A modal dialog has an empty text box, a **Create** button and a **Cancel** button. It is titled **New file** or **New folder** and names the folder the entry is created in ("the root folder" for the root).
@@ -38,6 +46,7 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 4. After creating the entry, the folder it was created in (unless it is the root) is expanded and the tree is reloaded, so the new entry shows.
 5. A new file is created empty, or with its root section anchor if it is sectioned, and opened in the file pane (saving the previously open file first, as for any file switch).
 
+<a id="SPEC-00046" data-uid="b3odkybydlfb"></a>
 ### 3.3 Delete
 
 1. A modal dialog has a **Delete** button (error color) and a **Cancel** button.
@@ -45,6 +54,7 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 3. The dialog names the files that aren't committed to Git and can't be recovered. If the root isn't in a Git repository, it says so.
 4. Deleting the open file, or a folder containing it, closes it. The UI state drops every entry for deleted paths.
 
+<a id="SPEC-00047" data-uid="w748uemplxzf"></a>
 ### 3.4 Add Section Anchors
 
 1. The open file is saved first.
@@ -52,18 +62,21 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 3. Adding the anchors rewrites those files (see [Server Requirements](server-requirements.md) §6). If the open file was among them, it is reloaded.
 4. While the root folder's `AGENTS.md` lacks the section anchor rules for coding agents, the dialog offers to add them with a checkbox, unticked. Ticked, the dialog can run even when no file needs anchors (**Add to AGENTS.md**).
 
+<a id="SPEC-00048" data-uid="v328rz9e2tip"></a>
 ### 3.5 Section Problems
 
 1. The open file is saved first.
 2. A modal dialog lists the problems in the folder's sectioned files: IDs used by copies of one section in several documents, IDs used by different sections (two branches issued one number), stray anchors (with their line), and files with merge conflict markers.
 3. Each occurrence opens its file, at the section. Each occurrence of a duplicate or colliding ID that doesn't keep the ID has **Renumber**, which gives it a new number; the list then reloads.
 
+<a id="SPEC-00049" data-uid="g5tal9mne58o"></a>
 ## 4. File Path
 
 1. The open file's path is shown from the root folder as a shadcn breadcrumb.
 2. When the path doesn't fit, leading folders are replaced by one "…" (its tooltip shows the hidden folders). The file name is never hidden.
 3. Once there are recent files, the file name becomes a drop-down listing up to ten of them (most recent first, not counting the open file). Choosing one opens it.
 
+<a id="SPEC-00050" data-uid="drv6ct4jpecs"></a>
 ## 5. Front Matter
 
 1. The front matter is edited in its own CodeMirror editor with YAML highlighting, between the file path and the content. The `---` delimiters are not shown.
@@ -72,6 +85,7 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 4. Typing into the editor of a file without front matter adds a front matter block; clearing the editor removes the block.
 5. There is no schema. Invalid YAML is kept and saved as typed; the editor shows an "Invalid YAML" marker in the warning color, with the parser's messages as a tooltip.
 
+<a id="SPEC-00051" data-uid="z5ma56k27geg"></a>
 ## 6. Markdown Content
 
 1. The content can be shown in four view types: **Text** (CodeMirror, Markdown mode), **Split** (CodeMirror and preview side by side), **Preview** (read-only) and **WYSIWYG** (Milkdown).
@@ -82,6 +96,7 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 6. Raw HTML in the preview is sanitized (see [Security](security.md) §6).
 7. Opening a file in WYSIWYG without editing it never changes the file; Milkdown's output is used only after the user changes something (Milkdown rewrites some Markdown, such as list markers, tables and reference links).
 
+<a id="SPEC-00052" data-uid="u4ps6ydi8prg"></a>
 ### 6.1 Sections
 
 1. In the preview and split views, a badge stands for each section anchor: at the start of a heading, between a list item's marker and its content, and at the top for the root section. The anchor itself stays invisible. The badge is the favicon (§9).
@@ -92,6 +107,7 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 6. Pasting a section anchor whose ID still exists elsewhere (in the open document, or, in the text editor, in another document) turns it into a placeholder, so the copy gets a new ID on save. A cut followed by a paste keeps the ID.
 7. In the text editor, the `data-uid` attribute of anchors is shown in the muted color. It isn't folded or hidden.
 
+<a id="SPEC-00053" data-uid="t3nnmebbri6x"></a>
 ### 6.2 Summaries
 
 1. In the preview and split views, a slider above the preview replaces heading sections with AI summaries, level by level. It has one stop per heading level the document uses plus two: the full text (the far right, the default) and the whole document (the far left). Skipped and unused levels add no stops. A document without headings shows no slider.
@@ -105,6 +121,7 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 9. Clicking a summary, or its **Show full text**, moves the slider to the full text and scrolls to its section. A link to a section hidden by a summary (`other.md#SPEC-00012`) does the same.
 10. Summaries are kept in memory while Specquer is open, so moving the slider back and forth asks for nothing new. At most three summary requests are in flight at once, in document order, so they never take all of the browser's connections to the server and saves and file loads don't wait behind them. Requests no longer needed (the slider moved, another file opened, another view chosen) are aborted, or dropped before they are sent.
 
+<a id="SPEC-00054" data-uid="r7go3dfjt7wm"></a>
 ## 7. Saving
 
 1. Edits are saved automatically:
@@ -116,6 +133,7 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 4. Saving a sectioned file may add or correct section anchors. The editors show them at once: the text editor inserts them without moving the cursor or losing text typed during the save, and undo doesn't remove them. They don't count as unsaved changes. The WYSIWYG view reloads its content. When the save changed more than adding anchors (a copy renumbered, an edited ID put back, a reused number, a copied UID, or a file with conflict markers left alone), a dismissible line under the file path says what, with a link to **Section problems…**.
 5. If the file changed on disk since it was opened, saving doesn't overwrite it. A dialog offers **Reload from disk** (discarding the user's changes) and **Keep my version** (overwriting the file on disk). Autosave pauses until the user chooses, and another file can't be opened meanwhile.
 
+<a id="SPEC-00055" data-uid="vcjbkxfhmoor"></a>
 ## 8. Theme
 
 1. Colors come from one module, `client/src/theme/palette.ts`. Only the light-mode colors are given there:
@@ -135,6 +153,7 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 4. The user switches between light and dark mode with the button in the header. Until they do, the mode follows the browser's preference; their choice is saved in the UI state.
 5. The pencil colors of the logo (§9) and the grays of the docs site's favicon are also defined in `palette.ts`, as `logoColors`. A unit test checks that the docs favicon's § reaches 4.5:1 on its tile in both modes.
 
+<a id="SPEC-00056" data-uid="vb26hxtvldyd"></a>
 ## 9. Icons
 
 The logo is a section sign (§), for specifications, drawn as two S-shaped strokes that share one closed "o" in the middle. It is drawn in SVG on a 32×32 grid, as paths rather than text, so it doesn't depend on fonts. All variants come from one module, `client/src/theme/logo.ts`.
