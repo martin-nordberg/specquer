@@ -85,6 +85,7 @@ export default defineConfig({
                         {text: 'Platform Choice', link: '/notes/platform-choice'},
                         {text: 'Database Choice', link: '/notes/database-choice'},
                         {text: 'Traceability Links', link: '/notes/traceability-links'},
+                        {text: 'Agent-Delegated Summaries', link: '/notes/agent-delegated-summaries'},
                     ]
                 },
             ],
