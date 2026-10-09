@@ -68,10 +68,18 @@ export default defineConfig({
                   },
                   {
                     text: '004-Hierarchical Summarization',
-                    collapsed: false,
+                    collapsed: true,
                     items: [
                       {text: 'Requirements', link: '/work-items/step-004-hierarchical-summarization/requirements'},
                       {text: 'Implementation Plan', link: '/work-items/step-004-hierarchical-summarization/implementation-plan'},
+                    ]
+                  },
+                  {
+                    text: '005-Summarization Changes',
+                    collapsed: false,
+                    items: [
+                      {text: 'Design Changes', link: '/work-items/step-005-summarization-changes/summary-design-changes'},
+                      {text: 'Implementation Plan', link: '/work-items/step-005-summarization-changes/implementation-plan'},
                     ]
                   }
                 ]
