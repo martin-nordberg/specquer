@@ -89,6 +89,13 @@ export default defineConfig({
                       {text: 'Requirements', link: '/work-items/step-006-settings/requirements'},
                       {text: 'Implementation Plan', link: '/work-items/step-006-settings/implementation-plan'},
                     ]
+                  },
+                  {
+                    text: '007-Without documents.yaml',
+                    collapsed: false,
+                    items: [
+                      {text: 'Requirements', link: '/work-items/step-007-no-documents-file/requirements'},
+                    ]
                   }
                 ]
               }
