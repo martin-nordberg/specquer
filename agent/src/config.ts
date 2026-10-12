@@ -1,37 +1,29 @@
-import { z } from "zod";
+import type { z } from "zod";
+import {
+  DEFAULT_SUMMARIES,
+  type ModelConfig,
+  SUMMARY_SETTING_KEYS,
+  type SummariesConfig,
+  modelConfigSchema,
+  summarySettingSchemas,
+} from "@specquer/shared/settings";
 
 /**
  * The agent configuration, `.specquer/shared/agent.config.yaml`, with an optional personal
  * override in `.specquer/user/agent.config.yaml`. `model:` applies to every agent feature;
  * `summaries:` holds the summarization settings. The configuration never holds API keys: it
- * names the environment variable that does.
+ * names the environment variable that does. The schemas are in `@specquer/shared/settings`, so the
+ * settings dialog validates with them too.
  */
 
-export const NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1";
-
-export const modelConfigSchema = z.object({
-  /** Only NVIDIA's hosted models (OpenAI-compatible API) in this version. */
-  provider: z.literal("nvidia"),
-  /** The provider's model ID. */
-  name: z.string().trim().min(1),
-  baseUrl: z.url({ protocol: /^https?$/ }).default(NVIDIA_BASE_URL),
-  /** The environment variable holding the API key. */
-  apiKeyEnv: z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/, "must be an environment variable name"),
-});
-export type ModelConfig = z.infer<typeof modelConfigSchema>;
-
-export const summariesConfigSchema = z.object({
-  /** How many model calls run at once. */
-  concurrency: z.number().int().min(1).max(16).default(2),
-  /** Sections estimated above this many tokens are summarized from their subsections' summaries. */
-  tokenBudget: z.number().int().min(1000).max(1_000_000).default(24_000),
-  /**
-   * Summarize every section of every Markdown file in the background, so the slider finds its
-   * summaries made. Off by default: it sends every spec to the model provider.
-   */
-  prefill: z.boolean().default(false),
-});
-export type SummariesConfig = z.infer<typeof summariesConfigSchema>;
+export {
+  DEFAULT_SUMMARIES,
+  type ModelConfig,
+  NVIDIA_BASE_URL,
+  type SummariesConfig,
+  modelConfigSchema,
+  summariesConfigSchema,
+} from "@specquer/shared/settings";
 
 export interface AgentConfig {
   model?: ModelConfig;
@@ -43,8 +35,6 @@ export interface AgentConfigFile {
   model?: ModelConfig;
   summaries: Partial<SummariesConfig>;
 }
-
-export const DEFAULT_SUMMARIES: SummariesConfig = summariesConfigSchema.parse({});
 
 function issues(error: z.ZodError): string {
   return error.issues.map((issue) => `${issue.path.join(".") || "value"} ${issue.message}`.trim()).join("; ");
@@ -72,9 +62,9 @@ export function parseAgentConfig(value: unknown, source: string, warn: (message:
   if (summaries !== undefined && summaries !== null) {
     if (!isRecord(summaries)) warn(`${source}: 'summaries' must be a mapping`);
     else {
-      for (const key of ["concurrency", "tokenBudget", "prefill"] as const) {
+      for (const key of SUMMARY_SETTING_KEYS) {
         if (summaries[key] === undefined) continue;
-        const field = summariesConfigSchema.shape[key].safeParse(summaries[key]);
+        const field = summarySettingSchemas[key].safeParse(summaries[key]);
         if (field.success) (result.summaries as Record<string, unknown>)[key] = field.data;
         else warn(`${source}: ignoring 'summaries.${key}': ${issues(field.error)}`);
       }

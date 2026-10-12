@@ -4,6 +4,9 @@ import { type ApiHandlers, createApiRouter } from "@specquer/shared/api";
 import { FileService } from "./files.ts";
 import { addAgentGuideFile, hasAgentGuideFile } from "./sections/agent-guide.ts";
 import { SectionIndex } from "./sections/section-index.ts";
+import { AgentSettingsFiles } from "./settings/agent-settings.ts";
+import { FolderSettingsFile } from "./settings/folder-settings.ts";
+import { WriteQueue } from "./settings/yaml-file.ts";
 import { PREVIEW_WORKER_PATH, previewWorkerScript } from "./preview-worker.ts";
 import {
   type SecurityConfig,
@@ -28,6 +31,10 @@ export interface AppConfig extends SecurityConfig {
 }
 
 export function createHandlers(files: FileService, uiState: UiStateStore, sections: SectionIndex, summaries: SummaryService): ApiHandlers {
+  // The settings files, written one at a time
+  const settingsQueue = new WriteQueue();
+  const agentSettings = new AgentSettingsFiles(files.root, settingsQueue);
+  const folderSettings = new FolderSettingsFile(files.root, settingsQueue);
   return {
     async getTree() {
       const tree = await files.getTree();
@@ -78,6 +85,30 @@ export function createHandlers(files: FileService, uiState: UiStateStore, sectio
     summaryStatus: () => summaries.status(),
     summarize: (request, signal) => summaries.summarize(request, signal),
     sectionSummary: (id) => summaries.sectionSummary(id),
+    agentSettings: () => agentSettings.read({ keySet: (name) => summaries.keySet(name), status: () => summaries.status() }),
+    async saveAgentSettings(update) {
+      const result = await agentSettings.write(update);
+      if (result.ok) summaries.configChanged();
+      return result;
+    },
+    envSet: async (name) => summaries.keySet(name),
+    testModel: (config, signal) => summaries.testModel(config, signal),
+    async folderSettings(path) {
+      await files.assertFolder(path);
+      return folderSettings.read(path);
+    },
+    async saveFolderSettings(path, setting, baseVersion) {
+      await files.assertFolder(path);
+      const result = await folderSettings.write(path, setting, baseVersion);
+      if (!result.ok) return result;
+      // Sections of files that stopped being sectioned are retired, and come back when they are again
+      sections.configChanged();
+      await sections.scan();
+      summaries.filesChanged();
+      const { own, inherited } = await folderSettings.read(path);
+      const sectioned = own.kind === "prefix" || (own.kind === "inherit" && (inherited?.prefix ?? null) !== null);
+      return { ...result, sectioned };
+    },
   };
 }
 

@@ -3,25 +3,36 @@ import { Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { ZodType } from "zod";
 import type { BodyEdit } from "../markdown/sections.ts";
+import type { FolderSetting, ModelConfig } from "../settings/settings.ts";
 import { type UiState, type UiStatePatch, uiStatePatchSchema } from "../uistate/uistate.ts";
 import {
+  type AgentSettings,
+  type AgentSettingsUpdate,
   type AnchorFolderResult,
   type ApiErrorBody,
   type DeletePreview,
   type FileContent,
+  type FolderSettings,
+  type ModelTestResult,
   type SectionInfo,
   type SectionNotice,
   type SectionProblem,
   type SectionSearchResult,
   type SectionSummaryLookup,
+  type SettingsSaveResult,
   type SummaryRequest,
   type SummaryResult,
   type SummaryStatus,
   type Tree,
+  agentSettingsUpdateSchema,
   anchorFolderSchema,
   createSchema,
   entryQuerySchema,
+  envQuerySchema,
   fileQuerySchema,
+  folderQuerySchema,
+  folderSettingsUpdateSchema,
+  modelTestSchema,
   renameSchema,
   renumberSectionSchema,
   saveFileSchema,
@@ -58,6 +69,9 @@ export type SaveResult =
 
 export type CreateResult = { ok: true; path: string } | { ok: false; reason: "exists" };
 
+/** A folder setting's save: on success, also whether the folder is sectioned now. */
+export type FolderSettingsSaveResult = { ok: true; version: string; sectioned: boolean } | Extract<SettingsSaveResult, { ok: false }>;
+
 export type RenameResult = { ok: true; path: string; uiState: UiState } | { ok: false; reason: "exists" };
 
 export interface ApiHandlers {
@@ -80,6 +94,21 @@ export interface ApiHandlers {
   summarize(request: SummaryRequest, signal: AbortSignal): Promise<SummaryResult>;
   /** A section's summary by section ID, from the cache only; `404` for an unknown ID. */
   sectionSummary(id: string): Promise<SectionSummaryLookup>;
+  agentSettings(): Promise<AgentSettings>;
+  saveAgentSettings(update: AgentSettingsUpdate): Promise<SettingsSaveResult>;
+  /** Whether an environment variable is set; never its value. */
+  envSet(name: string): Promise<boolean>;
+  /** One small model call with the settings as entered; `signal` aborts it. */
+  testModel(config: ModelConfig, signal: AbortSignal): Promise<ModelTestResult>;
+  folderSettings(path: string): Promise<FolderSettings>;
+  saveFolderSettings(path: string, setting: FolderSetting, baseVersion: string): Promise<FolderSettingsSaveResult>;
+}
+
+/** A failed settings save as a response: a conflict, or a file that isn't valid YAML. */
+function settingsFailure(result: Extract<SettingsSaveResult, { ok: false }>) {
+  return result.reason === "conflict"
+    ? ({ status: 409, body: { error: "conflict", message: "The file changed on disk.", version: result.version } } as const)
+    : ({ status: 422, body: { error: "invalid", message: result.message } } as const);
 }
 
 /** A successful save's response body: the new version, and the edits and notices if any. */
@@ -181,6 +210,33 @@ export function createApiRouter(handlers: ApiHandlers) {
     })
     .get("/summaries/sections/:id", validate("param", sectionSummaryParamSchema), async (c) => {
       return c.json(await handlers.sectionSummary(c.req.valid("param").id));
+    })
+    .get("/settings/agent", async (c) => c.json(await handlers.agentSettings()))
+    .put("/settings/agent", validate("json", agentSettingsUpdateSchema), async (c) => {
+      const result = await handlers.saveAgentSettings(c.req.valid("json"));
+      if (!result.ok) {
+        const failure = settingsFailure(result);
+        return c.json(failure.body, failure.status);
+      }
+      return c.json({ version: result.version }, 200);
+    })
+    .get("/settings/env", validate("query", envQuerySchema), async (c) => {
+      return c.json({ set: await handlers.envSet(c.req.valid("query").name) });
+    })
+    .post("/settings/model-test", validate("json", modelTestSchema), async (c) => {
+      return c.json(await handlers.testModel(c.req.valid("json"), c.req.raw.signal));
+    })
+    .get("/settings/folder", validate("query", folderQuerySchema), async (c) => {
+      return c.json(await handlers.folderSettings(c.req.valid("query").path));
+    })
+    .put("/settings/folder", validate("json", folderSettingsUpdateSchema), async (c) => {
+      const { path, setting, baseVersion } = c.req.valid("json");
+      const result = await handlers.saveFolderSettings(path, setting, baseVersion);
+      if (!result.ok) {
+        const failure = settingsFailure(result);
+        return c.json(failure.body, failure.status);
+      }
+      return c.json({ version: result.version, sectioned: result.sectioned }, 200);
     });
 }
 

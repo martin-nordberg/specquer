@@ -9,4 +9,4 @@ model:
 summaries:
   concurrency: 2
   tokenBudget: 24000
-  prefill: true
+  prefill: false

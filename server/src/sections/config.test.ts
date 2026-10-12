@@ -58,3 +58,36 @@ test("empty or invalid configuration sections nothing", () => {
   expect(parsePrefixConfig("").prefixFor("a.md")).toBeUndefined();
   expect(parsePrefixConfig("prefixes: [").prefixFor("a.md")).toBeUndefined();
 });
+
+test("null leaves a folder unsectioned, inside a sectioned folder too", () => {
+  const warnings: string[] = [];
+  const config = parsePrefixConfig(
+    'prefixes:\n  "docs/": DOC\n  "docs/archive/": null\n  "docs/archive/keep/": KEEP\n  "docs/archive/one.md": ONE\n  "docs/empty/":\n',
+    (w) => warnings.push(w),
+  );
+  expect(warnings).toEqual([]);
+  expect(config.prefixFor("docs/a.md")).toBe("DOC");
+  expect(config.prefixFor("docs/archive/a.md")).toBeUndefined();
+  expect(config.isSectioned("docs/archive/deep/a.md")).toBe(false);
+  expect(config.prefixFor("docs/archive/keep/a.md")).toBe("KEEP");
+  expect(config.prefixFor("docs/archive/one.md")).toBe("ONE");
+  expect(config.prefixFor("docs/empty/a.md")).toBeUndefined();
+  expect([...config.prefixes()]).toEqual(["DOC", "KEEP", "ONE"]);
+});
+
+test("a folder's own entry, the one it inherits, and the file keys inside it", () => {
+  const config = parsePrefixConfig('prefixes:\n  "./": TOP\n  "docs/": DOC\n  "docs/archive/": null\n  "docs/archive/one.md": ONE\n  "docs/b.md": BEE\n');
+  expect(config.entryFor("docs")).toBe("DOC");
+  expect(config.entryFor("docs/archive")).toBeNull();
+  expect(config.entryFor("docs/archive/deep")).toBeUndefined();
+  expect(config.entryFor("")).toBe("TOP");
+  expect(config.inheritedFor("docs/archive/deep")).toEqual({ key: "docs/archive/", prefix: null });
+  expect(config.inheritedFor("docs/archive")).toEqual({ key: "docs/", prefix: "DOC" });
+  expect(config.inheritedFor("docs")).toEqual({ key: "", prefix: "TOP" });
+  expect(config.inheritedFor("")).toBeUndefined();
+  expect(config.fileKeysIn("docs")).toEqual([
+    { key: "docs/archive/one.md", prefix: "ONE" },
+    { key: "docs/b.md", prefix: "BEE" },
+  ]);
+  expect(config.fileKeysIn("docs/archive")).toEqual([{ key: "docs/archive/one.md", prefix: "ONE" }]);
+});

@@ -154,13 +154,17 @@ prefixes:
   "documentation/notes/": NOTE
   "documentation/notes/ideas.md": IDEA
   "documentation/specifications/": SPEC
+  "documentation/notes/archive/": null
 ```
 
 - A key is a folder, ending in `/`, which covers every file in it and its subfolders, or a file, ending in `.md`. Keys are paths relative to the root folder (the folder holding `.specquer`); a leading `./` is removed, and `./` alone is the root folder. Keys aren't globs.
-- A file's prefix comes from the longest key that matches its path, so a file key beats its folder's key and a subfolder's key beats its parent's. The order of the keys doesn't matter. Only Markdown files that match a key are sectioned.
+- A file's prefix comes from the longest key that matches its path, so a file key beats its folder's key and a subfolder's key beats its parent's. The order of the keys doesn't matter. Only Markdown files whose longest matching key has a prefix are sectioned.
+- The value `null` (or an empty value) leaves the files a key covers unsectioned, so a folder inside a sectioned folder can be left out; a subfolder or file key under it can section its files again. `null` doesn't name a prefix. A Specquer older than Step 006 ignores a `null` entry with a warning, so for it the folder follows the key above.
 - Without the file nothing is sectioned; there is no built-in default. A user who wants every file sectioned adds the key `./`.
 - The file is read with the `yaml` package's document API, and read again when its modification time changes. An invalid key (not ending in `/` or `.md`, with empty, `.` or `..` segments, or holding `*` or `?`), an invalid prefix, and a key that repeats another after normalizing are reported in the log and ignored.
-- A file's new sections get the prefix for its current path; a moved file keeps its IDs, so one file can mix prefixes.
+- A file's new sections get the prefix for its current path; a moved file keeps its IDs, so one file can mix prefixes. Changing a folder's prefix likewise affects only new sections.
+- Making a folder unsectioned leaves its anchors in its files; its documents are dropped from the data files and their sections retired (§2.5, rule 4), so making it sectioned again restores them with their IDs.
+- The folder settings dialog edits folder keys (client §3.6, `server/src/settings/folder-settings.ts`): it finds a folder's key whatever its spelling, changes or removes it in place, and adds a new key at the end of `prefixes:` as the folder path with its trailing `/` (`./` for the root folder), keeping comments and other keys. File keys are edited by hand.
 
 <a id="SPEC-00014" data-uid="bmy8786aswqq"></a>
 ### 2.4. Data Files
@@ -362,6 +366,7 @@ summaries:
 - `model:` applies to all agent features; `summaries:` to summaries only. The schema and `mergeAgentConfig` are in `agent/src/config.ts`.
 - The personal `.specquer/user/agent.config.yaml` overrides the shared file key by key under `summaries:`, and its `model:` replaces the shared one as a whole, since a model's name, URL and key variable belong together (decision D7).
 - Unknown keys are ignored; an invalid `model:` is dropped and an invalid setting falls back to its default, each reported on the server's console.
+- The schemas are in `shared/src/settings/` (re-exported by `agent`), so the settings dialog (client §10) validates with them too. The dialog writes either file through `server/src/settings/agent-settings.ts` with the `yaml` package's document API: only the settings it changes, keeping comments, order and unknown keys, never writing the default base URL into a file that leaves it out. `null` in a save removes a setting. A personal file is created with `.specquer/user/.gitignore`.
 
 <a id="SPEC-00029" data-uid="kwkob0mx0z6x"></a>
 ### 4.3. Making a Summary

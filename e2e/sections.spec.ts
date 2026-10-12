@@ -120,7 +120,8 @@ test("following a link to a section opens the document at the section", async ({
 
 test("Add section anchors lists the files, then anchors them", async ({ page, specquer }) => {
   await treeItem(page, "specs").click({ button: "right" });
-  await page.getByRole("menuitem", { name: "Add section anchors…" }).click();
+  await page.getByRole("menuitem", { name: "Settings…" }).click();
+  await page.getByRole("dialog", { name: "Folder settings" }).getByRole("button", { name: "Add section anchors…" }).click();
   const dialog = page.getByRole("dialog", { name: "Add section anchors" });
   await expect(dialog).toContainText("2 files will change");
   await expect(dialog.getByRole("list", { name: "Files to change" })).toContainText("specs/links.md");

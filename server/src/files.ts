@@ -108,6 +108,11 @@ export class FileService {
     return real;
   }
 
+  /** Checks that a folder exists inside the root ("" is the root itself); throws an `ApiError` if not. */
+  async assertFolder(path: string): Promise<void> {
+    await this.existingFolder(path);
+  }
+
   async kindOf(path: string): Promise<"file" | "folder" | undefined> {
     if (!checkPath(path).ok) return undefined;
     try {

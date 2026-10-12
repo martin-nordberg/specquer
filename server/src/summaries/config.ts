@@ -12,7 +12,8 @@ export const SHARED_AGENT_CONFIG = join(".specquer", "shared", "agent.config.yam
 export const USER_AGENT_CONFIG = join(".specquer", "user", "agent.config.yaml");
 
 class ConfigFile {
-  private stamp: number | null = null;
+  /** `undefined`: not read yet, or invalidated. */
+  private stamp: number | null | undefined = undefined;
   /** The parse of the file at `stamp`; a promise, so concurrent loads share one read. */
   private parsed: Promise<AgentConfigFile> = Promise.resolve({ summaries: {} });
 
@@ -45,6 +46,10 @@ class ConfigFile {
     }
     return parseAgentConfig(doc.toJS(), this.path, this.warn);
   }
+
+  invalidate(): void {
+    this.stamp = undefined;
+  }
 }
 
 export class AgentConfigFiles {
@@ -59,5 +64,14 @@ export class AgentConfigFiles {
   async load(): Promise<AgentConfig> {
     const [shared, user] = await Promise.all([this.shared.load(), this.user.load()]);
     return mergeAgentConfig(shared, user);
+  }
+
+  /**
+   * Reads both files again on the next load, after Specquer wrote one: a write within the same
+   * millisecond as the last one leaves the modification time unchanged.
+   */
+  invalidate(): void {
+    this.shared.invalidate();
+    this.user.invalidate();
   }
 }

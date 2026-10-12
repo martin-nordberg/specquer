@@ -121,8 +121,25 @@ The model, recognition rules, data files and conflict rules are specified in [Da
 
 The rules for summaries are specified in [Data Architecture](data-architecture.md) §4.
 
+<a id=""></a>
+## 9. Settings
+
+| Route | Behavior |
+| ----- | -------- |
+| `GET /api/settings/agent` | Both agent configuration files (`shared`, `personal`), each with its `version` (`""` while it doesn't exist), the model and summaries settings it sets, the values in it ignored as invalid (`warnings`) and its YAML `error`, if any; the settings in effect (`effective`) and where each comes from (`sources`: `personal`, `shared` or `default`); whether each key variable the files name is set (`keys`); and the summary status. |
+| `PUT /api/settings/agent` | Body `{ scope, baseVersion, model?, summaries? }`, `scope` being `"shared"` or `"personal"`. Writes the settings given to that file; `null` removes one (`model: null` the whole block). Returns `{ version }`. |
+| `GET /api/settings/env?name=` | `{ set }`: whether an environment variable (a valid name) is set on the server. Never its value. |
+| `POST /api/settings/model-test` | Body: a model configuration, saved or not. Makes one call with a fixed prompt holding nothing from the specs, a 30-second timeout and no retries. Returns `{ ok: true, ms }` or `{ ok: false, problem }`, the problem in the user's terms with the key's value never repeated. One test runs at a time: a new one stops the one running, which answers "Stopped: another test started." |
+| `GET /api/settings/folder?path=` | A folder's entry in the prefix configuration: its `version`, its own setting (`own`: `inherit`, `off` or `prefix` with the prefix), the nearest folder above with an entry (`inherited`), the file keys inside it (`fileKeys`), and the file's YAML `error`, if any. |
+| `PUT /api/settings/folder` | Body `{ path, setting, baseVersion }`. Writes the folder's entry (removed for `inherit`, `null` for `off`), then rescans the sections, so a folder's sections are retired or restored at once. Returns `{ version, sectioned }`, whether the folder is sectioned now. |
+
+1. The routes write only `.specquer/shared/agent.config.yaml`, `.specquer/user/agent.config.yaml` (creating `.specquer/user/` with its `.gitignore`) and `.specquer/shared/section-prefixes.config.yaml`, at fixed paths. Folder paths are workspace paths of existing folders inside the root (`404` otherwise, `400` for a file).
+2. Values are validated with the shared schemas (`400` otherwise). A file is never created to hold nothing.
+3. Edits keep comments, key order and keys Specquer doesn't know. A save whose `baseVersion` is no longer the file's answers `409` with the current `version`; a file that isn't valid YAML (or isn't a mapping) answers `422` and is never rewritten. Saves run one at a time.
+4. After a save, the configuration is read again at once, even within the same millisecond as the last write: a changed model applies to the next summary, and pre-filling restarts if needed.
+
 <a id="SPEC-00083" data-uid="xukyl7a3b43e"></a>
-## 9. Other Routes
+## 10. Other Routes
 
 | Route | Behavior |
 | ----- | -------- |

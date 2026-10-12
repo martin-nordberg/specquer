@@ -170,6 +170,11 @@ export class SectionIndex {
     return config;
   }
 
+  /** Reads the prefix configuration again on the next load, after Specquer wrote it. */
+  configChanged(): void {
+    this.configFile.invalidate();
+  }
+
   /** Brings the index up to date with the files. Writes nothing. */
   scan(): Promise<void> {
     return this.run(async () => {

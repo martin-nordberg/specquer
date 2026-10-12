@@ -1,10 +1,14 @@
 import { hc } from "hono/client";
 import type {
+  AgentSettings,
+  AgentSettingsUpdate,
   AnchorFolderResult,
   ApiErrorBody,
   ApiRouter,
   DeletePreview,
   FileContent,
+  FolderSettings,
+  ModelTestResult,
   SectionInfo,
   SectionNotice,
   SectionProblem,
@@ -16,6 +20,7 @@ import type {
   Tree,
 } from "@specquer/shared/api";
 import type { BodyEdit } from "@specquer/shared/markdown";
+import type { FolderSetting, ModelConfig } from "@specquer/shared/settings";
 import type { UiState, UiStatePatch } from "@specquer/shared/uistate";
 
 /**
@@ -73,6 +78,12 @@ export type CreateOutcome = { kind: "created"; path: string } | { kind: "exists"
 
 export type RenameOutcome = { kind: "renamed"; path: string; uiState: UiState } | { kind: "exists"; message: string };
 
+/** A settings save's outcome: saved, changed on disk meanwhile, or a file that isn't valid YAML. */
+export type SettingsSaveOutcome = { kind: "saved"; version: string } | { kind: "conflict" } | { kind: "invalid"; message: string };
+
+/** A folder setting's save; once saved, whether the folder is sectioned now. */
+export type FolderSaveOutcome = { kind: "saved"; version: string; sectioned: boolean } | { kind: "conflict" } | { kind: "invalid"; message: string };
+
 /** The operations the UI uses; tests substitute their own. */
 export interface Api {
   getTree(): Promise<Tree>;
@@ -95,6 +106,21 @@ export interface Api {
   summarize(request: SummaryRequest, signal?: AbortSignal): Promise<SummaryResult>;
   /** A section's summary by ID, from the server's cache only (for link previews and reports). */
   sectionSummary(id: string): Promise<SectionSummaryLookup>;
+  agentSettings(): Promise<AgentSettings>;
+  saveAgentSettings(update: AgentSettingsUpdate): Promise<SettingsSaveOutcome>;
+  /** Whether an environment variable is set on the server. */
+  envSet(name: string): Promise<boolean>;
+  /** One small call to the model with these settings, saved or not. */
+  testModel(config: ModelConfig, signal?: AbortSignal): Promise<ModelTestResult>;
+  folderSettings(path: string): Promise<FolderSettings>;
+  saveFolderSettings(path: string, setting: FolderSetting, baseVersion: string): Promise<FolderSaveOutcome>;
+}
+
+/** A settings save's response: 409 and 422 are outcomes, not errors. */
+async function settingsOutcome<T extends { version: string }>(res: JsonResponse): Promise<{ kind: "saved" } & T | { kind: "conflict" } | { kind: "invalid"; message: string }> {
+  if (res.status === 409) return { kind: "conflict" };
+  if (res.status === 422) return { kind: "invalid", message: ((await res.json()) as ApiErrorBody).message };
+  return { kind: "saved", ...(await json<T>(res)) };
 }
 
 type SavedBody = { version: string; edits?: BodyEdit[]; notices?: SectionNotice[] };
@@ -178,5 +204,23 @@ export const httpApi: Api = {
   },
   async sectionSummary(id) {
     return json<SectionSummaryLookup>(await client.api.summaries.sections[":id"].$get({ param: { id } }));
+  },
+  async agentSettings() {
+    return json<AgentSettings>(await client.api.settings.agent.$get());
+  },
+  async saveAgentSettings(update) {
+    return settingsOutcome<{ version: string }>(await client.api.settings.agent.$put({ json: update }));
+  },
+  async envSet(name) {
+    return (await json<{ set: boolean }>(await client.api.settings.env.$get({ query: { name } }))).set;
+  },
+  async testModel(config, signal) {
+    return json<ModelTestResult>(await client.api.settings["model-test"].$post({ json: config }, { init: { signal } }));
+  },
+  async folderSettings(path) {
+    return json<FolderSettings>(await client.api.settings.folder.$get({ query: { path } }));
+  },
+  async saveFolderSettings(path, setting, baseVersion) {
+    return settingsOutcome<{ version: string; sectioned: boolean }>(await client.api.settings.folder.$put({ json: { path, setting, baseVersion } }));
   },
 };

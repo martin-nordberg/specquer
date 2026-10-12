@@ -76,6 +76,7 @@ The shared package holds everything both sides need. It must run unchanged in th
 | Markdown | `@specquer/shared/markdown` | Front matter split and join, YAML syntax check (`yaml` package), the preview pipeline, finding and adding section anchors; see [Data Architecture](data-architecture.md) §1 and §2 |
 | Sections | `@specquer/shared/sections` | Section ID and UID formats; the section anchor rules for coding agents |
 | UI state | `@specquer/shared/uistate` | Zod schema, defaults and pure update functions; see [Data Architecture](data-architecture.md) §3 |
+| Settings | `@specquer/shared/settings` | Zod schemas of the agent configuration (`model:`, `summaries:`, re-exported by `agent`) and of a folder's prefix setting, so the settings dialogs validate as the server does |
 
 | Aspect | Decision |
 | ------ | -------- |
@@ -101,7 +102,8 @@ The router's type is what the client's typed Hono client uses, so the client get
 | Sections | `SectionIndex` (`server/src/sections/`): an in-memory index of the sectioned files and the data files in `.specquer/shared/`, which the `yaml` package reads and writes (it keeps key order and writes one flow mapping per line); document IDs and section UIDs are 12-character CUID2s (`@paralleldrive/cuid2`'s `init({ length: 12 })`) carried in the anchors' `data-uid`; the data files are read again when they change on disk; see [Data Architecture](data-architecture.md) §2 |
 | Security | Session token, Host and Origin checks, Content-Security-Policy; see [Security](security.md) |
 | AI features | Delegated to `agent`. The summary service (`server/src/summaries/`) reads the agent configuration, keeps summaries in a SQLite cache (`bun:sqlite`, `.specquer/cache/summaries.db`), queues model calls with two priorities, looks summaries up by section ID, and pre-fills the cache in the background when switched on; see [Data Architecture](data-architecture.md) §4 |
-| Outbound network | Only to the configured model provider, and only when summaries are configured; see [Security](security.md) §9 |
+| Settings | `server/src/settings/`: the agent configuration files and the folders' prefix entries, read and written for the settings dialogs with the `yaml` package's document API (keeping comments), with versions against overwriting changes made on disk; after a write the readers are told to read the file again |
+| Outbound network | Only to the configured model provider, and only when summaries are configured or the user tests a model; see [Security](security.md) §9 |
 | Development port | 3000 |
 | Development mode | `bun --hot` (reloads on change) |
 
@@ -128,7 +130,7 @@ The command line, the file-system rules and the API are specified in [Server Req
 | Tool schemas | Zod, used to define the input of LangChain tools and structured output |
 | Model provider | `@langchain/openai`'s `ChatOpenAI`, pointed at NVIDIA's OpenAI-compatible API (`https://integrate.api.nvidia.com/v1`); the model is configured in `.specquer/shared/agent.config.yaml` |
 | Used by | `server`, which exposes agent features through API routes |
-| Features | Summaries of sections (Step 004): `config.ts` (the configuration schema and merging), `model.ts` (the chat model for a configuration), `summarize.ts` (the prompt, plain-text output, and the fallback for long sections) |
+| Features | Summaries of sections (Step 004): `config.ts` (parsing and merging the configuration; its schemas are in `shared`), `model.ts` (the chat model for a configuration, and `testModel`, the settings dialog's one-call check with its failures in the user's terms), `summarize.ts` (the prompt, plain-text output, and the fallback for long sections) |
 
 <a id="SPEC-00095" data-uid="bfd2gvoja5mj"></a>
 ### 6.1 Package Rationale
@@ -182,6 +184,7 @@ The client sends saved text only. The server reads files for summaries only to p
 | WYSIWYG editing | Milkdown (`@milkdown/kit`, CommonMark and GFM presets), with a node view that shows section anchors as badges |
 | Markdown preview | The `shared` pipeline (unified, remark-parse, remark-gfm, remark-frontmatter, remark-rehype, rehype-raw, rehype-sanitize), run in a Web Worker and rendered with `hast-util-to-jsx-runtime` |
 | Summaries | The summary slider (the shadcn Slider on Radix UI) above the preview; the rendered tree filtered by stop (`summarizeTree` from `shared`), with summaries from `SummaryStore` (`client/src/app/summaries.ts`) rendered as plain text |
+| Settings | The settings dialogs in `client/src/components/settings/`: the system settings (shadcn Tabs, RadioGroup and Switch), with the form apart from React in `settings-form.ts`, and the folder settings |
 | API client | Hono typed client (`hc`), typed from the router in `shared` |
 | Input validation | Zod and the validation functions from `shared`, so the client and server apply the same rules |
 | Build tool | Bun's bundler, through an HTML import of `client/index.html` in the back end |

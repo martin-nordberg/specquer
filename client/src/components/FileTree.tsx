@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, FilePlus, FileText, Folder, FolderOpen, FolderPlus, Pencil, Section, Trash2, TriangleAlert } from "lucide-react";
+import { ChevronDown, ChevronRight, FilePlus, FileText, Folder, FolderOpen, FolderPlus, Pencil, Settings, Trash2, TriangleAlert } from "lucide-react";
 import type { TreeFolder, TreeNode } from "@specquer/shared/api";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { cn } from "@/lib/utils";
@@ -12,8 +12,8 @@ export interface FileTreeProps {
   onOpenFile: (path: string) => void;
   onNewFile: (folder: TreeFolder) => void;
   onNewFolder: (folder: TreeFolder) => void;
-  /** **Add section anchors…** for a folder. */
-  onAddAnchors?: (folder: TreeFolder) => void;
+  /** **Settings…** for a folder: whether it is sectioned, its prefix, and adding section anchors. */
+  onFolderSettings?: (folder: TreeFolder) => void;
   /** **Section problems…** for a folder. */
   onShowProblems?: (folder: TreeFolder) => void;
   onRename: (node: TreeNode) => void;
@@ -49,9 +49,9 @@ function NewEntryItems({
   folder,
   onNewFile,
   onNewFolder,
-  onAddAnchors,
+  onFolderSettings,
   onShowProblems,
-}: Pick<FileTreeProps, "onNewFile" | "onNewFolder" | "onAddAnchors" | "onShowProblems"> & { folder: TreeFolder }) {
+}: Pick<FileTreeProps, "onNewFile" | "onNewFolder" | "onFolderSettings" | "onShowProblems"> & { folder: TreeFolder }) {
   return (
     <>
       <ContextMenuItem onSelect={() => onNewFile(folder)}>
@@ -60,9 +60,9 @@ function NewEntryItems({
       <ContextMenuItem onSelect={() => onNewFolder(folder)}>
         <FolderPlus /> New folder…
       </ContextMenuItem>
-      {onAddAnchors !== undefined && (
-        <ContextMenuItem onSelect={() => onAddAnchors(folder)}>
-          <Section /> Add section anchors…
+      {onFolderSettings !== undefined && (
+        <ContextMenuItem onSelect={() => onFolderSettings(folder)}>
+          <Settings /> Settings…
         </ContextMenuItem>
       )}
       {onShowProblems !== undefined && (

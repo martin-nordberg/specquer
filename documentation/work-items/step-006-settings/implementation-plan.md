@@ -214,3 +214,19 @@ Taken while planning; each is _Proposed_ and the work proceeds on it unless chan
 | Turning a folder off by mistake | Its sections are retired | Turning it back on restores every ID; the note after saving says so |
 | The model test sends the key to a mistyped URL | The key reaches another host | The same as saving that URL; only http(s) URLs pass the schema; the dialog shows the URL next to **Test** |
 | A file changes on disk while the dialog is open | A pull is overwritten | Versions; a conflict reloads the values |
+
+<a id=""></a>
+## 8. Implementation Status
+
+Phases 1 to 5 were carried out in October 2026. What differs from the plan, or was learned doing it:
+
+1. **Files** (§4.3): the writers are `server/src/settings/agent-settings.ts` and `folder-settings.ts`, on a common `yaml-file.ts` (`YamlFile`, `WriteQueue`). Creating `.specquer/user/` with its `.gitignore` moved from `UiStateStore` to `server/src/user-folder.ts`, which both use. A save that would leave a new file empty creates no file.
+2. **Keeping the file's text**: a changed value is set on its scalar in place, so a comment after it survives; unchanged values aren't touched at all. Removing every personal setting leaves an empty mapping (`{}`) in the personal file.
+3. **Freshness** (D5): `SectionIndex.configChanged()` and `SummaryService.configChanged()` make the readers forget their stamps; the handlers call them after a write.
+4. **Saving both tabs** (§4.6): the two tabs' changes to the same file go in one `PUT`, rather than two with the version chained; changes to different files are two `PUT`s.
+5. **The folder save** (§4.4) rescans before answering, and `sectioned` comes from the file as written, so the dialog's offer to add anchors and the anchor dialog's dry run see the new configuration.
+6. **The model test** (§4.5): `createChatModel` takes `{ timeout, maxRetries }`; `testModel` and `modelTestProblem` are in `agent/src/model.ts`, and `SummaryService.testModel` keeps one running. A test stopped by a newer one answers "Stopped: another test started." instead of an error. Failures are recognized by status (401, 403, 404, 429), LangChain's error codes and the OpenAI client's error names.
+7. **The env check** (D9) runs 300 ms after typing pauses, seeded from the variables `GET /api/settings/agent` already reported.
+8. **Section numbers in the specifications**: the prefix configuration is Data Architecture §2.3 (not §2.2). The client requirements gained §3.6 (folder settings) and §10 (settings); the server requirements gained §9 (settings), and other routes became §10.
+9. **Tests.** Unit and component tests pass (415), and the end-to-end suite passes on Chrome and WebKit (106), with `e2e/settings.spec.ts` covering a personal model set and tested in the dialog, a model error, a folder switched off and back on (IDs kept), and a new folder given a prefix and anchored from the dialog.
+

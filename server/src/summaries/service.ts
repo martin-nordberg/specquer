@@ -2,6 +2,7 @@ import {
   type AgentConfig,
   type ModelConfig,
   PROMPT_VERSION,
+  type ModelTestResult,
   type ResolvedModel,
   type SectionInput,
   type SummaryOutput,
@@ -9,6 +10,7 @@ import {
   sectionInput,
   summarizeSection,
   summarizeWithFallback,
+  testModel,
 } from "@specquer/agent";
 import { ApiError, type SectionSummaryLookup, type SummaryRequest, type SummaryResult, type SummaryStatus } from "@specquer/shared/api";
 import { isShortSection } from "@specquer/shared/summaries";
@@ -32,7 +34,7 @@ const DAY = 24 * 60 * 60 * 1000;
 export interface SummaryServiceOptions {
   /** Where API keys come from: the server's environment. */
   env?: Record<string, string | undefined>;
-  createModel?: (config: ModelConfig | undefined, env: Record<string, string | undefined>) => ResolvedModel;
+  createModel?: typeof createChatModel;
   now?: () => number;
   warn?: (message: string) => void;
   /** How long pre-filling waits after it is triggered (10 s). */
@@ -82,6 +84,7 @@ export class SummaryService {
   /** What pre-filling last ran with: whether it may run, and the model. */
   private prefillSignature: string | null = null;
   private purgedAt = -Infinity;
+  private modelTest: AbortController | null = null;
 
   constructor(
     root: string,
@@ -220,7 +223,38 @@ export class SummaryService {
     return { ...result, cached: false };
   }
 
+  /** Whether an environment variable is set (for the settings dialog; never its value). */
+  keySet(name: string): boolean {
+    const value = this.env[name];
+    return value !== undefined && value.trim() !== "";
+  }
+
+  /** Reads the agent configuration again on the next call, after Specquer wrote it. */
+  configChanged(): void {
+    this.config.invalidate();
+  }
+
+  /** One small call to check a model configuration; a test running already is aborted. */
+  async testModel(config: ModelConfig, signal: AbortSignal): Promise<ModelTestResult> {
+    this.modelTest?.abort();
+    const controller = new AbortController();
+    this.modelTest = controller;
+    const abort = () => controller.abort();
+    signal.addEventListener("abort", abort);
+    try {
+      return await testModel(config, this.env, controller.signal, this.createModel);
+    } catch (err) {
+      // Replaced by a newer test, not dropped by the client: the answer still reaches it
+      if (controller.signal.aborted && !signal.aborted) return { ok: false, problem: "Stopped: another test started." };
+      throw err;
+    } finally {
+      signal.removeEventListener("abort", abort);
+      if (this.modelTest === controller) this.modelTest = null;
+    }
+  }
+
   close(): void {
+    this.modelTest?.abort();
     this.prefill.close();
     this.cache.close();
   }

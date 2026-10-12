@@ -22,6 +22,9 @@ import { FileTree } from "@/components/FileTree";
 import { FrontmatterEditor, initialFrontmatterHeight } from "@/components/FrontmatterEditor";
 import type { PreviewSummaries, ScrollTarget } from "@/components/Preview";
 import { ProblemsDialog } from "@/components/ProblemsDialog";
+import { FolderSettingsDialog } from "@/components/settings/FolderSettingsDialog";
+import { SettingsButton } from "@/components/settings/SettingsButton";
+import { SettingsDialog } from "@/components/settings/SettingsDialog";
 import { SectionNotices } from "@/components/SectionNotices";
 import { SplitPane } from "@/components/SplitPane";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -70,6 +73,8 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
   const [deleting, setDeleting] = useState<TreeNode | null>(null);
   const [anchoring, setAnchoring] = useState<TreeFolder | null>(null);
   const [checking, setChecking] = useState<TreeFolder | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [folderSettings, setFolderSettings] = useState<TreeFolder | null>(null);
   const [scrollTarget, setScrollTarget] = useState<(ScrollTarget & { path: string }) | undefined>(undefined);
   const [openError, setOpenError] = useState<string | null>(null);
 
@@ -82,16 +87,19 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
   // Whether summaries can be made: asked once per page load and whenever the tab gets focus, so
   // editing the agent configuration takes effect without a restart (decision D10)
   const [summaryStatus, setSummaryStatus] = useState<SummaryStatus | null>(null);
-  useEffect(() => {
-    const load = () =>
-      api
+  const loadSummaryStatus = useCallback(
+    () =>
+      void api
         .summaryStatus()
         .then(setSummaryStatus)
-        .catch(() => setSummaryStatus({ enabled: false, problem: "Couldn't ask the server whether summaries are enabled." }));
-    void load();
-    window.addEventListener("focus", load);
-    return () => window.removeEventListener("focus", load);
-  }, [api]);
+        .catch(() => setSummaryStatus({ enabled: false, problem: "Couldn't ask the server whether summaries are enabled." })),
+    [api],
+  );
+  useEffect(() => {
+    loadSummaryStatus();
+    window.addEventListener("focus", loadSummaryStatus);
+    return () => window.removeEventListener("focus", loadSummaryStatus);
+  }, [loadSummaryStatus]);
 
   /**
    * Saves the current file, then opens another. Stays put if the save didn't succeed. With a
@@ -301,7 +309,7 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
         onOpenFile={openFromUi}
         onNewFile={(folder) => setCreating({ parent: folder, kind: "file" })}
         onNewFolder={(folder) => setCreating({ parent: folder, kind: "folder" })}
-        onAddAnchors={setAnchoring}
+        onFolderSettings={setFolderSettings}
         onShowProblems={setChecking}
         onRename={setRenaming}
         onDelete={setDeleting}
@@ -384,7 +392,10 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
           <img src={appIconUri} alt="" className="size-6" />
           Specquer
         </span>
-        <ThemeToggle theme={theme} onChange={(next) => uiStore.update((s) => setTheme(s, next))} />
+        <span className="flex items-center gap-1">
+          <ThemeToggle theme={theme} onChange={(next) => uiStore.update((s) => setTheme(s, next))} />
+          <SettingsButton onClick={() => setSettingsOpen(true)} />
+        </span>
       </header>
       <main className="min-h-0 flex-1">
         <SplitPane
@@ -398,6 +409,8 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
       <RenameDialog node={renaming} onClose={() => setRenaming(null)} onRename={rename} />
       <DeleteDialog node={deleting} onClose={() => setDeleting(null)} loadPreview={api.deletePreview} onDelete={remove} />
       <AnchorDialog folder={anchoring} onClose={() => setAnchoring(null)} loadChanges={anchorChanges} onRun={addAnchors} />
+      <FolderSettingsDialog folder={folderSettings} onClose={() => setFolderSettings(null)} api={api} onAddAnchors={setAnchoring} />
+      <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} api={api} onSaved={loadSummaryStatus} />
       <ProblemsDialog folder={checking} onClose={() => setChecking(null)} loadProblems={loadProblems} onOpen={openFromUi} onRenumber={renumberIn} />
     </div>
   );

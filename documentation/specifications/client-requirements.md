@@ -17,6 +17,7 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 
 1. The window is split into a folder pane on the left and a file pane on the right, with a drag bar between them.
 2. Dragging the bar (or pressing the arrow keys on it) changes the folder pane's width, as a fraction of the window between 10% and 70%. The fraction persists in the UI state.
+3. The header holds the app icon and name on the left, and on the right the light/dark mode toggle (§8) and, right of it, the **Settings** gear button (§10).
 
 <a id="SPEC-00043" data-uid="arb991i3e6ej"></a>
 ## 3. Folder Tree
@@ -25,7 +26,7 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 2. Folders come before files; names sort naturally, ignoring case.
 3. Clicking a folder expands or collapses it. Expanded folders persist in the UI state.
 4. Single-clicking a file opens it in the file pane. The open file is highlighted with the navigation color.
-5. Right-clicking a folder or file opens a context menu with **Rename…** and **Delete…**. For a folder, the menu starts with **New file…**, **New folder…**, **Add section anchors…** and **Section problems…**. Right-clicking the empty space below the last entry (or in an empty tree) offers the same four for the root folder.
+5. Right-clicking a folder or file opens a context menu with **Rename…** and **Delete…**. For a folder, the menu starts with **New file…**, **New folder…**, **Settings…** (with a gear icon, §3.6) and **Section problems…**. Right-clicking the empty space below the last entry (or in an empty tree) offers the same four for the root folder.
 
 <a id="SPEC-00044" data-uid="u5s5qfu4wurh"></a>
 ### 3.1 Rename
@@ -57,7 +58,7 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 <a id="SPEC-00047" data-uid="w748uemplxzf"></a>
 ### 3.4 Add Section Anchors
 
-1. The open file is saved first.
+1. It is opened with **Add section anchors…** in a folder's settings (§3.6). The open file is saved first.
 2. A modal dialog says how many sectioned files in the folder will change and lists them, with **Add anchors** and **Cancel** buttons; when none would change it says so and offers only **Close**.
 3. Adding the anchors rewrites those files (see [Server Requirements](server-requirements.md) §6). If the open file was among them, it is reloaded.
 4. While the root folder's `AGENTS.md` lacks the section anchor rules for coding agents, the dialog offers to add them with a checkbox, unticked. Ticked, the dialog can run even when no file needs anchors (**Add to AGENTS.md**).
@@ -68,6 +69,17 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 1. The open file is saved first.
 2. A modal dialog lists the problems in the folder's sectioned files: IDs used by copies of one section in several documents, IDs used by different sections (two branches issued one number), stray anchors (with their line), and files with merge conflict markers.
 3. Each occurrence opens its file, at the section. Each occurrence of a duplicate or colliding ID that doesn't keep the ID has **Renumber**, which gives it a new number; the list then reloads.
+
+<a id=""></a>
+### 3.6 Folder Settings
+
+1. A modal dialog, **Folder settings**, edits the folder's entry in `.specquer/shared/section-prefixes.config.yaml` (see [Data Architecture](data-architecture.md) §2.3).
+2. **Sectioned** has three choices: **Inherited** (no entry of its own; the dialog says what it follows, e.g. "from documentation: sectioned, prefix SPEC", or "not sectioned"), **Yes** (an entry with a prefix) and **No** (an entry saying it isn't sectioned, even inside a sectioned folder).
+3. **Prefix** shows for **Yes**, starting from the inherited prefix if any. It is typed in upper case and checked as the section ID prefix (an upper-case letter and 1 to 4 upper-case letters or digits); an invalid prefix is reported under the field. Several folders may share a prefix.
+4. The keys for single files inside the folder are listed, read only; they are edited in the YAML file.
+5. **Add section anchors…** opens **Add section anchors** (§3.4) for the folder, closing this dialog. It is enabled while the folder is sectioned with the saved settings.
+6. **Save** is enabled once the setting changed and is valid. When the save makes the folder sectioned, the dialog says so and offers **Add section anchors…** and **Close**; when it stops being sectioned, it says the anchors stay in the files and the sections keep their IDs if it is sectioned again.
+7. If the file changed on disk since the dialog read it, the save is refused, the dialog reloads the settings and says so. A file that isn't valid YAML is reported and can't be saved to until it is fixed by hand.
 
 <a id="SPEC-00049" data-uid="g5tal9mne58o"></a>
 ## 4. File Path
@@ -114,7 +126,7 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 2. Each step to the left summarizes the sections of the next higher level used, with everything below them; a section deeper than that level that isn't inside one of them is summarized too. A summarized section keeps its heading, with the summary under it. Text under a heading before its first subsection, and the text before the first heading, stay as written. At the far left one summary replaces the whole document, headings included.
 3. The stops are named "Full text", "Summarize level 3 sections", …, "Summarize document"; the current one is shown beside the slider and is the slider's accessible value text. The slider is reached and moved with the keyboard.
 4. The position is remembered per file in the UI state, as steps from the full text, and clamped to the stops the document has.
-5. Until a model is configured and its key set, the slider is disabled, the preview shows the full text, and a hint names `.specquer/shared/agent.config.yaml` (with the reason as a tooltip). The client asks the server whether summaries are enabled when the page loads and whenever the tab gets focus, so a configuration change needs no reload.
+5. Until a model is configured and its key set, the slider is disabled, the preview shows the full text, and a hint names `.specquer/shared/agent.config.yaml` (with the reason as a tooltip). The client asks the server whether summaries are enabled when the page loads, whenever the tab gets focus and after the settings are saved (§10), so a configuration change needs no reload.
 6. A section of fewer than 60 words (after simplification) is shown as written, without calling the model. A section added since the last save is shown as written until it is saved.
 7. A summary shows "Summarizing..." with a spinner while it is made (the spinner stays still when the system asks for reduced motion); then plain text paragraphs, never Markdown or HTML, under a subtle label: "AI summary", the name of the model that made it (the part after the last `/`, with the full ID as a tooltip), and "shortened" when the section was too long and was cut. If it can't be made (a network failure, the provider's rate limit), the error shows in its place with **Retry**.
 8. Summaries are made from the saved file only; unsaved text is never sent. A section edited since the last save keeps its last summary, labeled "out of date", and is summarized again after the next save.
@@ -164,3 +176,15 @@ The logo is a section sign (§), for specifications, drawn as two S-shaped strok
 | Favicon | A light § on a rounded tile in the navigation color | The app's browser tab. It is added at startup as a `data:` URI, which the Content-Security-Policy's `img-src` allows (see [Security](security.md) §7). |
 | App icon | A page with a folded corner and a § in the navigation color, with a pencil whose tip touches the §'s lower curve | Left of "Specquer" in the header, 24 pixels, with empty alternative text since the name follows it |
 | Docs favicon | The favicon's §, light on a dark gray tile, or dark on a very light gray tile when the browser is in dark mode | The documentation site's browser tab (`documentation/public/favicon.svg`); a unit test checks the file matches `logo.ts` |
+
+<a id=""></a>
+## 10. Settings
+
+1. The **Settings** gear button opens a modal dialog, **Settings**, with the agent configuration's settings (see [Data Architecture](data-architecture.md) §4.2) in tabs: **Model** and **Summarization**.
+2. Each tab has a **Personal** / **Shared** choice, starting on **Personal**, which says the file it saves to: `.specquer/user/agent.config.yaml` (for this user only, overriding the shared file) or `.specquer/shared/agent.config.yaml` (committed, for everyone using the repository). Switching with unsaved changes on the tab asks to discard them first.
+3. In **Personal** each value is the one in effect, with a badge saying where it comes from: **Personal**, **Shared** or **Default**. A personal value has **Reset**, which removes it from the personal file on save, so the shared value applies again. In **Shared** each value is the shared file's (or the default), marked when a personal value overrides it.
+4. **Model** tab: the provider (NVIDIA, read only), the model ID (free text; Specquer offers no list of models), the base URL and the API key variable. The key itself is never asked for, shown or saved, only the name of the variable that holds it; the tab says whether the server has that variable ("found" or "not set"), and when it isn't set, that Specquer reads its environment only at startup and must be restarted after it is set. The model status (summaries on with which model, or why they are off) is shown. The model is saved as a whole: changing any field writes the complete `model:` block, and **Reset** resets all of it.
+5. **Test** sends one short fixed prompt, with nothing from the specs, to the model as entered, saved or not, and shows how long the answer took or what went wrong (a rejected key, an unknown model, an unreachable URL, no answer within 30 seconds, or the provider's message). The tab names the URL the key will be sent to. A running test can be cancelled; a new one stops the one running.
+6. **Summarization** tab: concurrent model calls (1 to 16), the token budget (1,000 to 1,000,000) and **Pre-fill summaries in the background**. Switching pre-filling on warns that the server will send every section of every Markdown file to the model provider in the background, again after each change; in **Shared** it adds that this applies to everyone who pulls the change, and saving asks for confirmation (**Switch on for everyone**).
+7. Invalid values are reported under their field and keep **Save** disabled. **Save** writes the changes of both tabs, one save per file, and closes the dialog; **Cancel** discards them. A file that changed on disk since the dialog read it is not overwritten: the dialog reloads the values and says so. Values a file holds that are invalid are listed at the top of the tab, and a file that isn't valid YAML can't be saved to until it is fixed by hand.
+8. Saved settings take effect without a restart, except a key variable that wasn't set when Specquer started (item 4).

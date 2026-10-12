@@ -1,4 +1,3 @@
-import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import {
   type EntryKind,
@@ -12,6 +11,7 @@ import {
   renameInUiState,
 } from "@specquer/shared/uistate";
 import { writeAtomically } from "./files.ts";
+import { ensureUserFolder } from "./user-folder.ts";
 
 /**
  * Persists the UI state in `.specquer/user/uistate.yaml` under the root. If Specquer is open in
@@ -56,18 +56,9 @@ export class UiStateStore {
   }
 
   async save(state: UiState): Promise<void> {
-    await this.ensureFolder();
+    await ensureUserFolder(this.folder);
     const header = "# Specquer UI state for this user; written by Specquer\n";
     await writeAtomically(this.file, header + Bun.YAML.stringify(state, null, 2) + "\n");
-  }
-
-  /** Creates `.specquer/user/` with a `.gitignore` that keeps per-user state out of Git. */
-  private async ensureFolder(): Promise<void> {
-    const created = await mkdir(this.folder, { recursive: true });
-    // mkdir returns the first folder it created, or undefined if the folder already existed
-    if (created === undefined) return;
-    const gitignore = Bun.file(join(this.folder, ".gitignore"));
-    if (!(await gitignore.exists())) await Bun.write(gitignore, "*\n");
   }
 
   /**

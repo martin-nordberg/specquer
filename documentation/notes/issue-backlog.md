@@ -4,4 +4,5 @@
 # Minor Issues
 
 * In create or rename file, if the user types in a name ending with ".md" make the new file name xxx.md not xxx.md.md.
-* Fade out section anchor tags in plain text editing
+* Fade out section anchor tags in plain text editing.
+* 

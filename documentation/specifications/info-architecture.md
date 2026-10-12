@@ -20,7 +20,7 @@ This document describes what Specquer works with and how its screen is organized
 | Section | A whole spec file (the root section), a top-level heading with its content, or an item of a sectioned list. Sectioned files are chosen by `.specquer/shared/section-prefixes.config.yaml`. See [Data Architecture](data-architecture.md) §2. |
 | Section anchor and ID | An invisible HTML anchor that marks a section with a permanent ID such as `REQ-00257`, used in links to the section, and its UID (`data-uid`), the section's identity. The root anchor's UID is the document ID. |
 | Shared data | The section configuration and data files in `.specquer/shared/`, committed to Git: `documents.yaml` and, per prefix, `sections.yaml` (live and retired sections). |
-| Agent guide | Optional section anchor rules for coding agents in the root folder's `AGENTS.md`, added on request by **Add section anchors**. |
+| Agent guide | Optional section anchor rules for coding agents in the root folder's `AGENTS.md`, added on request by **Add section anchors** (in a folder's settings). |
 | Summary | An AI-generated summary of a heading section, or of the whole document, shown in the preview in place of the section's content by the summary slider. Made from the saved file by the model named in the agent configuration, and cached for 30 days. See [Data Architecture](data-architecture.md) §4. |
 | Agent configuration | `.specquer/shared/agent.config.yaml` (committed) names the model for agent features and the environment variable holding its key; an optional `.specquer/user/agent.config.yaml` overrides it for one user. Without it, Specquer makes no network calls. |
 | Summary cache | `.specquer/cache/summaries.db`, per user and ignored by Git. |
@@ -69,12 +69,12 @@ Specquer has one view: a header and two panes side by side.
 
 | Region | Contents |
 | ------ | -------- |
-| Header | App icon and application name; light/dark switch |
-| Left pane | Folder tree; context menu on each folder (New file, New folder, Add section anchors, Rename, Delete), each file (Rename, Delete) and the empty space below the last entry (New file, New folder, Add section anchors in the root) |
+| Header | App icon and application name; light/dark switch and the settings gear button |
+| Left pane | Folder tree; context menu on each folder (New file, New folder, Settings, Section problems, Rename, Delete), each file (Rename, Delete) and the empty space below the last entry (New file, New folder, Settings, Section problems for the root) |
 | Right pane, row 1 | File path breadcrumb (a drop-down of recent files once there are any), save status, view-type switch |
 | Right pane, row 2 | Front matter editor with a drag bar below it |
 | Right pane, row 3 | Markdown content in one of four views |
-| Dialogs | New file, new folder, rename, delete, add section anchors, and the conflict dialog when a file changed on disk |
+| Dialogs | New file, new folder, rename, delete, folder settings, add section anchors, section problems, settings (model and summarization), and the conflict dialog when a file changed on disk |
 
 <a id="SPEC-00036" data-uid="x9pynsmcyb9v"></a>
 ## 3. Navigation
