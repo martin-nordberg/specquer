@@ -25,6 +25,11 @@ export const summariesConfigSchema = z.object({
   concurrency: z.number().int().min(1).max(16).default(2),
   /** Sections estimated above this many tokens are summarized from their subsections' summaries. */
   tokenBudget: z.number().int().min(1000).max(1_000_000).default(24_000),
+  /**
+   * Summarize every section of every Markdown file in the background, so the slider finds its
+   * summaries made. Off by default: it sends every spec to the model provider.
+   */
+  prefill: z.boolean().default(false),
 });
 export type SummariesConfig = z.infer<typeof summariesConfigSchema>;
 
@@ -67,10 +72,10 @@ export function parseAgentConfig(value: unknown, source: string, warn: (message:
   if (summaries !== undefined && summaries !== null) {
     if (!isRecord(summaries)) warn(`${source}: 'summaries' must be a mapping`);
     else {
-      for (const key of ["concurrency", "tokenBudget"] as const) {
+      for (const key of ["concurrency", "tokenBudget", "prefill"] as const) {
         if (summaries[key] === undefined) continue;
         const field = summariesConfigSchema.shape[key].safeParse(summaries[key]);
-        if (field.success) result.summaries[key] = field.data;
+        if (field.success) (result.summaries as Record<string, unknown>)[key] = field.data;
         else warn(`${source}: ignoring 'summaries.${key}': ${issues(field.error)}`);
       }
     }

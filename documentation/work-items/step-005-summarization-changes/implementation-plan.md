@@ -189,4 +189,14 @@ Taken while planning; each is _Proposed_ and the work proceeds on it unless chan
 <a id="WORK-00206" data-uid="q02uw8l23cs1"></a>
 ## 8. Implementation Status
 
-Not started.
+Phases 1 to 5 were carried out in October 2026. What differs from the plan, or was learned doing it:
+
+1. **Targets** (§4.1) carry no depth: `summaryTargets` returns the deepest stop's sections first and the whole document last, which is the order pre-filling needs. The client's `savedBody()` is now `summaryBody` from `shared`, so both sides slice the same body.
+2. **Finding the section** (§4.4) is `SectionIndex.find(id)` rather than `locate`: it scans, reads the document and analyzes it with the index's knowledge of document UIDs, so a root anchor followed by a heading is told apart as it is everywhere else. `FoundSection` gained `range` for list items, which the lookup answers with as written. With no model configured, a summary found by the lookup has `current: false`.
+3. **Within a file** (§4.5), pre-filling summarizes the targets in order with as many workers as the queue has background slots. Queuing them all at once let the order depend on timing, so a parent could be summarized before its subsections.
+4. **Triggers** (§4.5): a trigger while a pass runs makes another pass follow it, rather than restarting it, so calls already queued aren't dropped; only a configuration change restarts. Tree loads trigger a pass (unchanged files are skipped by their stamps) in place of scans that find changed files. A rate limit stops the pass at once, dropping the calls still waiting.
+5. **The older summary's box** (§4.7): the entry stays "done" while the configured model's summary is made, so the text is replaced in one render with no "Summarizing..." in between; no height is held. The label's tooltip is "Made by _model ID_".
+6. **`accept`** is optional in the request schema (absent means `"current"`), so existing callers are unchanged; the store sends `"any"` first.
+7. **End-to-end tests** shorten pre-filling's wait through `SPECQUER_PREFILL_DELAY_MS`, which `server/src/index.ts` reads. New tests: `e2e/summaries.spec.ts` covers pre-filling (every stop shown with no further calls) and another model's summary replaced by the configured one's.
+8. **Tests.** Unit and component tests pass (373), and the end-to-end suite passes on Chrome and WebKit (98).
+9. **A pass over this repository (Phase 3)** with `google/gemma-4-31b-it` on NVIDIA's free tier, on a copy of its 32 Markdown files with the default concurrency (one background call at a time), didn't finish: after 50 minutes it had made 15 calls, with no 429s but two calls failing on the 120-second timeout (`AGENTS.md`, `CLAUDE.md`; their files are tried again on the next pass). A single call made directly, outside Specquer, took 55 seconds, against 3 to 5 seconds in Step 004, so the provider was slow that day. The done criterion "finishes without 429s reaching the user" is still open: run the pass again when the provider answers at its usual speed, and record its duration and calls here. At Step 004's speeds the pass would take a few minutes.

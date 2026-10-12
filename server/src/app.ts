@@ -31,26 +31,36 @@ export function createHandlers(files: FileService, uiState: UiStateStore, sectio
   return {
     async getTree() {
       const tree = await files.getTree();
-      // Files may have changed outside Specquer; catch up in the background
+      // Files may have changed outside Specquer; catch up in the background. Pre-filling skips
+      // files that haven't changed
       sections.scan().catch((err) => console.error(err));
+      summaries.filesChanged();
       return tree;
     },
     readFile: (path) => files.readFile(path),
-    saveFile: (path, text, baseVersion) => sections.save(path, text, baseVersion),
+    async saveFile(path, text, baseVersion) {
+      const result = await sections.save(path, text, baseVersion);
+      if (result.ok) summaries.filesChanged();
+      return result;
+    },
     async create(parent, name, kind) {
       const path = await sections.create(parent, name, kind);
-      return path === null ? { ok: false, reason: "exists" } : { ok: true, path };
+      if (path === null) return { ok: false, reason: "exists" };
+      summaries.filesChanged();
+      return { ok: true, path };
     },
     async rename(path, newName) {
       const newPath = await files.rename(path, newName);
       if (newPath === null) return { ok: false, reason: "exists" };
       if (newPath !== path) await sections.renamed(path, newPath);
+      summaries.filesChanged();
       return { ok: true, path: newPath, uiState: await uiState.renamed(path, newPath) };
     },
     deletePreview: (path) => files.deletePreview(path),
     async deleteEntry(path) {
       await files.deleteEntry(path);
       await sections.deleted(path);
+      summaries.filesChanged();
       return uiState.deleted(path);
     },
     getUiState: () => uiState.load(),
@@ -60,12 +70,14 @@ export function createHandlers(files: FileService, uiState: UiStateStore, sectio
     async anchorFolder(folder, dryRun, addAgentGuide) {
       const changed = await sections.anchorFolder(folder, dryRun);
       if (!dryRun && addAgentGuide) await addAgentGuideFile(files);
+      if (!dryRun && changed.length > 0) summaries.filesChanged();
       return { files: changed, agentGuide: await hasAgentGuideFile(files) };
     },
     sectionProblems: (folder) => sections.problems(folder),
     renumberSection: (path, id, uid, baseVersion) => sections.renumber(path, id, uid, baseVersion),
     summaryStatus: () => summaries.status(),
     summarize: (request, signal) => summaries.summarize(request, signal),
+    sectionSummary: (id) => summaries.sectionSummary(id),
   };
 }
 
@@ -76,13 +88,13 @@ const UNAUTHORIZED_PAGE = `<!doctype html><html lang="en"><head><meta charset="u
 /**
  * The Hono app: security checks, the client page with its token exchange, and the API; and the
  * section index, which the caller scans once the server is listening, and the summary service,
- * whose expired summaries the caller purges.
+ * whose unused summaries the caller purges and whose pre-filling it starts.
  */
 export function createApp(config: AppConfig) {
   const files = new FileService(config.root);
   const uiState = new UiStateStore(config.root, (path) => files.kindOf(path));
   const sections = new SectionIndex(files);
-  const summaries = new SummaryService(config.root, config.summaries);
+  const summaries = new SummaryService(config.root, { files, sections }, config.summaries);
   const app = new Hono();
 
   app.use(hostCheck(config));

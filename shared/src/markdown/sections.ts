@@ -66,6 +66,8 @@ export interface FoundSection {
   /** Where a missing anchor goes. */
   insertAt: number;
   form: AnchorForm;
+  /** A list item's source range (list items only). */
+  range?: Range;
 }
 
 export interface BodyEdit {
@@ -222,6 +224,7 @@ function itemSection(item: ListItem): FoundSection | undefined {
     title: words.slice(0, ITEM_TITLE_WORDS).join(" ") + (words.length > ITEM_TITLE_WORDS ? " …" : ""),
     insertAt: start(paragraph.children[0]!),
     form: "item",
+    range: { from: start(item), to: end(item) },
   };
 }
 
@@ -247,6 +250,7 @@ export function analyzeBody(body: string, options: AnalyzeOptions = {}): BodyAna
     return {
       ...section,
       insertAt: section.insertAt + bom,
+      ...(section.range === undefined ? {} : { range: shift(section.range, bom) }),
       anchor:
         anchor === undefined
           ? undefined

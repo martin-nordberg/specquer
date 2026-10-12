@@ -3,28 +3,57 @@ import { mkdir, rename } from "node:fs/promises";
 import { join } from "node:path";
 
 /**
- * The summary cache, `.specquer/cache/summaries.db` (SQLite through `bun:sqlite`). Summaries
- * older than 30 days are ignored and deleted, whether used or not (decision D8). The folder gets
- * a `.gitignore` when it is created, so the cache is never committed. A damaged database is moved
- * aside and created again; the cache never stops the server.
+ * The summary cache, `.specquer/cache/summaries.db` (SQLite through `bun:sqlite`). An entry is
+ * keyed by its text (simplified, with the sentence count), the model and the prompt version, so
+ * another model's summary of the same text can be found. Entries unused for 60 days are deleted
+ * (Step 005, D2). The folder gets a `.gitignore` when it is created, so the cache is never
+ * committed. A damaged database is moved aside and created again, and one written by an older
+ * version of Specquer is emptied; the cache never stops the server.
  */
 
 export const CACHE_FOLDER = join(".specquer", "cache");
 export const CACHE_FILE = join(CACHE_FOLDER, "summaries.db");
-export const MAX_AGE = 30 * 24 * 60 * 60 * 1000;
+export const MAX_UNUSED = 60 * 24 * 60 * 60 * 1000;
+/** `PRAGMA user_version` of the current schema; any other version is dropped (Step 005, D4). */
+export const SCHEMA_VERSION = 2;
 
 export interface CachedSummary {
   summary: string;
+  /** The name of the model that made it, as shown to the user. */
   model: string;
   truncated: boolean;
 }
 
-/** The cache key: a hash of the simplified text, the model ID, the prompt version and the sentence count. */
-export function cacheKey(text: string, model: string, promptVersion: number, sentences: number): string {
-  return new Bun.CryptoHasher("sha256").update(JSON.stringify([text, model, promptVersion, sentences])).digest("hex");
+/** A summary found for some model: `current` when it is the requested model's and prompt version's. */
+export interface FoundSummary extends CachedSummary {
+  current: boolean;
 }
 
-const SCHEMA = "CREATE TABLE IF NOT EXISTS summaries (key TEXT PRIMARY KEY, model TEXT, prompt_version INTEGER, summary TEXT, truncated INTEGER, created_at INTEGER)";
+/** Which entry: the text's key, the model's key (`modelKey`) and the prompt version. */
+export interface EntryKey {
+  text: string;
+  model: string;
+  promptVersion: number;
+}
+
+/** The text part of the key: a hash of the simplified text and the sentence count (Step 005, D1). */
+export function textKey(text: string, sentences: number): string {
+  return new Bun.CryptoHasher("sha256").update(JSON.stringify([text, sentences])).digest("hex");
+}
+
+const SCHEMA = `CREATE TABLE IF NOT EXISTS summaries (
+  text_key TEXT NOT NULL,
+  model TEXT NOT NULL,
+  prompt_version INTEGER NOT NULL,
+  model_name TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  truncated INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  used_at INTEGER NOT NULL,
+  PRIMARY KEY (text_key, model, prompt_version)
+)`;
+
+type Row = { summary: string; model_name: string; truncated: number };
 
 export class SummaryCache {
   private db: Database | null = null;
@@ -83,7 +112,14 @@ export class SummaryCache {
     const db = new Database(this.file, { create: true, strict: true });
     try {
       db.run("PRAGMA journal_mode = WAL");
-      db.run(SCHEMA);
+      const { user_version } = db.query<{ user_version: number }, []>("PRAGMA user_version").get()!;
+      if (user_version !== SCHEMA_VERSION) {
+        db.transaction(() => {
+          db.run("DROP TABLE IF EXISTS summaries");
+          db.run(SCHEMA);
+          db.run(`PRAGMA user_version = ${SCHEMA_VERSION}`);
+        })();
+      }
       db.query("SELECT count(*) FROM summaries").get();
       return db;
     } catch (err) {
@@ -100,40 +136,75 @@ export class SummaryCache {
     if (!(await gitignore.exists())) await Bun.write(gitignore, "*\n");
   }
 
-  async get(key: string): Promise<CachedSummary | undefined> {
+  /** The entry for `key`, marked as used. */
+  async get(key: EntryKey): Promise<CachedSummary | undefined> {
     const db = await this.open();
     if (db === null) return undefined;
     try {
+      const params = { text: key.text, model: key.model, promptVersion: key.promptVersion };
       const row = db
-        .query<{ summary: string; model: string; truncated: number }, { key: string; since: number }>(
-          "SELECT summary, model, truncated FROM summaries WHERE key = $key AND created_at >= $since",
-        )
-        .get({ key, since: this.now() - MAX_AGE });
-      return row === null ? undefined : { summary: row.summary, model: row.model, truncated: row.truncated !== 0 };
+        .query<Row, typeof params>("SELECT summary, model_name, truncated FROM summaries WHERE text_key = $text AND model = $model AND prompt_version = $promptVersion")
+        .get(params);
+      if (row === null) return undefined;
+      db.query("UPDATE summaries SET used_at = $now WHERE text_key = $text AND model = $model AND prompt_version = $promptVersion").run({ ...params, now: this.now() });
+      return { summary: row.summary, model: row.model_name, truncated: row.truncated !== 0 };
     } catch (err) {
       this.warn(`reading the summary cache failed: ${(err as Error).message}`);
       return undefined;
     }
   }
 
-  async put(key: string, promptVersion: number, value: CachedSummary): Promise<void> {
+  /**
+   * The best entry for the text, marked as used (Step 005, D7): the requested model's with the
+   * prompt version, then another model's with the same prompt version, newest first, then one
+   * from an older prompt version, newest first. `model` may be `undefined` (no model configured).
+   */
+  async best(text: string, model: string | undefined, promptVersion: number): Promise<FoundSummary | undefined> {
+    const db = await this.open();
+    if (db === null) return undefined;
+    try {
+      const params = { text, model: model ?? "", promptVersion };
+      const row = db
+        .query<Row & { current: number; model: string; prompt_version: number }, typeof params>(
+          `SELECT summary, model_name, truncated, model, prompt_version, (model = $model AND prompt_version = $promptVersion) AS current
+           FROM summaries WHERE text_key = $text
+           ORDER BY current DESC, prompt_version = $promptVersion DESC, prompt_version DESC, created_at DESC LIMIT 1`,
+        )
+        .get(params);
+      if (row === null) return undefined;
+      db.query("UPDATE summaries SET used_at = $now WHERE text_key = $text AND model = $model AND prompt_version = $promptVersion").run({
+        text,
+        model: row.model,
+        promptVersion: row.prompt_version,
+        now: this.now(),
+      });
+      return { summary: row.summary, model: row.model_name, truncated: row.truncated !== 0, current: row.current !== 0 };
+    } catch (err) {
+      this.warn(`reading the summary cache failed: ${(err as Error).message}`);
+      return undefined;
+    }
+  }
+
+  async put(key: EntryKey, value: CachedSummary): Promise<void> {
     const db = await this.open();
     if (db === null) return;
     try {
+      const now = this.now();
       db.query(
-        "INSERT OR REPLACE INTO summaries (key, model, prompt_version, summary, truncated, created_at) VALUES ($key, $model, $promptVersion, $summary, $truncated, $createdAt)",
-      ).run({ key, model: value.model, promptVersion, summary: value.summary, truncated: value.truncated ? 1 : 0, createdAt: this.now() });
+        `INSERT OR REPLACE INTO summaries (text_key, model, prompt_version, model_name, summary, truncated, created_at, used_at)
+         VALUES ($text, $model, $promptVersion, $modelName, $summary, $truncated, $now, $now)`,
+      ).run({ text: key.text, model: key.model, promptVersion: key.promptVersion, modelName: value.model, summary: value.summary, truncated: value.truncated ? 1 : 0, now });
     } catch (err) {
       this.warn(`writing the summary cache failed: ${(err as Error).message}`);
     }
   }
 
-  /** Deletes summaries older than 30 days; returns how many. */
+  /** Deletes entries unused for 60 days; returns how many. */
   async purge(): Promise<number> {
     const db = await this.open();
     if (db === null) return 0;
     try {
-      return db.query("DELETE FROM summaries WHERE created_at < $since").run({ since: this.now() - MAX_AGE }).changes;
+      return db.query("DELETE FROM summaries WHERE used_at < $since").run({ since: this.now() - MAX_UNUSED }).changes;
     } catch (err) {
       this.warn(`purging the summary cache failed: ${(err as Error).message}`);
       return 0;

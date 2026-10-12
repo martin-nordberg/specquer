@@ -8,6 +8,7 @@ import {
   toLf,
 } from "@specquer/shared/markdown";
 import type { SectionNotice } from "@specquer/shared/api";
+import { summaryBody } from "@specquer/shared/summaries";
 import type { Api, SaveOutcome } from "@/lib/api";
 import { rebaseEdits } from "./edits";
 
@@ -142,7 +143,7 @@ export class DocumentStore {
    * made from the saved file only, never from unsaved edits.
    */
   savedBody(): string {
-    return toLf(splitFrontmatter(this.savedText).body);
+    return summaryBody(this.savedText);
   }
 
   /** The file text the editors currently hold. */

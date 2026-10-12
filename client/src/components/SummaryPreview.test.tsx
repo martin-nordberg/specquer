@@ -15,7 +15,7 @@ const BODY = `Intro text.\n\n# Top\n\nLead.\n\n## A1\n\n${words(80, "alpha")}\n\
 
 type Summarize = (request: SummaryRequest, signal?: AbortSignal) => Promise<SummaryResult>;
 
-function fakeApi(summarize: Summarize = async (request) => ({ summary: `Summary of ${request.text.split("\n")[0]}.`, model: "m", cached: false, truncated: false })) {
+function fakeApi(summarize: Summarize = async (request) => ({ summary: `Summary of ${request.text.split("\n")[0]}.`, model: "m", cached: false, truncated: false, current: true })) {
   const calls: Array<{ request: SummaryRequest; signal?: AbortSignal }> = [];
   const api = {
     summarize: mock((request: SummaryRequest, signal?: AbortSignal) => {
@@ -133,7 +133,7 @@ describe("the summarized preview", () => {
     const { api, calls } = fakeApi(async () => {
       await gate;
       if (fail) throw new ApiRequestError(429, "The model provider's rate limit was reached.");
-      return { summary: "First paragraph.\n\nSecond paragraph.", model: "m", cached: false, truncated: true };
+      return { summary: "First paragraph.\n\nSecond paragraph.", model: "m", cached: false, truncated: true, current: true };
     });
     render(<Harness store={new SummaryStore(api)} initialSteps={1} />);
     await waitFor(() => expect(screen.getByText("Summarizing...")).toBeDefined());
@@ -143,7 +143,7 @@ describe("the summarized preview", () => {
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     await waitFor(() => expect(screen.getByText("Second paragraph.")).toBeDefined());
     const summary = screen.getByRole("region", { name: "AI summary" });
-    expect(within(summary).getByText("AI summary · shortened")).toBeDefined();
+    expect(within(summary).getByText("AI summary · m · shortened")).toBeDefined();
     expect(within(summary).getAllByText(/paragraph\./)).toHaveLength(2);
     expect(calls).toHaveLength(2);
   });
@@ -165,13 +165,13 @@ describe("the summarized preview", () => {
     const edited = BODY.replace("alpha alpha", "alpha CHANGED alpha");
     const { rerender } = render(<Harness store={store} initialSteps={1} markdown={edited} savedBody={BODY} />);
     await waitFor(() => expect(screen.getByText("Summary of ## A1.")).toBeDefined());
-    expect(screen.getByText("AI summary · out of date")).toBeDefined();
+    expect(screen.getByText("AI summary · m · out of date")).toBeDefined();
     expect(calls.every((c) => !c.request.text.includes("CHANGED"))).toBe(true);
     // Saved
     rerender(<Harness store={store} initialSteps={1} markdown={edited} savedBody={edited} />);
     await waitFor(() => expect(calls).toHaveLength(2));
     expect(calls[1]!.request.text).toContain("CHANGED");
-    await waitFor(() => expect(screen.getByText("AI summary")).toBeDefined());
+    await waitFor(() => expect(screen.getByText("AI summary · m")).toBeDefined());
   });
 
   test("a new section that isn't saved yet is shown as written", async () => {
@@ -193,7 +193,7 @@ describe("the summarized preview", () => {
 
   test("at most a few requests are in flight, so other requests aren't held up", async () => {
     const pending: Array<() => void> = [];
-    const { api, calls } = fakeApi((request) => new Promise((resolve) => pending.push(() => resolve({ summary: `Summary of ${request.text.split("\n")[0]}.`, model: "m", cached: false, truncated: false }))));
+    const { api, calls } = fakeApi((request) => new Promise((resolve) => pending.push(() => resolve({ summary: `Summary of ${request.text.split("\n")[0]}.`, model: "m", cached: false, truncated: false, current: true }))));
     const body = `# Top\n\n${[1, 2, 3, 4, 5, 6, 7, 8].map((n) => `## S${n}\n\n${words(80, "alpha")}\n`).join("\n")}`;
     render(<Harness store={new SummaryStore(api)} initialSteps={1} markdown={body} savedBody={body} />);
     await waitFor(() => expect(calls).toHaveLength(MAX_IN_FLIGHT));
@@ -251,3 +251,66 @@ function PreviewWithTarget({ store, body, onSteps }: { store: SummaryStore; body
     />
   );
 }
+
+describe("the model's name and another model's summary", () => {
+  const result = (summary: string, model: string, current: boolean): SummaryResult => ({ summary, model, cached: true, truncated: false, current });
+
+  test("the label shows the model's short name, with the full ID as a tooltip", async () => {
+    const { api } = fakeApi(async () => result("A summary.", "google/gemma-4-31b-it", true));
+    render(<Harness store={new SummaryStore(api)} initialSteps={1} />);
+    const label = await waitFor(() => screen.getByText("AI summary · gemma-4-31b-it"));
+    expect(label.getAttribute("title")).toBe("Made by google/gemma-4-31b-it");
+  });
+
+  test("another model's summary shows at once, marked, and is replaced when the configured model's arrives", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const { api, calls } = fakeApi(async (request) => {
+      if (request.accept === "any") return result("Old summary.", "old/model", false);
+      await gate;
+      return result("New summary.", "new/model", true);
+    });
+    render(<Harness store={new SummaryStore(api)} initialSteps={1} />);
+    await waitFor(() => expect(screen.getByText("Old summary.")).toBeDefined());
+    expect(screen.getByText("AI summary · model · older model")).toBeDefined();
+    await waitFor(() => expect(calls.map((c) => c.request.accept)).toEqual(["any", "current"]));
+    await act(async () => release());
+    await waitFor(() => expect(screen.getByText("New summary.")).toBeDefined());
+    expect(screen.getByText("AI summary · model")).toBeDefined();
+    expect(screen.queryByText("Old summary.")).toBeNull();
+  });
+
+  test("the second request waits behind the requests the preview still needs", async () => {
+    const pending: Array<() => void> = [];
+    const { api, calls } = fakeApi(
+      (request) =>
+        new Promise((resolve) =>
+          pending.push(() => resolve(request.accept === "any" ? result("Old.", "old/model", false) : result("New.", "new/model", true))),
+        ),
+    );
+    const body = `# Top\n\n${[1, 2, 3, 4, 5].map((n) => `## S${n}\n\n${words(80, "alpha")}\n`).join("\n")}`;
+    render(<Harness store={new SummaryStore(api)} initialSteps={1} markdown={body} savedBody={body} />);
+    await waitFor(() => expect(calls).toHaveLength(MAX_IN_FLIGHT));
+    // S1's older summary arrives: S4's first request goes before S1's second
+    await act(async () => pending.shift()!());
+    await waitFor(() => expect(calls).toHaveLength(MAX_IN_FLIGHT + 1));
+    expect(calls.map((c) => `${c.request.text.split("\n")[0]} ${c.request.accept}`)).toEqual(["## S1 any", "## S2 any", "## S3 any", "## S4 any"]);
+  });
+
+  test("an error on the second request keeps the older summary and offers Retry", async () => {
+    let fail = true;
+    const { api, calls } = fakeApi(async (request) => {
+      if (request.accept === "any") return result("Old summary.", "old/model", false);
+      if (fail) throw new ApiRequestError(502, "The model provider failed.");
+      return result("New summary.", "new/model", true);
+    });
+    render(<Harness store={new SummaryStore(api)} initialSteps={1} />);
+    await waitFor(() => expect(screen.getByText(/model provider failed/)).toBeDefined());
+    expect(screen.getByText("Old summary.")).toBeDefined();
+    fail = false;
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(screen.getByText("New summary.")).toBeDefined());
+    expect(screen.queryByText(/model provider failed/)).toBeNull();
+    expect(calls.map((c) => c.request.accept)).toEqual(["any", "current", "current"]);
+  });
+});

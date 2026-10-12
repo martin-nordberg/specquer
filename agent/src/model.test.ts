@@ -15,6 +15,7 @@ test("an OpenAI-compatible model at the configured URL", () => {
   const resolved = createChatModel(config, { TEST_KEY: "secret" });
   if (!resolved.ok) throw new Error(resolved.problem);
   expect(resolved.id).toBe("google/gemma-4-31b-it");
+  expect(resolved.key).toBe(`nvidia:google/gemma-4-31b-it@${NVIDIA_BASE_URL}`);
   expect(resolved.model).toBeInstanceOf(ChatOpenAI);
   const chat = resolved.model as ChatOpenAI;
   expect(chat.model).toBe("google/gemma-4-31b-it");

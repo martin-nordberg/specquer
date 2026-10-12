@@ -39,7 +39,8 @@ async function startSpecquer(files: Record<string, string>): Promise<Specquer & 
   const child = Bun.spawn(["bun", "src/index.ts", root, "--no-open"], {
     cwd: join(repository, "server"),
     // The key for a fake model, which tests that summarize configure
-    env: { ...process.env, NODE_ENV: "production", [FAKE_MODEL_KEY_ENV]: "e2e-key" },
+    // and a short wait before pre-filling, for tests that switch it on
+    env: { ...process.env, NODE_ENV: "production", [FAKE_MODEL_KEY_ENV]: "e2e-key", SPECQUER_PREFILL_DELAY_MS: "100" },
     stdout: "pipe",
     stderr: "pipe",
   });

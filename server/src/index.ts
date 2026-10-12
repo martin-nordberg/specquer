@@ -35,6 +35,8 @@ const { app, sections, summaries } = createApp({
   development,
   port: () => port,
   fetchPage: () => fetch(`http://${LOOPBACK_HOST}:${port}${internalPagePath}`),
+  // The end-to-end tests shorten pre-filling's wait
+  ...(process.env.SPECQUER_PREFILL_DELAY_MS === undefined ? {} : { summaries: { prefillDelay: Number(process.env.SPECQUER_PREFILL_DELAY_MS) } }),
 });
 
 function serve(listenPort: number) {
@@ -61,8 +63,10 @@ port = server.port ?? 0;
 
 // Bring the section index up to date in the background; this writes nothing
 sections.scan().catch((err) => console.error(err));
-// Delete summaries older than 30 days (also checked once a day while summarizing)
+// Delete summaries unused for 60 days (also checked once a day while summarizing), and start
+// pre-filling if it is switched on
 summaries.purge().catch((err) => console.error(err));
+summaries.filesChanged();
 
 const url = `http://${LOOPBACK_HOST}:${port}/?token=${token}`;
 console.log(`Specquer is serving ${root}\nOpen ${url}`);

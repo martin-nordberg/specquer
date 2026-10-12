@@ -379,6 +379,30 @@ export class SectionIndex {
     });
   }
 
+  /**
+   * A section by ID, after bringing the index up to date: its document's path, the document's
+   * body (without front matter, `\n` line endings) and the section found in it. The first, if the
+   * ID is duplicated.
+   */
+  find(id: string): Promise<{ path: string; body: string; section: FoundSection } | undefined> {
+    return this.run(async () => {
+      await this.scanFiles();
+      for (const doc of this.documents.values()) {
+        if (!doc.sections.some((section) => section.id === id)) continue;
+        let text: string;
+        try {
+          text = (await this.files.readFile(doc.path)).text;
+        } catch {
+          return undefined;
+        }
+        const { body } = prepareText(text);
+        const section = this.analyze(body).sections.find((found) => found.id === id);
+        return section === undefined ? undefined : { path: doc.path, body, section };
+      }
+      return undefined;
+    });
+  }
+
   /** The sections of one document, as last indexed. */
   sectionsOf(path: string): Promise<SectionInfo[]> {
     return this.run(async () => {

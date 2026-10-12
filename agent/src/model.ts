@@ -12,7 +12,16 @@ import type { ModelConfig } from "./config.ts";
 /** A LangChain chat model, as the agent's callers see it. */
 export type ChatModel = BaseChatModel;
 
-export type ResolvedModel = { ok: true; model: ChatModel; id: string } | { ok: false; problem: string };
+/**
+ * A configured model: `id` is its name, shown to the user; `key` identifies it in the cache, so
+ * the same name at another host gets its own summaries.
+ */
+export type ResolvedModel = { ok: true; model: ChatModel; id: string; key: string } | { ok: false; problem: string };
+
+/** The cache's identity for a model: provider, name and base URL. */
+export function modelKey(config: ModelConfig): string {
+  return `${config.provider}:${config.name}@${config.baseUrl}`;
+}
 
 /** How long one call may take. */
 export const MODEL_TIMEOUT = 120_000;
@@ -33,5 +42,5 @@ export function createChatModel(config: ModelConfig | undefined, env: Record<str
     // Rate limits are reported to the user, who can retry, rather than retried for minutes
     maxRetries: 1,
   });
-  return { ok: true, model, id: config.name };
+  return { ok: true, model, id: config.name, key: modelKey(config) };
 }

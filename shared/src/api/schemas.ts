@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { entryNameSchema, entryPathSchema, markdownPathSchema, workspacePathSchema } from "../paths/paths.ts";
+import { SECTION_ID_PATTERN } from "../sections/ids.ts";
 import { MAX_SUMMARY_TEXT } from "../summaries/rules.ts";
 
 /** A folder in the tree; it lists only folders that contain Markdown files, and `.md` files. */
@@ -169,6 +170,8 @@ export interface SummaryStatus {
   model?: string;
   /** Why summaries aren't enabled, for the slider's hint. */
   problem?: string;
+  /** Background pre-filling: whether it is switched on (and can run), and how many calls wait. */
+  prefill?: { enabled: boolean; pending: number };
 }
 
 /**
@@ -179,6 +182,11 @@ export const summaryRequestSchema = z.object({
   path: markdownPathSchema,
   text: z.string().max(MAX_SUMMARY_TEXT),
   headings: z.array(z.string().max(1000)).max(6).default([]),
+  /**
+   * `"any"` accepts a cached summary from another model or prompt version at once (marked not
+   * `current`); `"current"`, the default, only the configured model's.
+   */
+  accept: z.enum(["current", "any"]).optional(),
 });
 export type SummaryRequest = z.infer<typeof summaryRequestSchema>;
 
@@ -190,4 +198,18 @@ export interface SummaryResult {
   cached: boolean;
   /** Whether the text was too long and was cut before it was summarized. */
   truncated: boolean;
+  /** Whether it is the configured model's, with the current prompt; false for an older summary. */
+  current: boolean;
 }
+
+/** The section ID in `GET /api/summaries/sections/:id`. */
+export const sectionSummaryParamSchema = z.object({ id: z.string().regex(SECTION_ID_PATTERN, "Not a section ID.") });
+
+/**
+ * A section's summary from the cache, never from a model call: a short section or a list item
+ * as written, a cached summary, or none yet.
+ */
+export type SectionSummaryLookup =
+  | { kind: "text"; text: string }
+  | { kind: "summary"; summary: string; model: string; truncated: boolean; current: boolean }
+  | { kind: "none" };

@@ -86,3 +86,55 @@ test("a running call runs to the end when its requests are aborted, and can be j
   expect(finished).toBe(true);
   expect(calls).toBe(1);
 });
+
+test("interactive calls start before waiting background ones, which leave a slot free", async () => {
+  const queue = new CallQueue(() => 2);
+  const gates = Array.from({ length: 4 }, () => deferred<string>());
+  const started: string[] = [];
+  const run = (key: string, index: number, priority: "interactive" | "background") =>
+    queue.run(
+      key,
+      () => {
+        started.push(key);
+        return gates[index]!.promise;
+      },
+      undefined,
+      priority,
+    );
+  const backlog = [run("b0", 0, "background"), run("b1", 1, "background")];
+  await Bun.sleep(0);
+  // Background calls take at most concurrency - 1 slots
+  expect(started).toEqual(["b0"]);
+  expect(queue.waiting).toBe(1);
+  const interactive = run("i", 2, "interactive");
+  await Bun.sleep(0);
+  expect(started).toEqual(["b0", "i"]);
+  gates[2]!.resolve("i");
+  expect(await interactive).toBe("i");
+  gates[0]!.resolve("b0");
+  await backlog[0];
+  await Bun.sleep(0);
+  expect(started).toEqual(["b0", "i", "b1"]);
+  gates[1]!.resolve("b1");
+  expect(await backlog[1]).toBe("b1");
+});
+
+test("an interactive request joining a waiting background call promotes it", async () => {
+  const queue = new CallQueue(() => 2);
+  const busy = deferred<string>();
+  const started: string[] = [];
+  const task = (key: string, value: Promise<string> | string) => () => {
+    started.push(key);
+    return Promise.resolve(value);
+  };
+  const running = queue.run("b0", task("b0", busy.promise), undefined, "background");
+  const waiting = queue.run("b1", task("b1", "one"), undefined, "background");
+  const other = queue.run("b2", task("b2", "two"), undefined, "background");
+  await Bun.sleep(0);
+  expect(started).toEqual(["b0"]);
+  // Joined interactively: it starts in the free slot, ahead of b2
+  expect(await queue.run("b1", task("b1", "one"))).toBe("one");
+  expect(started).toEqual(["b0", "b1"]);
+  busy.resolve("zero");
+  expect(await Promise.all([running, waiting, other])).toEqual(["zero", "one", "two"]);
+});

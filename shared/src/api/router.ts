@@ -13,6 +13,7 @@ import {
   type SectionNotice,
   type SectionProblem,
   type SectionSearchResult,
+  type SectionSummaryLookup,
   type SummaryRequest,
   type SummaryResult,
   type SummaryStatus,
@@ -26,6 +27,7 @@ import {
   saveFileSchema,
   sectionProblemsSchema,
   sectionSearchSchema,
+  sectionSummaryParamSchema,
   summaryRequestSchema,
 } from "./schemas.ts";
 
@@ -76,6 +78,8 @@ export interface ApiHandlers {
   summaryStatus(): Promise<SummaryStatus>;
   /** Summarizes a section; `signal` aborts when the client no longer needs it. */
   summarize(request: SummaryRequest, signal: AbortSignal): Promise<SummaryResult>;
+  /** A section's summary by section ID, from the cache only; `404` for an unknown ID. */
+  sectionSummary(id: string): Promise<SectionSummaryLookup>;
 }
 
 /** A successful save's response body: the new version, and the edits and notices if any. */
@@ -88,7 +92,7 @@ function saveBody(result: Extract<SaveResult, { ok: true }>) {
 }
 
 /** Validation errors use the same JSON shape as other errors. */
-function validate<T extends ZodType, Target extends "json" | "query">(target: Target, schema: T) {
+function validate<T extends ZodType, Target extends "json" | "query" | "param">(target: Target, schema: T) {
   return zValidator(target, schema, (result, c) => {
     if (!result.success) {
       const message = result.error.issues.map((issue) => issue.message).join(" ");
@@ -174,6 +178,9 @@ export function createApiRouter(handlers: ApiHandlers) {
     .get("/summaries/status", async (c) => c.json(await handlers.summaryStatus()))
     .post("/summaries", validate("json", summaryRequestSchema), async (c) => {
       return c.json(await handlers.summarize(c.req.valid("json"), c.req.raw.signal));
+    })
+    .get("/summaries/sections/:id", validate("param", sectionSummaryParamSchema), async (c) => {
+      return c.json(await handlers.sectionSummary(c.req.valid("param").id));
     });
 }
 

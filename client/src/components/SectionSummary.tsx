@@ -11,18 +11,31 @@ export interface SectionSummaryProps {
   onShowFullText: () => void;
 }
 
+/** A model ID's last part (`google/gemma-4-31b-it` → `gemma-4-31b-it`), for the label. */
+export function shortModelName(model: string): string {
+  return model.slice(model.lastIndexOf("/") + 1);
+}
+
 /**
  * A section's AI summary in the preview, as plain text (decision D2): model output is untrusted
- * and never rendered as Markdown or HTML.
+ * and never rendered as Markdown or HTML. The label names the model that made it (the full ID in
+ * a tooltip), and marks a summary from another model shown until the configured one's arrives.
  */
 export function SectionSummary({ entry, outOfDate, onRetry, onShowFullText }: SectionSummaryProps) {
   const loading = entry === undefined || entry.state === "loading";
-  const label = ["AI summary", ...(entry?.state === "done" && entry.truncated ? ["shortened"] : []), ...(outOfDate ? ["out of date"] : [])].join(" · ");
+  const done = entry?.state === "done" ? entry : undefined;
+  const label = [
+    "AI summary",
+    ...(done === undefined ? [] : [shortModelName(done.model)]),
+    ...(done !== undefined && !done.current ? ["older model"] : []),
+    ...(done?.truncated === true ? ["shortened"] : []),
+    ...(outOfDate ? ["out of date"] : []),
+  ].join(" · ");
   return (
     <section aria-label="AI summary" className="my-3 rounded-md border border-dashed bg-muted/40 px-4 py-2" data-testid="section-summary">
       <div className="mb-1 flex items-center gap-1.5 text-xs text-muted-foreground">
         <Sparkles className="size-3" aria-hidden />
-        <span>{label}</span>
+        <span title={done === undefined ? undefined : `Made by ${done.model}`}>{label}</span>
       </div>
       {loading ? (
         <p className="flex items-center gap-2 text-muted-foreground italic">
@@ -43,6 +56,14 @@ export function SectionSummary({ entry, outOfDate, onRetry, onShowFullText }: Se
               {paragraph}
             </p>
           ))}
+        </div>
+      )}
+      {done?.refreshError !== undefined && (
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <p className="text-error-text">Couldn't summarize with the configured model: {done.refreshError}</p>
+          <Button variant="outline" size="sm" onClick={onRetry}>
+            Retry
+          </Button>
         </div>
       )}
       <button type="button" className="mt-1 text-xs text-muted-foreground underline-offset-2 hover:underline" onClick={onShowFullText}>

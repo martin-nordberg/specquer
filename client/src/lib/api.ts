@@ -9,6 +9,7 @@ import type {
   SectionNotice,
   SectionProblem,
   SectionSearchResult,
+  SectionSummaryLookup,
   SummaryRequest,
   SummaryResult,
   SummaryStatus,
@@ -92,6 +93,8 @@ export interface Api {
   summaryStatus(): Promise<SummaryStatus>;
   /** Summarizes a section's saved text; `signal` aborts the request when it is no longer needed. */
   summarize(request: SummaryRequest, signal?: AbortSignal): Promise<SummaryResult>;
+  /** A section's summary by ID, from the server's cache only (for link previews and reports). */
+  sectionSummary(id: string): Promise<SectionSummaryLookup>;
 }
 
 type SavedBody = { version: string; edits?: BodyEdit[]; notices?: SectionNotice[] };
@@ -172,5 +175,8 @@ export const httpApi: Api = {
   },
   async summarize(request, signal) {
     return json<SummaryResult>(await client.api.summaries.$post({ json: request }, { init: { signal } }));
+  },
+  async sectionSummary(id) {
+    return json<SectionSummaryLookup>(await client.api.summaries.sections[":id"].$get({ param: { id } }));
   },
 };

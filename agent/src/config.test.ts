@@ -27,10 +27,12 @@ test("invalid values are reported and ignored on their own", () => {
 
 test("the personal file replaces the model as a whole and overrides settings key by key", () => {
   const shared = parseAgentConfig({ model, summaries: { concurrency: 4, tokenBudget: 9000 } }, "shared");
-  const user = parseAgentConfig({ model: { provider: "nvidia", name: "other/model", apiKeyEnv: "MY_KEY", baseUrl: "http://127.0.0.1:9999/v1" }, summaries: { concurrency: 1 } }, "user");
+  const user = parseAgentConfig({ model: { provider: "nvidia", name: "other/model", apiKeyEnv: "MY_KEY", baseUrl: "http://127.0.0.1:9999/v1" }, summaries: { concurrency: 1, prefill: true } }, "user");
   expect(mergeAgentConfig(shared, user)).toEqual({
     model: { provider: "nvidia", name: "other/model", apiKeyEnv: "MY_KEY", baseUrl: "http://127.0.0.1:9999/v1" },
-    summaries: { concurrency: 1, tokenBudget: 9000 },
+    summaries: { concurrency: 1, tokenBudget: 9000, prefill: true },
   });
+  expect(DEFAULT_SUMMARIES.prefill).toBe(false);
+  expect(parseAgentConfig({ summaries: { prefill: "yes" } }, "s").summaries).toEqual({});
   expect(mergeAgentConfig({ summaries: {} }, { summaries: {} })).toEqual({ summaries: DEFAULT_SUMMARIES });
 });

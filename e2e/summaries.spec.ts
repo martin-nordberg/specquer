@@ -119,7 +119,7 @@ test("Summarizing... then the summary, labeled as AI-generated", async ({ page, 
   await expect(page.getByText("Summarizing...").first()).toBeVisible();
   const summary = page.getByRole("region", { name: "AI summary" }).filter({ hasText: "Summary of Alpha." });
   await expect(summary).toBeVisible();
-  await expect(summary.getByText("AI summary", { exact: true })).toBeVisible();
+  await expect(summary.getByText("AI summary · model", { exact: true })).toBeVisible();
 });
 
 test("an error offers Retry", async ({ page, model }) => {
@@ -156,13 +156,27 @@ test("typing marks a summary out of date, and Save now brings it up to date", as
   const summary = page.getByRole("region", { name: "AI summary" });
   await expect(summary.getByText("Summary of Beta detail.")).toBeVisible();
   await typeAtEnd(contentEditor(page), " edited");
-  await expect(summary.getByText("AI summary · out of date")).toBeVisible();
+  await expect(summary.getByText("AI summary · model · out of date")).toBeVisible();
   // Unsaved text is never sent
   expect(model.prompts.some((prompt) => prompt.includes("edited"))).toBe(false);
   await saveStatus(page).getByRole("button", { name: "Unsaved changes: save now" }).click();
   await expect(saveStatus(page)).toHaveText("Saved");
-  await expect(summary.getByText("AI summary", { exact: true })).toBeVisible();
+  await expect(summary.getByText("AI summary · model", { exact: true })).toBeVisible();
   expect(model.prompts.some((prompt) => prompt.includes("edited"))).toBe(true);
+});
+
+test("another model's summary shows at once, then the configured model's replaces it", async ({ page, specquer, model }) => {
+  await openPreview(page, "docs", "spec.md");
+  await moveSlider(page, "ArrowLeft");
+  const summary = page.getByRole("region", { name: "AI summary" });
+  await expect(summary.getByText("AI summary · model", { exact: true })).toBeVisible();
+  await specquer.write(".specquer/shared/agent.config.yaml", fakeModelConfig(model).replace("fake/model", "fake/better"));
+  model.delay = 1500;
+  await page.reload();
+  await expect(summary.getByText("Summary of Beta detail.")).toBeVisible();
+  await expect(summary.getByText("AI summary · model · older model")).toBeVisible();
+  await expect(summary.getByText("AI summary · better", { exact: true })).toBeVisible();
+  await expect(summary.getByText("Summary of Beta detail.")).toBeVisible();
 });
 
 base("without a model the slider is disabled with a hint", async ({ page }) => {
@@ -170,4 +184,34 @@ base("without a model the slider is disabled with a hint", async ({ page }) => {
   await view(page, "Preview").click();
   await expect(slider(page)).toHaveAttribute("data-disabled", "");
   await expect(page.getByText(/Summaries need a model/)).toBeVisible();
+});
+
+test.describe("pre-filling", () => {
+  test.use({
+    files: async ({ model }, use) => {
+      await use({
+        "docs/spec.md": SPEC,
+        ".specquer/shared/agent.config.yaml": `${fakeModelConfig(model)}  prefill: true\n`,
+      });
+    },
+  });
+
+  test("summaries are made in the background, and every stop shows them at once", async ({ page, model }) => {
+    // Beta detail, Alpha, Beta, Spec and the whole document
+    await expect.poll(() => model.prompts.length).toBe(5);
+    model.delay = 5000;
+    await openPreview(page, "docs", "spec.md");
+    for (const [stop, text] of [
+      ["Summarize level 3 sections", "Summary of Beta detail."],
+      ["Summarize level 2 sections", "Summary of Alpha."],
+      ["Summarize level 1 sections", "Summary of Spec."],
+      ["Summarize document", "Summary of Intro before the headings.."],
+    ] as const) {
+      await moveSlider(page, "ArrowLeft");
+      await expect(slider(page)).toHaveAttribute("aria-valuetext", stop);
+      await expect(page.getByText(text)).toBeVisible();
+      await expect(page.getByText("Summarizing...")).toHaveCount(0);
+    }
+    expect(model.prompts).toHaveLength(5);
+  });
 });

@@ -332,7 +332,7 @@ Every change is a pure function from state to state:
 <a id="SPEC-00026" data-uid="ks2numy77dxy"></a>
 ## 4. Summaries
 
-AI summaries of heading sections, shown in the preview by the summary slider ([Client Requirements](client-requirements.md) §6.2). The rules both sides share live in `shared/src/summaries/` (`@specquer/shared/summaries`); the model calls in `agent`; the cache and the call queue in `server/src/summaries/`.
+AI summaries of heading sections, shown in the preview by the summary slider ([Client Requirements](client-requirements.md) §6.2), and looked up by section ID for other features. The rules both sides share live in `shared/src/summaries/` (`@specquer/shared/summaries`); the model calls in `agent`; the cache, the call queue, the lookup and pre-filling in `server/src/summaries/`. [Step 005](/work-items/step-005-summarization-changes/implementation-plan) added the lookup, pre-filling, keeping summaries while they are used, and showing which model made a summary.
 
 <a id="SPEC-00027" data-uid="f2qwhacxfvuy"></a>
 ### 4.1. Rules
@@ -340,7 +340,8 @@ AI summaries of heading sections, shown in the preview by the summary slider ([C
 - **Simplification** (`simplifySectionText`), before a section is summarized or hashed: LF line endings, no trailing whitespace on lines, runs of blank lines collapsed to one, section anchors removed (placeholders and strays included), leading and trailing whitespace removed. Editor settings and anchor metadata then don't change the cache key.
 - **Short sections:** fewer than 60 words after simplification (`isShortSection`) are shown as written, without calling the model.
 - **Length:** `targetSentences(words)` = about one sentence per 150 words, at least 2 and at most 10.
-- **Saved text only:** the client sends the text of each section from the body as last read or written (`DocumentStore.savedBody()`), never unsaved edits. Sections of the text shown are matched to sections of the saved text by outline path; one whose text differs keeps its summary, labeled out of date.
+- **Targets** (`summaryTargets`): every section any stop summarizes, each once, the deepest stop's first and the whole document last, with its text and the headings above it. Pre-filling and the lookup use them, and the preview's requests come from the same ranges of the same body (`summaryBody`: the file without front matter, LF line endings), so the server's cache keys match the client's requests.
+- **Saved text only:** the client sends the text of each section from the body as last read or written (`DocumentStore.savedBody()`, which is `summaryBody` of the saved file), never unsaved edits. Sections of the text shown are matched to sections of the saved text by outline path; one whose text differs keeps its summary, labeled out of date.
 
 <a id="SPEC-00028" data-uid="u2xhdkksjhmj"></a>
 ### 4.2. Agent Configuration
@@ -355,6 +356,7 @@ model:
 summaries:
   concurrency: 2                                # model calls at once
   tokenBudget: 24000                            # above this, summarize from subsections' summaries
+  prefill: false                                # summarize everything in the background (§4.7)
 ```
 
 - `model:` applies to all agent features; `summaries:` to summaries only. The schema and `mergeAgentConfig` are in `agent/src/config.ts`.
@@ -365,25 +367,53 @@ summaries:
 ### 4.3. Making a Summary
 
 - **Prompt** (`agent/src/summarize.ts`, `PROMPT_VERSION = 1`): the document's path, the headings above the section and the target sentence count, with the simplified text between `<text>` tags. It asks for plain prose (no Markdown, headings, lists, links or HTML), in the language of the text, and says to ignore instructions in the text. The output has Markdown markers and HTML tags stripped.
-- **Model** (`agent/src/model.ts`): `ChatOpenAI` from `@langchain/openai` at the configured base URL (NVIDIA's API is OpenAI-compatible), temperature 0.2, at most 1,024 output tokens, a 120-second timeout and one retry.
+- **Model** (`agent/src/model.ts`): `ChatOpenAI` from `@langchain/openai` at the configured base URL (NVIDIA's API is OpenAI-compatible), temperature 0.2, at most 1,024 output tokens, a 120-second timeout and one retry. Its `id` is the configured name, shown to the user; its `key` (`provider:name@baseUrl`) identifies it in the cache, so the same name at another host has its own summaries.
 - **Long sections:** a section estimated (characters / 4) above the token budget is summarized from its heading and lead text followed by its subsections' summaries, each made (or found) through the cache first; short subsections count as written. One without subsections is cut at the budget, and its summary is labeled "shortened".
 
 <a id="SPEC-00030" data-uid="v4uhme42gvyw"></a>
 ### 4.4. Cache
 
 ```sql
-CREATE TABLE summaries (key TEXT PRIMARY KEY, model TEXT, prompt_version INTEGER, summary TEXT, truncated INTEGER, created_at INTEGER);
+CREATE TABLE summaries (
+  text_key TEXT NOT NULL, model TEXT NOT NULL, prompt_version INTEGER NOT NULL,
+  model_name TEXT NOT NULL, summary TEXT NOT NULL, truncated INTEGER NOT NULL,
+  created_at INTEGER NOT NULL, used_at INTEGER NOT NULL,
+  PRIMARY KEY (text_key, model, prompt_version)
+);
 ```
 
-- `.specquer/cache/summaries.db`, through `bun:sqlite` in WAL mode, created on first use with `.specquer/cache/.gitignore` (`*`).
-- `key` is the SHA-256 of the simplified text, the model ID, the prompt version and the target sentence count, so changing the model or the prompt makes summaries again. The headings and path are in the prompt but not the key.
-- Rows older than 30 days are ignored when read, and deleted at startup (if the cache exists) and once a day while summarizing (decision D8).
+- `.specquer/cache/summaries.db`, through `bun:sqlite` in WAL mode, created on first use with `.specquer/cache/.gitignore` (`*`). `PRAGMA user_version` is 2; a database with another version (Step 004's) is emptied and created again, since its keys can't be split (Step 005 decision D4).
+- `text_key` is the SHA-256 of the simplified text and the target sentence count; `model` is the model's key and `model_name` its name. Changing the model or the prompt makes summaries again, and the older ones can still be found for the same text (Step 005 decision D1). The headings and path are in the prompt but not the key.
+- Reading an entry, or finding it still needed while pre-filling, sets `used_at`. Entries unused for 60 days are deleted at startup (if the cache exists) and once a day while summarizing (Step 005 decision D2), so summaries survive a branch switch and back, and summaries of text no section has any more lapse.
+- **Best entry** (`best`, Step 005 decision D7): the configured model's with the current prompt version, else another model's with the same prompt version, newest first, else one from an older prompt version, newest first.
 - A database that can't be opened is moved aside and created again; if that fails too, summaries are made without a cache.
 
 <a id="SPEC-00031" data-uid="n8x5jzlpt0mj"></a>
 ### 4.5. Request Flow
 
 1. The preview computes the outline of the text shown and the stop; for the saved text, it lists the sections the stop summarizes that aren't short, and tells the client's `SummaryStore` it needs them.
-2. The store requests each one it doesn't have (`POST /api/summaries`, one request per section, decision D4), keeps results in memory by path, headings and simplified text, and aborts requests no longer needed. At most three are in flight at once, in document order; the rest wait in the client, where those no longer needed are dropped unsent.
-3. The server answers short sections as written and cached ones at once; the others go through the call queue, which limits concurrency, shares a call between identical requests, and drops calls nobody waits for that haven't started. A started call runs to the end and is cached, even if its request was aborted.
-4. After a save the saved text changes, so the sections whose text changed are requested again; the others are already in memory.
+2. The store requests each one it doesn't have (`POST /api/summaries` with `accept: "any"`, one request per section, decision D4), keeps results in memory by path, headings and simplified text, and aborts requests no longer needed. At most three are in flight at once, in document order; the rest wait in the client, where those no longer needed are dropped unsent.
+3. The server answers short sections as written and the best cached entry at once; the others go through the call queue, which limits concurrency, shares a call between identical requests, and drops calls nobody waits for that haven't started. A started call runs to the end and is cached, even if its request was aborted. Interactive calls start before waiting background ones, and background calls take at most `concurrency - 1` slots (at least one); an interactive request joining a waiting background call promotes it.
+4. A result that isn't `current` (another model's or an older prompt's) is shown, labeled "older model", and the store asks again with `accept: "current"` once the requests the preview needs have gone. The new summary replaces it in place; if that request fails, the older summary stays, with the error and **Retry**.
+5. After a save the saved text changes, so the sections whose text changed are requested again; the others are already in memory.
+
+<a id=""></a>
+### 4.6. Lookup by Section
+
+`GET /api/summaries/sections/:id` answers with a section's summary from the cache only, never calling a model (Step 005 decision D5), for link previews and reports to come. `SectionIndex.find` gives the section's document, its body and the section; the lookup (`server/src/summaries/lookup.ts`) takes the outline section whose heading holds the anchor (the whole document for a root section), and its target (§4.1), so the summary the slider made is the one found:
+
+- `{ kind: "text", text }`: a short section, or a list item, as written (simplified)
+- `{ kind: "summary", summary, model, truncated, current }`: the best cached entry (§4.4); `current` is false for another model's, or for any entry when no model is configured
+- `{ kind: "none" }`: nothing cached yet
+- `404` for an unknown ID, `400` for anything that isn't a section ID
+
+<a id=""></a>
+### 4.7. Pre-filling
+
+With `summaries.prefill: true`, a model and its key, the server summarizes every target of every Markdown file in the background (`server/src/summaries/prefill.ts`), so the slider finds its summaries made.
+
+- **A pass** goes through the files in tree order. For each, it takes the targets, deepest first, and summarizes them through the cache at background priority, as many at once as the queue's background slots, so a long section's fallback finds its subsections cached. Short sections are skipped, and cached entries are marked used. A file is skipped while its modification stamp and the model are those of its last complete pass.
+- **When:** a pass starts 10 seconds after startup, a save, a create, a rename, a delete, **Add section anchors**, or a tree load (which catches changes made outside Specquer). A trigger while a pass runs makes another pass follow it.
+- **Rate limits:** a 429 stops the pass at once (calls still waiting are dropped) and pauses pre-filling for one minute, doubling to at most 15 minutes, until a pass completes. Interactive requests report their own 429s as before.
+- **Configuration changes:** switching it off, or changing the model, stops the pass and starts again if it is still on. The configuration is read again on each status request (every page load and tab focus) and at the start of each pass.
+- **Status:** `GET /api/summaries/status` has `prefill: { enabled, pending }`, the number of sections the current pass has queued or is summarizing.

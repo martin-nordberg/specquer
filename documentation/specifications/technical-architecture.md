@@ -100,7 +100,7 @@ The router's type is what the client's typed Hono client uses, so the client get
 | UI state | `.specquer/user/uistate.yaml` under the root folder, read and written with `Bun.YAML` |
 | Sections | `SectionIndex` (`server/src/sections/`): an in-memory index of the sectioned files and the data files in `.specquer/shared/`, which the `yaml` package reads and writes (it keeps key order and writes one flow mapping per line); document IDs and section UIDs are 12-character CUID2s (`@paralleldrive/cuid2`'s `init({ length: 12 })`) carried in the anchors' `data-uid`; the data files are read again when they change on disk; see [Data Architecture](data-architecture.md) §2 |
 | Security | Session token, Host and Origin checks, Content-Security-Policy; see [Security](security.md) |
-| AI features | Delegated to `agent`. The summary service (`server/src/summaries/`) reads the agent configuration, keeps summaries in a SQLite cache (`bun:sqlite`, `.specquer/cache/summaries.db`) and queues model calls; see [Data Architecture](data-architecture.md) §4 |
+| AI features | Delegated to `agent`. The summary service (`server/src/summaries/`) reads the agent configuration, keeps summaries in a SQLite cache (`bun:sqlite`, `.specquer/cache/summaries.db`), queues model calls with two priorities, looks summaries up by section ID, and pre-fills the cache in the background when switched on; see [Data Architecture](data-architecture.md) §4 |
 | Outbound network | Only to the configured model provider, and only when summaries are configured; see [Security](security.md) §9 |
 | Development port | 3000 |
 | Development mode | `bun --hot` (reloads on change) |
@@ -153,14 +153,19 @@ client                         server                          agent / provider
 Preview ─ outline of saved text
   │ SummaryStore.need(sections)
   │ POST /api/summaries ───────► SummaryService
-  │  (≤ 3 in flight; aborted)     ├─ short? → as written
-  │                               ├─ cache (bun:sqlite) hit? → cached
-  │                               └─ CallQueue (concurrency, ─► summarizeWithFallback
-  │                                  shared calls, drops)         └─ ChatOpenAI ─► NVIDIA
-  ◄──────── { summary, model, cached, truncated }
+  │  accept: any, then current    ├─ short? → as written
+  │  (≤ 3 in flight; aborted)     ├─ best cache entry (bun:sqlite)? → cached, current or not
+  │                               └─ CallQueue (concurrency,  ─► summarizeWithFallback
+  │                                  interactive first,           └─ ChatOpenAI ─► NVIDIA
+  │                                  shared calls, drops)
+  ◄──────── { summary, model, cached, truncated, current }
+                                  ▲ background priority
+                               Prefill ─ every file's summaryTargets (when switched on)
+
+GET /api/summaries/sections/:id ─► SectionIndex.find ─► lookup ─► cache only
 ```
 
-The client sends saved text only, and the server never reads files for summaries. The details are in [Data Architecture](data-architecture.md) §4.
+The client sends saved text only. The server reads files for summaries only to pre-fill the cache (when switched on) and to look a summary up by section ID, which never calls the model. The details are in [Data Architecture](data-architecture.md) §4.
 
 <a id="SPEC-00098" data-uid="yk5wgoalz22d"></a>
 ## 7. Front End
