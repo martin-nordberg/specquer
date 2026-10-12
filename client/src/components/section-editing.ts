@@ -10,8 +10,9 @@ import { anchorTagSectionId } from "@specquer/shared/markdown";
  *   in the open document are checked at once; IDs in other documents are looked up after the
  *   paste, and the anchor is replaced when the lookup finds one. A cut followed by a paste keeps
  *   its IDs: the cut removed the original, and opening another file saves this one first.
- * - **Muted UIDs.** `data-uid="…"` is shown in the muted color, so the eye skips it; it stays
- *   visible and editable (no folding).
+ * - **Faded anchors.** Section anchors (`<a id="REQ-00012" data-uid="…"></a>`, and placeholders)
+ *   are shown lighter than the muted color, so the eye skips them; they stay visible and editable
+ *   as text (no folding or atomic ranges).
  */
 
 /** An empty anchor: an open tag (one, the section ID's) and its closing tag. */
@@ -90,27 +91,39 @@ function pasteLookup(lookup: SectionLookup) {
   });
 }
 
-const mutedUid = new MatchDecorator({
-  regexp: /data-uid="[^"\n]*"/g,
-  decoration: Decoration.mark({ class: "cm-section-uid" }),
+/** Whether an empty anchor (open and closing tag) is a section anchor or a placeholder. */
+export function isSectionAnchor(anchor: string): boolean {
+  const openTag = anchor.slice(0, anchor.indexOf(">") + 1);
+  return anchorTagSectionId(openTag) !== undefined || /^<a\s+id=(?:""|'')\s*>$/i.test(openTag);
+}
+
+const fadedMark = Decoration.mark({ class: "cm-section-anchor" });
+
+const fadedAnchor = new MatchDecorator({
+  regexp: ANCHOR,
+  decoration: (match) => (isSectionAnchor(match[0]) ? fadedMark : null),
 });
 
-const mutedUids = ViewPlugin.fromClass(
+const fadedAnchors = ViewPlugin.fromClass(
   class {
     decorations;
     constructor(view: EditorView) {
-      this.decorations = mutedUid.createDeco(view);
+      this.decorations = fadedAnchor.createDeco(view);
     }
     update(update: ViewUpdate) {
-      this.decorations = mutedUid.updateDeco(update, this.decorations);
+      this.decorations = fadedAnchor.updateDeco(update, this.decorations);
     }
   },
   { decorations: (plugin) => plugin.decorations },
 );
 
-const mutedTheme = EditorView.theme({ ".cm-section-uid, .cm-section-uid *": { color: "var(--muted-foreground)" } });
+// Lighter than the muted color: the syntax colors inside give way to it, and opacity fades it further
+const fadedTheme = EditorView.theme({
+  ".cm-section-anchor": { opacity: "0.55" },
+  ".cm-section-anchor, .cm-section-anchor *": { color: "var(--muted-foreground)" },
+});
 
-/** Paste handling and muted UIDs; `lookup` checks other documents. */
+/** Paste handling and faded anchors; `lookup` checks other documents. */
 export function sectionEditing(lookup: SectionLookup): Extension {
-  return [pasteFilter, pasteLookup(lookup), mutedUids, mutedTheme];
+  return [pasteFilter, pasteLookup(lookup), fadedAnchors, fadedTheme];
 }

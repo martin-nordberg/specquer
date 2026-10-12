@@ -3,7 +3,7 @@ import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { Schema, Slice } from "@milkdown/kit/prose/model";
 import { placeholdersForPastedCopies } from "./MilkdownEditor";
-import { PLACEHOLDER, placeholderChanges, sectionAnchorsIn, sectionEditing } from "./section-editing";
+import { PLACEHOLDER, isSectionAnchor, placeholderChanges, sectionAnchorsIn, sectionEditing } from "./section-editing";
 
 const anchor = (id: string, uid = "u1") => `<a id="${id}" data-uid="${uid}"></a>`;
 
@@ -12,6 +12,21 @@ test("finds anchors with section IDs and turns taken ones into placeholders", ()
   expect(sectionAnchorsIn(text).map((a) => a.id)).toEqual(["REQ-00001", "REQ-00002"]);
   const changes = placeholderChanges(text, (id) => id === "REQ-00002", 10);
   expect(changes).toEqual([{ from: 10 + text.indexOf("<a id=\"REQ-00002\""), to: 10 + text.indexOf(" item"), insert: PLACEHOLDER }]);
+});
+
+test("section anchors and placeholders are faded; other anchors aren't", () => {
+  expect(isSectionAnchor(anchor("REQ-00001"))).toBe(true);
+  expect(isSectionAnchor(PLACEHOLDER)).toBe(true);
+  expect(isSectionAnchor('<a id="intro"></a>')).toBe(false);
+  expect(isSectionAnchor('<a name="x"></a>')).toBe(false);
+  const doc = `${anchor("REQ-00001")}\n# A\n\n* ${PLACEHOLDER} item\n\n<a id="intro"></a> text\n`;
+  const view = new EditorView({ state: EditorState.create({ doc, extensions: [sectionEditing(async () => false)] }), parent: document.body });
+  const faded = [...view.contentDOM.querySelectorAll(".cm-section-anchor")].map((element) => element.textContent);
+  expect(faded).toEqual([anchor("REQ-00001"), PLACEHOLDER]);
+  // Still plain text: typing inside an anchor edits it
+  view.dispatch({ changes: { from: 7, insert: "X" } });
+  expect(view.state.doc.toString()).toStartWith('<a id="XREQ-00001"');
+  view.destroy();
 });
 
 describe("pasting in the text editor", () => {

@@ -117,7 +117,7 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 4. In the text editor, typing `#` in a Markdown link target (`](#` or `](path#`) offers completion of section IDs, each with its heading text and document. Choosing one inserts the path to its document relative to the open file (nothing for the same file) and the ID.
 5. A badge whose ID is also used elsewhere has a warning ring. Its tooltip names the other occurrences, says whether this one keeps the ID, and offers **Renumber this one** (saving the open file first).
 6. Pasting a section anchor whose ID still exists elsewhere (in the open document, or, in the text editor, in another document) turns it into a placeholder, so the copy gets a new ID on save. A cut followed by a paste keeps the ID.
-7. In the text editor, the `data-uid` attribute of anchors is shown in the muted color. It isn't folded or hidden.
+7. In the text editor, section anchors (and placeholders, `<a id=""></a>`) are faded: shown in the muted color, made lighter still, so the eye skips them. They aren't folded or hidden, and stay editable as text.
 
 <a id="SPEC-00053" data-uid="t3nnmebbri6x"></a>
 ### 6.2 Summaries
