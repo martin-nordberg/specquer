@@ -17,6 +17,8 @@ export const baseColors = {
   navigation: "#1e549f",
   error: "#cf4647",
   warning: "#f5d061",
+  /** The fill inside folder icons in the tree: sepia */
+  folder: "#dcc196",
 };
 
 export type BaseColors = typeof baseColors;
@@ -43,6 +45,9 @@ export const logoColors = {
 /** WCAG AA for normal text. */
 export const MIN_CONTRAST = 4.5;
 
+/** WCAG AA for graphics, such as an icon's outline against its fill. */
+export const MIN_GRAPHIC_CONTRAST = 3;
+
 export const fillRoles = ["primary", "secondary", "navigation", "error", "warning"] as const;
 export type FillRole = (typeof fillRoles)[number];
 
@@ -56,6 +61,8 @@ export interface ModeColors {
   border: string;
   /** The error color, adjusted to be readable as text on the background. */
   errorText: string;
+  /** The fill inside folder icons, under an outline in the foreground color. */
+  folderFill: string;
   /** Each fill with the text color chosen for it. */
   fills: Record<FillRole, { fill: string; text: string }>;
 }
@@ -112,6 +119,7 @@ function modeColors(
   background: string,
   foreground: string,
   fillOverrides: Partial<Record<FillRole, string>> = {},
+  folder: string = base.folder,
 ): ModeColors {
   const [lightText, darkText] = toOklch(background).l > toOklch(foreground).l ? [background, foreground] : [foreground, background];
   const fills = Object.fromEntries(
@@ -124,6 +132,7 @@ function modeColors(
     mutedForeground: nudgeForContrast(mix(background, foreground, 0.6), mix(background, foreground, 0.06)),
     border: mix(background, foreground, 0.18),
     errorText: nudgeForContrast(base.error, background),
+    folderFill: nudgeForContrast(folder, foreground, MIN_GRAPHIC_CONTRAST),
     fills,
   };
 }
@@ -136,7 +145,8 @@ export function derivePalette(base: BaseColors = baseColors): Palette {
   const darkForeground = withLightness(base.text, 0.95, 0.15);
   return {
     light: modeColors(base, base.background, base.text),
-    dark: modeColors(base, darkBackground, darkForeground, { navigation: withLightness(base.navigation, 0.3) }),
+    // A darker sepia, so folders don't glow against the dark background
+    dark: modeColors(base, darkBackground, darkForeground, { navigation: withLightness(base.navigation, 0.3) }, withLightness(base.folder, 0.45, 0.7)),
   };
 }
 
@@ -157,6 +167,7 @@ export function cssVariables(colors: ModeColors): Record<string, string> {
     "--accent": colors.muted,
     "--accent-foreground": colors.foreground,
     "--error-text": colors.errorText,
+    "--folder": colors.folderFill,
     "--destructive": colors.fills.error.fill,
     "--destructive-foreground": colors.fills.error.text,
   };

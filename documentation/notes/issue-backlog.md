@@ -4,7 +4,6 @@
 # Minor Issues
 
 * WYSIWYG view is ugly; may need to be removed if it can't be much better.
-* Change left pane folder icons to have a sepia background color (within the icon)
 
 <a id="NOTE-00052" data-uid="nwnr301tg98g"></a>
 # TBD Issues

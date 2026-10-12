@@ -160,11 +160,13 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
    | `navigation` | `#1e549f` | Header, selected tree item, menu highlight |
    | `error` | `#cf4647` | Errors, destructive buttons |
    | `warning` | `#f5d061` | Warnings |
+   | `folder` | `#dcc196` | The sepia fill inside folder icons in the tree |
 
 2. The text color on each fill is chosen automatically (whichever of the mode's light and dark text contrasts more) and the fill's lightness is nudged, keeping its hue, until the pair reaches WCAG AA (4.5:1). A unit test checks every pair in both modes.
 3. Dark mode is derived in OKLCH: a very dark background and a near-white text color with the hue of `text`, and a darker navigation color. The fills keep their colors, with their text chosen as above.
 4. The user switches between light and dark mode with the button in the header. Until they do, the mode follows the browser's preference; their choice is saved in the UI state.
-5. The pencil colors of the logo (§9) and the grays of the docs site's favicon are also defined in `palette.ts`, as `logoColors`. A unit test checks that the docs favicon's § reaches 4.5:1 on its tile in both modes.
+5. Folder icons in the tree are outlined in the text color and filled with `folder`; dark mode uses a darker sepia, so folders don't glow. The outline stays at least 3:1 (WCAG AA for graphics) against the fill in both modes, which a unit test checks.
+6. The pencil colors of the logo (§9) and the grays of the docs site's favicon are also defined in `palette.ts`, as `logoColors`. A unit test checks that the docs favicon's § reaches 4.5:1 on its tile in both modes.
 
 <a id="SPEC-00056" data-uid="vb26hxtvldyd"></a>
 ## 9. Icons

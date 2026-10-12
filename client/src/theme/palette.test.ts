@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { wcagContrast } from "culori";
-import { MIN_CONTRAST, baseColors, derivePalette, fillRoles, paletteStylesheet } from "./palette.ts";
+import { MIN_CONTRAST, MIN_GRAPHIC_CONTRAST, baseColors, derivePalette, fillRoles, paletteStylesheet } from "./palette.ts";
 
 const palette = derivePalette();
 
@@ -18,6 +18,15 @@ describe.each(["light", "dark"] as const)("%s mode", (mode) => {
     expect(wcagContrast(colors.mutedForeground, colors.muted)).toBeGreaterThanOrEqual(MIN_CONTRAST);
     expect(wcagContrast(colors.errorText, colors.background)).toBeGreaterThanOrEqual(MIN_CONTRAST);
   });
+});
+
+test("folder icons' outline stands out against their sepia fill in both modes", () => {
+  for (const mode of [palette.light, palette.dark]) {
+    expect(wcagContrast(mode.foreground, mode.folderFill)).toBeGreaterThanOrEqual(MIN_GRAPHIC_CONTRAST);
+  }
+  expect(palette.light.folderFill).toBe(baseColors.folder);
+  // Dark mode's sepia is darker, so folders don't glow
+  expect(wcagContrast(palette.dark.folderFill, palette.dark.background)).toBeLessThan(wcagContrast(palette.light.folderFill, palette.dark.background));
 });
 
 test("light mode keeps the given colors where they already pass", () => {

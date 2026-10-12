@@ -96,7 +96,7 @@ function TreeItem({ node, depth, ...props }: FileTreeProps & { node: TreeNode; d
             onClick={() => (isFolder ? props.onToggleFolder(node.path, !isExpanded) : props.onOpenFile(node.path))}
           >
             {isFolder ? <Chevron className="size-4 shrink-0 opacity-70" /> : <span className="w-4 shrink-0" />}
-            <Icon className="size-4 shrink-0 opacity-80" />
+            <Icon className={cn("size-4 shrink-0 opacity-80", isFolder && "fill-folder")} />
             <span className="truncate">{node.name}</span>
           </button>
         </ContextMenuTrigger>
