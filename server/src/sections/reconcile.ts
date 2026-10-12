@@ -1,6 +1,6 @@
 import type { SectionRenumberReason } from "@specquer/shared/api";
 import { parseSectionId } from "@specquer/shared/sections";
-import { type DocumentEntry, type PrefixData, type SectionData, type SectionEntry, emptyPrefixData } from "./data.ts";
+import { type PrefixData, type SectionData, type SectionEntry, emptyPrefixData } from "./data.ts";
 
 /**
  * Reconciliation: from the data files and the sections found in the documents, the data files
@@ -10,14 +10,16 @@ import { type DocumentEntry, type PrefixData, type SectionData, type SectionEntr
  * A section's identity is its UID (`data-uid` in its anchor); its ID is its name. The root
  * section's UID is the document ID. "Recorded" means the entry in the data files.
  *
- * Documents:
- * - A document without a document ID gets the one recorded for its path, if no other file holds
- *   it, or a new one.
- * - A document ID held by several files: the file at the recorded path keeps it, or the first by
- *   path; the others are copies and get new IDs as above.
- * - A document found at another path than recorded was moved: the path is updated.
- * - Entries for document IDs no file holds (deleted, or no longer matching the configuration)
- *   are removed; their sections are retired.
+ Documents (a document ID is the root section's UID; no file records documents by path):
+ * - A document without a document ID gets the one its sections' entries record most often, if
+ *   no other file holds it, or a new one.
+ * - A document ID held by several files (a whole file copied): the original the caller names
+ *   (`originals`, from where the index last saw it, or Git) keeps it, and the others are copies,
+ *   renumbered with new IDs as above. Without an original, the files are reported as a copied
+ *   document and left alone, like frozen documents, until the user asks for one to be renumbered
+ *   (`copyRequests`); the first by path stands in for the document meanwhile.
+ * - Sections of documents no file holds (deleted, or no longer matching the configuration) are
+ *   retired.
  *
  * Sections, in this order:
  * - An ID whose prefix isn't known is renumbered.
@@ -91,8 +93,26 @@ export interface RenumberRequest {
   index: number;
 }
 
+/** Files holding one document ID, none of them known to be the original. */
+export interface CopiedDocument {
+  documentId: string;
+  /** By path. */
+  paths: string[];
+}
+
+export interface ReconcileOptions {
+  /** For document IDs held by several files: the path of the original. */
+  originals?: ReadonlyMap<string, string>;
+  /** Files the user asked to renumber as copies of another document. */
+  copyRequests?: readonly string[];
+}
+
 export interface ReconcileResult {
   data: SectionData;
+  /** Every document ID held, with the path of the file that holds it. */
+  documents: Map<string, string>;
+  /** Copies waiting for the user to say which file is the original. */
+  copiedDocuments: CopiedDocument[];
   /** By path, for every scanned document. */
   fixes: Map<string, DocumentFix>;
   /** Duplicates and collisions waiting for the user. */
@@ -117,49 +137,11 @@ export function reconcile(
   knownPrefixes: ReadonlySet<string>,
   newUid: () => string,
   requests: readonly RenumberRequest[] = [],
+  options: ReconcileOptions = {},
 ): ReconcileResult {
   const documents = [...scanned].sort(byPath);
   const documentIdOf = (doc: ScannedDocument) => doc.sections[0]?.uid ?? null;
-
-  // Documents: settle each file's document ID
-  const holders = new Map<string, ScannedDocument[]>();
-  for (const doc of documents) {
-    const documentId = documentIdOf(doc);
-    if (documentId === null) continue;
-    const list = holders.get(documentId) ?? [];
-    list.push(doc);
-    holders.set(documentId, list);
-  }
-  const assigned = new Map<ScannedDocument, string>();
-  const taken = new Set<string>();
-  const copies = new Set<ScannedDocument>();
-  for (const [documentId, files] of holders) {
-    const recorded = data.documents.get(documentId)?.path;
-    const keeper = files.find((doc) => doc.path === recorded) ?? files[0]!;
-    assigned.set(keeper, documentId);
-    taken.add(documentId);
-    for (const doc of files) if (doc !== keeper) copies.add(doc);
-  }
-  const recordedByPath = new Map<string, string>();
-  for (const [documentId, entry] of data.documents) if (!recordedByPath.has(entry.path)) recordedByPath.set(entry.path, documentId);
-  for (const doc of documents) {
-    if (assigned.has(doc)) continue;
-    const recorded = recordedByPath.get(doc.path);
-    const documentId = recorded !== undefined && !taken.has(recorded) && !holders.has(recorded) ? recorded : newUid();
-    assigned.set(doc, documentId);
-    taken.add(documentId);
-  }
-
-  const newDocuments = new Map<string, DocumentEntry>();
-  const pathById = new Map<string, string>([...assigned].map(([doc, id]) => [id, doc.path]));
-  for (const documentId of data.documents.keys()) {
-    const path = pathById.get(documentId);
-    if (path !== undefined) newDocuments.set(documentId, { path });
-  }
-  for (const doc of documents) {
-    const documentId = assigned.get(doc)!;
-    if (!newDocuments.has(documentId)) newDocuments.set(documentId, { path: doc.path });
-  }
+  const copyRequests = new Set(options.copyRequests ?? []);
 
   // What the data files record
   const recordedByUid = new Map<string, SectionEntry>();
@@ -179,6 +161,63 @@ export function reconcile(
     }
   }
 
+  // Documents: settle each file's document ID
+  const holders = new Map<string, ScannedDocument[]>();
+  for (const doc of documents) {
+    const documentId = documentIdOf(doc);
+    if (documentId === null) continue;
+    const list = holders.get(documentId) ?? [];
+    list.push(doc);
+    holders.set(documentId, list);
+  }
+  const assigned = new Map<ScannedDocument, string>();
+  const taken = new Set<string>();
+  const copies = new Set<ScannedDocument>();
+  /** Copies whose original isn't known: left alone, like frozen documents. */
+  const held = new Set<ScannedDocument>();
+  const copiedDocuments: CopiedDocument[] = [];
+  const newDocuments = new Map<string, string>();
+  for (const [documentId, files] of holders) {
+    let keeper: ScannedDocument;
+    if (files.length === 1) keeper = files[0]!;
+    else {
+      const original = options.originals?.get(documentId);
+      const candidates = files.some((doc) => !copyRequests.has(doc.path)) ? files.filter((doc) => !copyRequests.has(doc.path)) : files;
+      const known = candidates.find((doc) => doc.path === original) ?? (candidates.length === 1 ? candidates[0] : undefined);
+      if (known !== undefined) keeper = known;
+      else {
+        keeper = candidates[0]!;
+        copiedDocuments.push({ documentId, paths: candidates.map((doc) => doc.path) });
+        for (const doc of candidates) if (doc !== keeper) held.add(doc);
+      }
+      for (const doc of files) if (doc !== keeper && !held.has(doc)) copies.add(doc);
+    }
+    assigned.set(keeper, documentId);
+    taken.add(documentId);
+    newDocuments.set(documentId, keeper.path);
+    for (const doc of held) if (doc.sections[0]?.uid === documentId) assigned.set(doc, documentId);
+  }
+  // Without a document ID (a lost root anchor, or a copy): the one its sections record most often, if free
+  const recordedDocumentOf = (doc: ScannedDocument) => {
+    const votes = new Map<string, number>();
+    for (const section of doc.sections.slice(1)) {
+      const recorded = section.uid === null ? undefined : recordedByUid.get(section.uid)?.documentId;
+      if (recorded !== undefined) votes.set(recorded, (votes.get(recorded) ?? 0) + 1);
+    }
+    let best: string | undefined;
+    for (const [documentId, count] of votes) if (best === undefined || count > votes.get(best)!) best = documentId;
+    return best;
+  };
+  for (const doc of documents) {
+    if (assigned.has(doc)) continue;
+    const recorded = recordedDocumentOf(doc);
+    const documentId = recorded !== undefined && !taken.has(recorded) && !holders.has(recorded) ? recorded : newUid();
+    assigned.set(doc, documentId);
+    taken.add(documentId);
+    newDocuments.set(documentId, doc.path);
+  }
+  const isFrozen = (doc: ScannedDocument) => doc.frozen === true || held.has(doc);
+
   // Occurrences of section IDs
   const fixes = new Map<string, DocumentFix>();
   const occurrences: Occurrence[] = [];
@@ -192,11 +231,11 @@ export function reconcile(
     doc.sections.forEach((section, index) => {
       const uid = index === 0 ? documentId : section.uid;
       if (section.uid !== null) present.add(section.uid);
-      if (index === 0 && section.uid !== documentId && !doc.frozen) fix.uids.set(0, documentId);
+      if (index === 0 && section.uid !== documentId && !isFrozen(doc)) fix.uids.set(0, documentId);
       const parsed = section.id === null ? null : parseSectionId(section.id);
       const known = parsed !== null && knownPrefixes.has(parsed.prefix);
       if (known) highest.set(parsed.prefix, Math.max(highest.get(parsed.prefix) ?? 0, parsed.sequence));
-      if (doc.frozen) {
+      if (isFrozen(doc)) {
         if (known) frozen.push({ doc, fix, index, documentId, id: section.id!, uid });
         return;
       }
@@ -253,7 +292,10 @@ export function reconcile(
   for (const [id, list] of byId) {
     if (list.length < 2) continue;
     const entries = recordedById.get(id) ?? [];
-    const candidates = list.some((o) => !requested(o)) ? list.filter((o) => !requested(o)) : list;
+    // A copy never keeps an ID its original holds, nor an occurrence the user asked to renumber
+    const preferred = list.filter((o) => !requested(o) && !copies.has(o.doc));
+    const unrequested = list.filter((o) => !requested(o));
+    const candidates = preferred.length > 0 ? preferred : unrequested.length > 0 ? unrequested : list;
     // The earliest entry that matches an occurrence decides
     const matching = (matches: (uid: string, entry: SectionEntry, o: Occurrence) => boolean) => {
       for (const [uid, entry] of entries) {
@@ -361,5 +403,5 @@ export function reconcile(
     }
   }
 
-  return { data: { documents: newDocuments, prefixes }, fixes, duplicates };
+  return { data: { prefixes }, documents: newDocuments, copiedDocuments, duplicates, fixes };
 }

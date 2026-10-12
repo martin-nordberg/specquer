@@ -64,3 +64,21 @@ export async function gitUncommitted(root: string, info: GitInfo, path: string):
   }
   return files;
 }
+
+/**
+ * Which of the given paths (relative to the root) Git's index tracks, or `null` when the root
+ * isn't in a Git work tree. Used to tell an original from a copy made outside Specquer.
+ */
+export async function gitTrackedFiles(root: string, paths: readonly string[]): Promise<string[] | null> {
+  try {
+    const result = await $`git --literal-pathspecs -C ${root} ls-files -z --cached -- ${paths}`.quiet().nothrow();
+    if (result.exitCode !== 0) return null;
+    return result.stdout
+      .toString()
+      .split("\0")
+      .filter((path) => path !== "");
+  } catch {
+    // Git isn't installed
+    return null;
+  }
+}

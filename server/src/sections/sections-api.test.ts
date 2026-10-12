@@ -65,15 +65,14 @@ describe("saving", () => {
     const { save, read, exists } = await setup({ "docs/a.md": "" }, { config: null });
     await save("docs/a.md", "# Title\n");
     expect(await read("docs/a.md")).toBe("# Title\n");
-    expect(await exists(".specquer/shared/documents.yaml")).toBe(false);
+    expect(await exists(".specquer/shared/REQ/sections.yaml")).toBe(false);
   });
 
-  test("records documents and sections in the data files", async () => {
-    const { save, read } = await setup({ "docs/specs/s.md": "" });
+  test("records sections in the data files, and no documents file", async () => {
+    const { save, read, exists } = await setup({ "docs/specs/s.md": "" });
     await save("docs/specs/s.md", "# Spec\n");
-    const documents = await read(".specquer/shared/documents.yaml");
     const sections = await read(".specquer/shared/SPEC/sections.yaml");
-    expect(documents).toMatch(/^ {2}[a-z0-9]+: \{ path: docs\/specs\/s\.md \}$/m);
+    expect(await exists(".specquer/shared/documents.yaml")).toBe(false);
     expect(sections).toContain("lastSequence: 2\n");
     expect(sections).toMatch(/^ {2}[a-z0-9]+: \{ id: SPEC-00002, documentId: [a-z0-9]+ \}$/m);
   });
@@ -112,17 +111,20 @@ describe("saving", () => {
     expect(await read("docs/a.md")).toBe(original);
   });
 
-  test("a file moved outside Specquer keeps its IDs and its path is updated", async () => {
-    const { root, save, read, request } = await setup({ "docs/a.md": "" });
+  test("a file or folder moved outside Specquer keeps its IDs", async () => {
+    const { root, save, read, request } = await setup({ "docs/a.md": "", "docs/sub/c.md": "" });
     await save("docs/a.md", "# A\n");
+    await save("docs/sub/c.md", "# C\n");
     const original = await read("docs/a.md");
+    const nested = await read("docs/sub/c.md");
     await Bun.$`mv ${join(root, "docs/a.md")} ${join(root, "docs/b.md")}`.quiet();
+    await Bun.$`mv ${join(root, "docs/sub")} ${join(root, "docs/moved")}`.quiet();
     await request("/api/tree");
-    await save("docs/b.md", original);
+    expect((await save("docs/b.md", original)).notices).toBeUndefined();
+    expect((await save("docs/moved/c.md", nested)).notices).toBeUndefined();
     expect(await read("docs/b.md")).toBe(original);
-    const documents = await read(".specquer/shared/documents.yaml");
-    expect(documents).toContain("path: docs/b.md");
-    expect(documents).not.toContain("path: docs/a.md");
+    expect(await read("docs/moved/c.md")).toBe(nested);
+    expect(await read(".specquer/shared/REQ/sections.yaml")).not.toContain("retired:");
   });
 });
 
@@ -131,7 +133,7 @@ describe("scanning writes nothing", () => {
     const { request, sections, exists, read } = await setup({ "docs/a.md": "# A\n" });
     await request("/api/tree");
     await sections.scan();
-    expect(await exists(".specquer/shared/documents.yaml")).toBe(false);
+    expect(await exists(".specquer/shared/REQ/sections.yaml")).toBe(false);
     expect(await read("docs/a.md")).toBe("# A\n");
   });
 });
@@ -149,11 +151,12 @@ describe("create, rename, delete", () => {
     const { request, save, read } = await setup({ "docs/sub/a.md": "" });
     await save("docs/sub/a.md", "# A\n");
     await request("/api/rename", { method: "POST", body: { path: "docs/sub", newName: "renamed" } });
-    expect(await read(".specquer/shared/documents.yaml")).toContain("path: docs/renamed/a.md");
+    expect(ids(await read("docs/renamed/a.md"))).toEqual(["REQ-00001", "REQ-00002"]);
+    expect(await read(".specquer/shared/REQ/sections.yaml")).toMatch(/id: REQ-00001, documentId/);
     await request("/api/rename", { method: "POST", body: { path: "docs", newName: "elsewhere" } });
-    const documents = await read(".specquer/shared/documents.yaml");
-    expect(documents).not.toContain("path:");
-    expect(await read(".specquer/shared/REQ/sections.yaml")).toContain("lastSequence: 2\n");
+    const sections = await read(".specquer/shared/REQ/sections.yaml");
+    expect(sections).toContain("lastSequence: 2\n");
+    expect(sections).toMatch(/retired:\n(.*\n)*.*id: REQ-00001 \}/);
   });
 
   test("deleting a folder drops its documents and sections", async () => {
@@ -161,9 +164,6 @@ describe("create, rename, delete", () => {
     await save("docs/sub/a.md", "# A\n");
     await save("docs/b.md", "# B\n");
     await request("/api/entry?path=docs%2Fsub", { method: "DELETE" });
-    const documents = await read(".specquer/shared/documents.yaml");
-    expect(documents).toContain("path: docs/b.md");
-    expect(documents).not.toContain("docs/sub/a.md");
     const sections = await read(".specquer/shared/REQ/sections.yaml");
     expect(sections).not.toMatch(/id: REQ-00001, documentId/);
     expect(sections).toMatch(/retired:\n(.*\n)*.*id: REQ-00001 \}/);
@@ -214,8 +214,6 @@ describe("UIDs and conflicts", () => {
     const text = await read("docs/a.md");
     const sections = findSections(text);
     expect(sections.map((s) => s.uid?.length)).toEqual([12, 12, 12]);
-    const documents = await read(".specquer/shared/documents.yaml");
-    expect(documents).toContain(`${sections[0]!.uid}: { path: docs/a.md }`);
     expect(await read(".specquer/shared/REQ/sections.yaml")).toContain(`${sections[0]!.uid}: { id: REQ-00001, documentId: ${sections[0]!.uid} }`);
   });
 
@@ -234,7 +232,6 @@ describe("UIDs and conflicts", () => {
     const sections = await read(".specquer/shared/REQ/sections.yaml");
     // A pull brings a teammate's section in another file, a higher lastSequence and a retired number
     await write("docs/b.md", '<a id="REQ-00040" data-uid="teamdoc00001"></a>\n\n<a id="REQ-00041" data-uid="teamsec00001"></a>\n# Theirs\n');
-    await write(".specquer/shared/documents.yaml", `${await read(".specquer/shared/documents.yaml")}  teamdoc00001: { path: docs/b.md }\n`);
     await write(
       ".specquer/shared/REQ/sections.yaml",
       `${sections.replace("lastSequence: 2", "lastSequence: 50")}  teamdoc00001: { id: REQ-00040, documentId: teamdoc00001 }\n  teamsec00001: { id: REQ-00041, documentId: teamdoc00001 }\nretired:\n  gone00000001: { id: REQ-00050 }\n`,
@@ -382,5 +379,69 @@ describe("the agent guide", () => {
     await request("/api/sections/anchor", { method: "POST", body: { folder: "docs", dryRun: false, addAgentGuide: true } });
     const text = await read("AGENTS.md");
     expect(text.startsWith("# Agents\n\nBe careful.\n\n<!-- specquer:section-anchors -->\n")).toBe(true);
+  });
+});
+
+describe("whole files copied", () => {
+  const ORIGINAL = `<a id="REQ-00001" data-uid="docaaaaaaaa1"></a>\n\n<a id="REQ-00002" data-uid="secbbbbbbbb2"></a>\n# Spec\n`;
+  type Problems = { problems: SectionProblem[] };
+
+  test("a copy made while Specquer runs is renumbered on save; the original keeps its IDs", async () => {
+    const { save, read, write, request } = await setup({ "docs/spec.md": ORIGINAL });
+    await request("/api/tree");
+    await save("docs/spec.md", ORIGINAL);
+    // The copy sorts before the original
+    await write("docs/a-copy.md", ORIGINAL);
+    await request("/api/tree");
+    const result = await save("docs/a-copy.md", ORIGINAL);
+    expect(result.notices?.map((n) => n.kind === "renumbered" && n.reason)).toEqual(["copy", "copy"]);
+    expect(ids(await read("docs/a-copy.md"))).toEqual(["REQ-00003", "REQ-00004"]);
+    expect(ids(await read("docs/spec.md"))).toEqual(["REQ-00001", "REQ-00002"]);
+    expect(await read("docs/spec.md")).toBe(ORIGINAL);
+  });
+
+  test("a copy found at startup: Git's tracked file is the original", async () => {
+    const { save, read, write, request } = await setup({ "docs/spec.md": ORIGINAL }, { git: true });
+    await write("docs/a-copy.md", ORIGINAL);
+    await request("/api/tree");
+    const result = await save("docs/a-copy.md", ORIGINAL);
+    expect(result.notices?.every((n) => n.kind === "renumbered" && n.reason === "copy")).toBe(true);
+    expect(ids(await read("docs/a-copy.md"))).toEqual(["REQ-00003", "REQ-00004"]);
+    expect(await read("docs/spec.md")).toBe(ORIGINAL);
+  });
+
+  test("outside Git the copy waits for the user, who renumbers it", async () => {
+    const { save, read, request } = await setup({ "docs/spec.md": ORIGINAL, "docs/a-copy.md": ORIGINAL });
+    const problems = (await (await request("/api/sections/problems?folder=docs")).json()) as Problems;
+    expect(problems.problems).toEqual([{ kind: "copied-document", paths: ["docs/a-copy.md", "docs/spec.md"] }]);
+    // Neither file is anchored meanwhile, even with a new section
+    const saved = await save("docs/spec.md", `${ORIGINAL}\n## New\n`);
+    expect(saved.notices).toEqual([{ kind: "not-anchored", reason: "copied-document" }]);
+    expect(await read("docs/spec.md")).toBe(`${ORIGINAL}\n## New\n`);
+    // Renumber this copy
+    const file = (await (await request("/api/file?path=docs%2Fa-copy.md")).json()) as { version: string };
+    const res = await request("/api/sections/renumber-document", { method: "POST", body: { path: "docs/a-copy.md", baseVersion: file.version } });
+    expect(res.status).toBe(200);
+    expect(ids(await read("docs/a-copy.md"))).toEqual(["REQ-00003", "REQ-00004"]);
+    expect(((await (await request("/api/sections/problems?folder=docs")).json()) as Problems).problems).toEqual([]);
+    // The original is anchored again, keeping its IDs
+    await save("docs/spec.md", `${ORIGINAL}\n## New\n`);
+    expect(ids(await read("docs/spec.md"))).toEqual(["REQ-00001", "REQ-00002", "REQ-00005"]);
+    const stale = await request("/api/sections/renumber-document", { method: "POST", body: { path: "docs/a-copy.md", baseVersion: file.version } });
+    expect(stale.status).toBe(409);
+  });
+
+  test("a root anchor right before a heading is recognized from sections.yaml", async () => {
+    // The heading's anchor removed: the root anchor now sits on the line before the heading
+    const tight = `<a id="REQ-00001" data-uid="docaaaaaaaa1"></a>\n# Spec\n`;
+    const { save, read, write } = await setup({ "docs/spec.md": ORIGINAL });
+    await save("docs/spec.md", ORIGINAL);
+    await write("docs/spec.md", tight);
+    await save("docs/spec.md", tight);
+    const sections = findSections(await read("docs/spec.md"));
+    expect(sections.map((s) => [s.kind, s.id, s.uid])).toEqual([
+      ["root", "REQ-00001", "docaaaaaaaa1"],
+      ["heading", "REQ-00003", expect.stringMatching(/^[a-z0-9]{12}$/)],
+    ]);
   });
 });

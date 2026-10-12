@@ -82,6 +82,7 @@ export function createHandlers(files: FileService, uiState: UiStateStore, sectio
     },
     sectionProblems: (folder) => sections.problems(folder),
     renumberSection: (path, id, uid, baseVersion) => sections.renumber(path, id, uid, baseVersion),
+    renumberDocument: (path, baseVersion) => sections.renumberDocument(path, baseVersion),
     summaryStatus: () => summaries.status(),
     summarize: (request, signal) => summaries.summarize(request, signal),
     sectionSummary: (id) => summaries.sectionSummary(id),

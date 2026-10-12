@@ -6,14 +6,15 @@ import { writeAtomically } from "../files.ts";
 import { SHARED_FOLDER } from "./config.ts";
 
 /**
- * The committed data files in `.specquer/shared/`:
+ * The committed data files in `.specquer/shared/`, one per prefix:
  *
- * - `documents.yaml`: every sectioned document, by document ID (its root section's UID), with
- *   its path.
  * - `<prefix>/sections.yaml`: for each prefix, the highest sequence number ever assigned, every
  *   section by its UID with its section ID and document ID (the root sections included, keyed by
  *   the document ID), and the retired sections: those no document holds any more, by UID, with
  *   the ID they had. A section restored later is told apart from its ID reused by its UID.
+ *
+ * No file records documents by path (Step 007): a document's ID is its root section's UID, which
+ * the root section's entry records as its own `documentId`. An old `documents.yaml` is ignored.
  *
  * Every entry can be rebuilt from the documents, which carry the UIDs; the files are the last
  * known state, which tells an edited ID or a reused one from a new one.
@@ -24,10 +25,6 @@ import { SHARED_FOLDER } from "./config.ts";
  * empty. Nothing here ever stops the server. The files are read again when they change on disk
  * (a pull or a branch switch), see `DataFiles.changed`.
  */
-
-export interface DocumentEntry {
-  path: string;
-}
 
 export interface SectionEntry {
   id: string;
@@ -51,20 +48,24 @@ export function emptyPrefixData(lastSequence = 0): PrefixData {
 }
 
 export interface SectionData {
-  /** By document ID, in file order. */
-  documents: Map<string, DocumentEntry>;
   /** By prefix. */
   prefixes: Map<string, PrefixData>;
 }
 
 export function emptyData(): SectionData {
-  return { documents: new Map(), prefixes: new Map() };
+  return { prefixes: new Map() };
 }
 
-export const DOCUMENTS_FILE = "documents.yaml";
-export const SECTIONS_FILE = "sections.yaml";
+/** The document IDs the data records: UIDs whose live entry names them as their own document. */
+export function documentIds(data: SectionData): Set<string> {
+  const ids = new Set<string>();
+  for (const prefixData of data.prefixes.values()) {
+    for (const [uid, entry] of prefixData.sections) if (entry.documentId === uid) ids.add(uid);
+  }
+  return ids;
+}
 
-const DOCUMENTS_HEADER = "# Specquer's sectioned documents, by document ID; written by Specquer. Commit this file.\n";
+export const SECTIONS_FILE = "sections.yaml";
 const SECTIONS_HEADER = "# Specquer's sections for one prefix, by unique ID; written by Specquer. Commit this file.\n";
 
 const CONFLICT_MARKER = /^(<{7}|={7}|>{7}|\|{7})( .*)?$/;
@@ -88,17 +89,6 @@ function mapEntries(doc: ReturnType<typeof parseDocument>, key: string): Array<[
     }
   }
   return entries;
-}
-
-export function parseDocumentsFile(text: string): Map<string, DocumentEntry> {
-  const documents = new Map<string, DocumentEntry>();
-  const doc = parseTolerant(text);
-  for (const [key, value] of mapEntries(doc, "documents")) {
-    const path = (value as { path?: unknown } | null)?.path;
-    if (!isUid(key) || typeof path !== "string" || documents.has(key)) continue;
-    documents.set(key, { path });
-  }
-  return documents;
 }
 
 export function parseSectionsFile(text: string, prefix: string): PrefixData {
@@ -129,11 +119,6 @@ function scalar(value: string): string {
   return /^[A-Za-z0-9_][A-Za-z0-9_./-]*$/.test(value) && !/^(true|false|null|yes|no|on|off|~)$/i.test(value) && !/^[0-9.]+$/.test(value)
     ? value
     : JSON.stringify(value);
-}
-
-export function formatDocumentsFile(documents: ReadonlyMap<string, DocumentEntry>): string {
-  const lines = [...documents].map(([key, entry]) => `  ${key}: { path: ${scalar(entry.path)} }`);
-  return `${DOCUMENTS_HEADER}documents:${lines.length === 0 ? " {}" : ""}\n${lines.map((l) => `${l}\n`).join("")}`;
 }
 
 export function formatSectionsFile(data: PrefixData): string {
@@ -178,7 +163,7 @@ export class DataFiles {
         return "-";
       }
     };
-    const parts = [await stamp(join(this.folder, DOCUMENTS_FILE))];
+    const parts: string[] = [];
     for (const prefix of await this.prefixFolders()) parts.push(`${prefix}=${await stamp(join(this.folder, prefix, SECTIONS_FILE))}`);
     return parts.join("|");
   }
@@ -204,8 +189,6 @@ export class DataFiles {
     // Files that vanished (a branch switch) must be written again, even with the same content
     this.written.clear();
     const data = emptyData();
-    const documentsText = await this.readText(join(this.folder, DOCUMENTS_FILE));
-    if (documentsText !== null) data.documents = this.guard(DOCUMENTS_FILE, () => parseDocumentsFile(documentsText), new Map());
     for (const prefix of await this.prefixFolders()) {
       const text = await this.readText(join(this.folder, prefix, SECTIONS_FILE));
       if (text === null) continue;
@@ -225,7 +208,6 @@ export class DataFiles {
 
   /** Writes the data files whose content changed; empty data creates no file. */
   async write(data: SectionData): Promise<void> {
-    await this.writeFile(join(this.folder, DOCUMENTS_FILE), formatDocumentsFile(data.documents), data.documents.size === 0);
     for (const [prefix, prefixData] of data.prefixes) {
       const empty = prefixData.lastSequence === 0 && prefixData.sections.size === 0 && prefixData.retired.size === 0;
       await this.writeFile(join(this.folder, prefix, SECTIONS_FILE), formatSectionsFile(prefixData), empty);

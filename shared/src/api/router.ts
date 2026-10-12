@@ -34,6 +34,7 @@ import {
   folderSettingsUpdateSchema,
   modelTestSchema,
   renameSchema,
+  renumberDocumentSchema,
   renumberSectionSchema,
   saveFileSchema,
   sectionProblemsSchema,
@@ -89,6 +90,8 @@ export interface ApiHandlers {
   anchorFolder(folder: string, dryRun: boolean, addAgentGuide: boolean): Promise<AnchorFolderResult>;
   sectionProblems(folder: string): Promise<SectionProblem[]>;
   renumberSection(path: string, id: string, uid: string | null, baseVersion: string): Promise<SaveResult>;
+  /** Renumbers every section of a file that is a copy of another document. */
+  renumberDocument(path: string, baseVersion: string): Promise<SaveResult>;
   summaryStatus(): Promise<SummaryStatus>;
   /** Summarizes a section; `signal` aborts when the client no longer needs it. */
   summarize(request: SummaryRequest, signal: AbortSignal): Promise<SummaryResult>;
@@ -201,6 +204,12 @@ export function createApiRouter(handlers: ApiHandlers) {
     .post("/sections/renumber", validate("json", renumberSectionSchema), async (c) => {
       const { path, id, uid, baseVersion } = c.req.valid("json");
       const result = await handlers.renumberSection(path, id, uid, baseVersion);
+      if (!result.ok) return c.json({ error: "conflict", version: result.version }, 409);
+      return c.json(saveBody(result), 200);
+    })
+    .post("/sections/renumber-document", validate("json", renumberDocumentSchema), async (c) => {
+      const { path, baseVersion } = c.req.valid("json");
+      const result = await handlers.renumberDocument(path, baseVersion);
       if (!result.ok) return c.json({ error: "conflict", version: result.version }, 409);
       return c.json(saveBody(result), 200);
     })

@@ -51,6 +51,7 @@ describe("SectionNotices", () => {
   test("every notice has a sentence", () => {
     expect(noticeText({ kind: "restored", id: "REQ-00099", newId: "REQ-00002", title: "A" })).toContain("REQ-00002 was put back");
     expect(noticeText({ kind: "uid-replaced", id: "REQ-00003", title: "B" })).toContain("got its own");
+    expect(noticeText({ kind: "not-anchored", reason: "copied-document" })).toContain("Renumber the copy in Section problems");
     for (const reason of ["reused", "unknown-prefix", "duplicate", "collision"] as const) {
       expect(noticeText({ kind: "renumbered", reason, id: "REQ-00001", newId: "REQ-00002", title: "T" })).toContain("REQ-00002");
     }
@@ -78,7 +79,7 @@ describe("ProblemsDialog", () => {
     });
     const onOpen = mock(() => {});
     const onClose = mock(() => {});
-    render(<ProblemsDialog folder={root} onClose={onClose} loadProblems={loadProblems} onOpen={onOpen} onRenumber={onRenumber} />);
+    render(<ProblemsDialog folder={root} onClose={onClose} loadProblems={loadProblems} onOpen={onOpen} onRenumber={onRenumber} onRenumberDocument={async () => null} />);
     const list = await screen.findByRole("list", { name: "Problems" });
     expect(list.textContent).toContain("REQ-00005 is used by different sections:");
     expect(list.textContent).toContain("keeps the ID");
@@ -90,13 +91,31 @@ describe("ProblemsDialog", () => {
     expect(loadProblems).toHaveBeenCalledTimes(2);
   });
 
+  test("a copied document offers Renumber this copy for each file", async () => {
+    let problems: SectionProblem[] = [{ kind: "copied-document", paths: ["docs/a-copy.md", "docs/spec.md"] }];
+    const onRenumberDocument = mock(async () => {
+      problems = [];
+      return null;
+    });
+    render(
+      <ProblemsDialog folder={root} onClose={() => {}} loadProblems={async () => problems} onOpen={() => {}} onRenumber={async () => null} onRenumberDocument={onRenumberDocument} />,
+    );
+    const list = await screen.findByRole("list", { name: "Problems" });
+    expect(list.textContent).toContain("copies of one document");
+    const buttons = screen.getAllByRole("button", { name: "Renumber this copy" });
+    expect(buttons).toHaveLength(2);
+    fireEvent.click(buttons[0]!);
+    await waitFor(() => expect(onRenumberDocument).toHaveBeenCalledWith("docs/a-copy.md"));
+    await screen.findByText("No problems found.");
+  });
+
   test("opening an occurrence opens the file at the section and closes the dialog", async () => {
     const problems: SectionProblem[] = [
       { kind: "duplicate", id: "REQ-00005", occurrences: [{ path: "docs/a.md", uid: "u", title: "A", keeps: true }, { path: "docs/b.md", uid: "u", title: "A", keeps: false }] },
     ];
     const onOpen = mock(() => {});
     const onClose = mock(() => {});
-    render(<ProblemsDialog folder={root} onClose={onClose} loadProblems={async () => problems} onOpen={onOpen} onRenumber={async () => null} />);
+    render(<ProblemsDialog folder={root} onClose={onClose} loadProblems={async () => problems} onOpen={onOpen} onRenumber={async () => null} onRenumberDocument={async () => null} />);
     fireEvent.click(await screen.findByRole("button", { name: "docs/b.md" }));
     expect(onOpen).toHaveBeenCalledWith("docs/b.md", "REQ-00005");
     expect(onClose).toHaveBeenCalled();

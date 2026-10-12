@@ -109,7 +109,7 @@ The code is split by where it runs:
 | `server` | `src/sections/reconcile.ts` | Reconciliation: the conflict rules, as a pure function |
 | `server` | `src/sections/section-index.ts` | `SectionIndex`: the in-memory index, ID allocation, save, create, rename, delete, renumbering a duplicate, problems, **Add section anchors** |
 | `server` | `src/sections/agent-guide.ts` | Adding the agent rules to `AGENTS.md` |
-| `client` | `src/components/section-editing.ts` | Paste handling and muted UIDs in the text editor |
+| `client` | `src/components/section-editing.ts` | Paste handling and faded section anchors in the text editor |
 
 <a id="SPEC-00011" data-uid="fudl6mu2mzdq"></a>
 ### 2.1. Model
@@ -120,7 +120,7 @@ The code is split by where it runs:
 | Section anchor | An empty HTML anchor carrying the section ID and UID: `<a id="REQ-00257" data-uid="k1v2u0xwq8y7"></a>` |
 | Section ID | The section's name: a prefix (an upper-case letter and 1 to 4 upper-case letters or digits), a dash and a sequence number of five or more digits: `^[A-Z][A-Z0-9]{1,4}-[0-9]{5,}$`. It appears in URLs and links. Never reused, and never changed except to resolve a duplicate |
 | Section UID | The section's identity: a CUID2 in the anchor's `data-uid`, 12 characters long when new (longer ones stay valid). It travels with the text, so copies, moves, edited IDs and restores can be told apart, and future metadata can be keyed by it |
-| Document ID | The root section's UID, so a document keeps its identity when moved or renamed outside Specquer |
+| Document ID | The root section's UID, so a document keeps its identity when moved or renamed outside Specquer. No file records documents by path ([Step 007](/work-items/step-007-no-documents-file/requirements)); `sections.yaml` records the root section under the document ID, with itself as its `documentId` |
 | Placeholder | An anchor in a section anchor's place whose `id` isn't a section ID, blank included (`<a id=""></a>`). It asks for an ID and a new UID |
 | Stray anchor | An anchor with a section ID that isn't in a section anchor's place (in a block quote, a nested list or an ordinary paragraph, usually because text moved). It no longer marks a section and is reported |
 | Known prefix | A prefix that is a value in the configuration or already has a `sections.yaml` |
@@ -132,7 +132,7 @@ The code is split by where it runs:
 
 | Section | Recognized as | Missing anchor written as |
 | ------- | ------------- | ------------------------- |
-| Root | The first block is a paragraph holding only an anchor, unless the heading on the very next line follows it, which makes it that heading's anchor. An anchor whose UID is a document ID recorded in `documents.yaml` (`options.isDocumentUid`) is the root anchor regardless; the heading's new anchor then goes between the two, which restores the blank line | `<a id="X" data-uid="D"></a>` (D the document ID) and a blank line, at the start of the body (after a byte-order mark) |
+| Root | The first block is a paragraph holding only an anchor, unless the heading on the very next line follows it, which makes it that heading's anchor. An anchor whose UID is a document ID (`options.isDocumentUid`: a UID whose `sections.yaml` entry names itself as its `documentId`, or a document ID the index found) is the root anchor regardless; the heading's new anchor then goes between the two, which restores the blank line | `<a id="X" data-uid="D"></a>` (D the document ID) and a blank line, at the start of the body (after a byte-order mark) |
 | ATX heading | A paragraph holding only an anchor, as the block directly before a top-level heading (blank lines allowed), or an anchor at the start of the heading's text (`## <a id="X"></a> Title`, which the WYSIWYG editor writes for some headings) | `<a id="X" data-uid="U"></a>` on its own line before the heading, with a blank line above it when the line above isn't blank (or the anchor would join that paragraph) |
 | Setext heading | An anchor at the start of the heading's first line (a line above it would become part of the heading) | `<a id="X" data-uid="U"></a> ` at the start of the first line |
 | List item | An anchor at the start of the first paragraph of an item of a top-level list; in a task item, after the box. A list is sectioned when at least one item has an anchor (usually a placeholder the user typed) | `<a id="X" data-uid="U"></a> ` before the item's content |
@@ -169,13 +169,7 @@ prefixes:
 <a id="SPEC-00014" data-uid="bmy8786aswqq"></a>
 ### 2.4. Data Files
 
-Committed to Git in `.specquer/shared/`, one entry per line, entries in the order they were added:
-
-```yaml
-# .specquer/shared/documents.yaml
-documents:
-  tz4a98xxat96: { path: documentation/specifications/overview.md }
-```
+Committed to Git in `.specquer/shared/`, one file per prefix, one entry per line, entries in the order they were added:
 
 ```yaml
 # .specquer/shared/SPEC/sections.yaml
@@ -187,23 +181,24 @@ retired:
   m3n4b5v6c7x8: { id: SPEC-00007 }
 ```
 
-- `sections` holds every live section by UID, the root sections included (keyed by the document ID). `retired` holds the sections no document holds any more, by UID, with the ID they had: a section restored later (by `git restore`, or a file moved back into the configuration) comes back with its UID and is told apart from its number reused.
+- `sections` holds every live section by UID, the root sections included (keyed by the document ID, which is also their `documentId`). `retired` holds the sections no document holds any more, by UID, with the ID they had: a section restored later (by `git restore`, or a file moved back into the configuration) comes back with its UID and is told apart from its number reused.
 - Every entry can be rebuilt from the documents, which carry the UIDs. The files are the last known state, which the rules in §2.5 compare the documents with ("recorded").
 - Git merges conflict only where both branches appended entries. When reading, conflict markers are dropped and both sides kept; for `lastSequence` the highest value wins, for entries with the same key the earlier one, and a UID both live and retired is live.
 - Invalid entries are skipped and an unreadable file counts as empty (reported in the log); the index is rebuilt from the documents and the file is written with the next change. Nothing here stops the server.
+- No file maps documents to paths: such a file only changed when Specquer wrote it, so renames and copies outside Specquer left it out of date and it added noise and merge conflicts to commits. A `documents.yaml` left from before Step 007 is ignored, neither read nor watched nor written.
 - Files are written atomically, only when their content changes, and not at all while they would be empty. They are read again when their modification time or size changes, or a prefix folder appears or goes, as after a pull or a branch switch; numbers issued in the running session stay issued.
 
 <a id="SPEC-00015" data-uid="cwls8mo6j18e"></a>
 ### 2.5. Reconciliation
 
-`reconcile(data, scannedDocuments, knownPrefixes, newUid, requests)` is a pure function from the data files and the sections found in the documents (each with its ID and UID) to the data files as they should be, the fixes each document's anchors need, and the duplicates waiting for the user. A section's identity is its UID; its ID is its name. A document with merge conflict markers is **frozen**: its sections count as present (so they are neither retired nor reused, and raise `lastSequence`), but it gets no fixes and takes no part in settling duplicates.
+`reconcile(data, scannedDocuments, knownPrefixes, newUid, requests, { originals, copyRequests })` is a pure function from the data files and the sections found in the documents (each with its ID and UID) to the data files as they should be, the document ID each file holds, the fixes each document's anchors need, and the duplicates and copied documents waiting for the user. A section's identity is its UID; its ID is its name. A document with merge conflict markers is **frozen**: its sections count as present (so they are neither retired nor reused, and raise `lastSequence`), but it gets no fixes and takes no part in settling duplicates.
 
 Documents (keyed by the root anchor's UID):
 
-1. A document without a document ID gets the one recorded for its path, if no other file holds it, or a new CUID2.
-2. A document ID in several files (a copy): the file at the recorded path keeps it, or else the first by path; the others get new IDs as in rule 1, and all their sections are renumbered as copies.
-3. A document found at another path than recorded was moved; its path is updated.
-4. Entries for document IDs that no sectioned file holds (deleted files, and files that no longer match the configuration) are removed; their sections are retired.
+1. A document without a document ID (its root anchor lost) gets the one its sections' entries record most often as their `documentId`, if no other file holds it, or a new CUID2.
+2. A document ID in several files (a whole file copied): the original keeps it, and the others get new IDs as in rule 1, and all their sections are renumbered as copies; a copy never keeps a section ID its original holds. The original is the file `originals` names: where the index last saw the document alone, or the one file Git's index tracks (§2.6). Without one, the files are a **copied document**: like frozen documents they get no fixes, and they are reported until the user renumbers the copy (`copyRequests`); the first by path stands in for the document meanwhile.
+3. A document moved keeps its ID wherever it is; nothing records its path.
+4. Sections of documents no sectioned file holds (deleted files, and files that no longer match the configuration) are retired.
 
 Sections, in this order:
 
@@ -231,15 +226,17 @@ Sections, in this order:
 
 `SectionIndex` (server) holds the configuration, the data files and, for each sectioned document, its path, modification time, found sections, stray anchors and whether it is frozen. All its operations run one at a time.
 
+It also remembers, for this session only, where it last saw each document ID held by one file alone (`lastSeen`, following renames and deletes made in Specquer). When a scan finds several files holding one document ID, that file is the original; failing that, it asks Git once (`git ls-files --cached` on those paths), and the one file Git's index tracks is the original. Outside Git, or with both files tracked or neither, the copy waits for the user.
+
 | Operation | Behavior |
 | --------- | -------- |
 | Scan | At startup (in the background) and after each tree load. Reads the data files again if they changed on disk, lists the Markdown files as the tree does, keeps the sectioned ones, parses only files whose modification time or size changed, and reconciles. **Writes nothing**: opening Specquer on a fresh clone or after a branch switch leaves the working tree unchanged. Save, create, renumbering, problems and **Add section anchors** scan first, so they never work from a stale view of files changed outside Specquer (about 50 ms for this repository, 200 ms for 2,000 files with 40,000 sections, when nothing changed) |
 | Allocate | One more than the highest number known for the prefix (including IDs just typed into the text being saved), recorded at once, so a number is never handed out twice, even if the save then fails |
-| Save | For a sectioned file: split off the front matter, convert the body to `\n`, reconcile with this text, allocate IDs for sections without one, placeholders and sections to renumber, put back edited IDs, add or replace UIDs, apply the edits, put back the front matter, line endings and byte-order mark, write with the version check, then write the data files. The response carries the edits, relative to the body sent, and notices for what changed beyond adding anchors. A file with merge conflict markers is written as sent, with a notice |
+| Save | For a sectioned file: split off the front matter, convert the body to `\n`, reconcile with this text, allocate IDs for sections without one, placeholders and sections to renumber, put back edited IDs, add or replace UIDs, apply the edits, put back the front matter, line endings and byte-order mark, write with the version check, then write the data files. The response carries the edits, relative to the body sent, and notices for what changed beyond adding anchors. A file with merge conflict markers, or one of a copied document, is written as sent, with a notice |
 | Create | A new sectioned file starts with its root anchor (a new number and a new document ID) and a blank line |
-| Rename, delete | After the file-system change, paths in the index and in `documents.yaml` follow the rename (everything under a renamed folder); a scan then drops what is gone or no longer matches, and the data files are written |
-| Renumber | At the user's request, gives one occurrence of a duplicate or collision (named by path, ID and UID) a new ID, rewriting the file as a save would, if it is still at the version the user saw. The edits are relative to the body on disk |
-| Problems | For a folder: duplicates and collisions waiting for the user (every occurrence's path, UID and title, and which keeps the ID), stray anchors (path, ID and line), and frozen files |
+| Rename, delete | After the file-system change, paths in the index and in `lastSeen` follow the rename (everything under a renamed folder); a scan then drops what is gone or no longer matches, and the data files are written |
+| Renumber | At the user's request, gives one occurrence of a duplicate or collision (named by path, ID and UID) a new ID, rewriting the file as a save would, if it is still at the version the user saw. The edits are relative to the body on disk. For a copied document, renumbers every section of the file the user names as the copy, its root section included |
+| Problems | For a folder: copied documents (their paths), duplicates and collisions waiting for the user (every occurrence's path, UID and title, and which keeps the ID), stray anchors (path, ID and line), and frozen files |
 | Add section anchors | Scans, then for each sectioned file under the folder whose anchors would change: rewrites it as a save would. A dry run only lists the files. A file changed on disk during the run is read again, never overwritten blindly; frozen files are left alone. On request it also appends the section anchor rules for coding agents to the root folder's `AGENTS.md` (once, between marker comments) |
 | Sections of a document, search | For badge tooltips, problems and link completion: ID, UID (`null` for a section renumbered on the next save), kind, title, heading level, and the problem when the ID is also used elsewhere. Titles: the heading text, the first eight words of a list item, the file name for the root section |
 
@@ -249,12 +246,12 @@ Data files are written only by the changes in this table, and then hold the whol
 ### 2.7. Client
 
 - **Anchors added on save.** `DocumentStore` keeps the body it sent. When the save returns edits, it builds a CodeMirror `ChangeSet` from them, maps it through the changes typed since (a `ChangeSet` from `@codemirror/merge`'s `diff` of the sent and current body) and applies it. The written text becomes the saved text, so the anchors aren't unsaved changes. Renumbering a duplicate in the open file saves first and applies the server's edits the same way.
-- **Text editor.** `CodeEditor` applies a body changed from outside as the minimal changes, so the selection is mapped and the cursor stays put, and outside the undo history (`addToHistory: false`), so undo never removes an assigned anchor (which would retire its number). `data-uid="…"` is shown in the muted color, never folded or hidden.
+- **Text editor.** `CodeEditor` applies a body changed from outside as the minimal changes, so the selection is mapped and the cursor stays put, and outside the undo history (`addToHistory: false`), so undo never removes an assigned anchor (which would retire its number). Section anchors are faded (the muted color, lighter still), never folded or hidden.
 - **Paste handling.** A pasted section anchor whose ID the open document holds elsewhere becomes a placeholder (`<a id=""></a>`) in the same transaction. The other pasted IDs are looked up with `GET /api/sections/search`; one that another document holds becomes a placeholder too, outside the undo history. A cut followed by a paste keeps its IDs: the cut removed the original, and opening another file saves the current one first. In the WYSIWYG editor, a ProseMirror `transformPasted` hook does the first check; copies from other documents are left to the server, which reports them.
 - **WYSIWYG.** A Milkdown node view for raw HTML nodes shows an anchor's open tag as the badge (its ID as a tooltip) and hides its closing tag; Milkdown still writes the HTML back unchanged. A heading's anchor shows as a badge on the line above the heading. When a save adds anchors, the WYSIWYG editor reloads its content, which moves its cursor to the start.
 - **Badges.** The preview pipeline marks the top-level section anchors (`data-section-anchor`) and moves a heading's anchor into the heading; the first block's anchor is the root's unless a heading follows on the very next line (by source position). The preview renders each marked anchor as the invisible anchor (the scroll target) followed by a `SectionBadge`: a focusable button with the favicon, a tooltip with the section ID, the document path and the UID, and a click that copies the section ID. The preview loads the document's sections when its anchors or the saved version change; a badge whose ID is also used elsewhere has a warning ring, and its tooltip names the other occurrences and offers **Renumber this one**.
-- **Notices.** After a save or renumbering with notices, a dismissible line under the file path says what changed (a copy renumbered, an edited ID put back, a reused number, a copied UID, a file with conflict markers left alone), with a link to **Section problems…**.
-- **Section problems.** **Section problems…** in the folder tree's context menu opens a dialog listing a folder's problems. Each occurrence opens its file at the section; duplicates and collisions have **Renumber**.
+- **Notices.** After a save or renumbering with notices, a dismissible line under the file path says what changed (a copy renumbered, an edited ID put back, a reused number, a copied UID, a file with conflict markers or a copied document left alone), with a link to **Section problems…**.
+- **Section problems.** **Section problems…** in the folder tree's context menu opens a dialog listing a folder's problems. Each occurrence opens its file at the section; duplicates and collisions have **Renumber**, and each file of a copied document **Renumber this copy**.
 - **Agent guide.** **Add section anchors** offers, while `AGENTS.md` lacks them, to add the section anchor rules for coding agents; nothing is written there unless the user ticks the box.
 - **Completion.** A CodeMirror completion source recognizes `](#…` and `](path#…` and offers sections from `GET /api/sections/search`: of all documents without a path (inserting the path relative to the open file, or nothing for the same file), of that document with one.
 - **Links to sections.** A preview link to another document with a fragment opens the document and scrolls the preview to `user-content-<id>` once rendered.

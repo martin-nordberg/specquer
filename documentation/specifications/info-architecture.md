@@ -19,7 +19,7 @@ This document describes what Specquer works with and how its screen is organized
 | UI state | Per-user settings in `.specquer/user/uistate.yaml`: theme, pane width, expanded folders, recent files, the open file and per-file view settings. See [Data Architecture](data-architecture.md) §3. |
 | Section | A whole spec file (the root section), a top-level heading with its content, or an item of a sectioned list. Sectioned files are chosen by `.specquer/shared/section-prefixes.config.yaml`. See [Data Architecture](data-architecture.md) §2. |
 | Section anchor and ID | An invisible HTML anchor that marks a section with a permanent ID such as `REQ-00257`, used in links to the section, and its UID (`data-uid`), the section's identity. The root anchor's UID is the document ID. |
-| Shared data | The section configuration and data files in `.specquer/shared/`, committed to Git: `documents.yaml` and, per prefix, `sections.yaml` (live and retired sections). |
+| Shared data | The section configuration and data files in `.specquer/shared/`, committed to Git: per prefix, `sections.yaml` (live and retired sections, the root sections keyed by the document ID). |
 | Agent guide | Optional section anchor rules for coding agents in the root folder's `AGENTS.md`, added on request by **Add section anchors** (in a folder's settings). |
 | Summary | An AI-generated summary of a heading section, or of the whole document, shown in the preview in place of the section's content by the summary slider. Made from the saved file by the model named in the agent configuration, and cached for 30 days. See [Data Architecture](data-architecture.md) §4. |
 | Agent configuration | `.specquer/shared/agent.config.yaml` (committed) names the model for agent features and the environment variable holding its key; an optional `.specquer/user/agent.config.yaml` overrides it for one user. Without it, Specquer makes no network calls. |
@@ -30,7 +30,6 @@ root folder
 ├── .specquer/shared/        section and agent configuration and data, committed
 │   ├── section-prefixes.config.yaml
 │   ├── agent.config.yaml    optional: the model for summaries
-│   ├── documents.yaml
 │   └── REQ/sections.yaml
 ├── .specquer/user/          per-user state, ignored by Git
 │   ├── .gitignore           *

@@ -299,6 +299,27 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
     [api, docStore],
   );
 
+  /** Renumbers a whole file as a copy: the open file is saved first, and reloaded after. */
+  const renumberDocumentIn = useCallback(
+    async (path: string): Promise<string | null> => {
+      try {
+        const isOpen = docStore.get().document?.path === path;
+        if (isOpen) {
+          const saved = await docStore.save();
+          if (saved === "conflict" || saved === "error") return "Save or resolve the open file's changes first.";
+        }
+        const file = await api.readFile(path);
+        const outcome = await api.renumberDocument(path, file.version);
+        if (outcome.kind === "conflict") return `${path} changed on disk; try again.`;
+        if (isOpen && !docStore.hasUnsavedChanges) await docStore.reloadTheirs();
+        return null;
+      } catch (err) {
+        return (err as Error).message;
+      }
+    },
+    [api, docStore],
+  );
+
   const left = (
     <nav aria-label="Folders" className="flex h-full flex-col overflow-auto">
       <FileTree
@@ -411,7 +432,7 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
       <AnchorDialog folder={anchoring} onClose={() => setAnchoring(null)} loadChanges={anchorChanges} onRun={addAnchors} />
       <FolderSettingsDialog folder={folderSettings} onClose={() => setFolderSettings(null)} api={api} onAddAnchors={setAnchoring} />
       <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} api={api} onSaved={loadSummaryStatus} />
-      <ProblemsDialog folder={checking} onClose={() => setChecking(null)} loadProblems={loadProblems} onOpen={openFromUi} onRenumber={renumberIn} />
+      <ProblemsDialog folder={checking} onClose={() => setChecking(null)} loadProblems={loadProblems} onOpen={openFromUi} onRenumber={renumberIn} onRenumberDocument={renumberDocumentIn} />
     </div>
   );
 }

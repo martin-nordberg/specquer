@@ -12,15 +12,18 @@ export interface ProblemsDialogProps {
   onOpen: (path: string, sectionId?: string) => void;
   /** Renumbers one occurrence; resolves to an error message, or `null` on success. */
   onRenumber: (path: string, id: string, uid: string | null) => Promise<string | null>;
+  /** Renumbers a whole file as a copy of another document; resolves as `onRenumber` does. */
+  onRenumberDocument: (path: string) => Promise<string | null>;
 }
 
 const linkClass = "rounded-sm font-mono text-xs underline outline-none focus-visible:ring-2 focus-visible:ring-ring/50";
 
 /**
- * **Section problems**: duplicate and colliding section IDs waiting for the user, stray anchors,
- * and files with merge conflict markers, in a folder's sectioned files.
+ * **Section problems**: whole files copied with no known original, duplicate and colliding
+ * section IDs waiting for the user, stray anchors, and files with merge conflict markers, in a
+ * folder's sectioned files.
  */
-export function ProblemsDialog({ folder, onClose, loadProblems, onOpen, onRenumber }: ProblemsDialogProps) {
+export function ProblemsDialog({ folder, onClose, loadProblems, onOpen, onRenumber, onRenumberDocument }: ProblemsDialogProps) {
   const [problems, setProblems] = useState<SectionProblem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -45,9 +48,9 @@ export function ProblemsDialog({ folder, onClose, loadProblems, onOpen, onRenumb
     onClose();
   };
 
-  const renumber = async (path: string, id: string, uid: string | null) => {
+  const renumber = async (path: string, id: string | null, uid: string | null) => {
     setBusy(true);
-    const result = await onRenumber(path, id, uid);
+    const result = id === null ? await onRenumberDocument(path) : await onRenumber(path, id, uid);
     setBusy(false);
     setError(result);
     await reload();
@@ -55,6 +58,24 @@ export function ProblemsDialog({ folder, onClose, loadProblems, onOpen, onRenumb
 
   const describe = (problem: SectionProblem) => {
     switch (problem.kind) {
+      case "copied-document":
+        return (
+          <>
+            <p>These files are copies of one document, and Specquer can't tell which is the original. Renumber the copy; until then neither file gets anchors.</p>
+            <ul className="grid gap-1 pl-4">
+              {problem.paths.map((path) => (
+                <li key={path} className="flex flex-wrap items-center gap-2">
+                  <button type="button" className={linkClass} onClick={() => open(path)}>
+                    {path}
+                  </button>
+                  <Button type="button" size="sm" variant="secondary" disabled={busy} onClick={() => void renumber(path, null, null)}>
+                    Renumber this copy
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </>
+        );
       case "duplicate":
       case "collision":
         return (

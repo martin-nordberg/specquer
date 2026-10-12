@@ -101,6 +101,8 @@ export interface Api {
   sectionProblems(folder: string): Promise<SectionProblem[]>;
   /** Renumbers one occurrence of a duplicate ID; the edits are relative to the body on disk. */
   renumberSection(path: string, id: string, uid: string | null, baseVersion: string): Promise<SaveOutcome>;
+  /** Renumbers every section of a file that is a copy of another document. */
+  renumberDocument(path: string, baseVersion: string): Promise<SaveOutcome>;
   summaryStatus(): Promise<SummaryStatus>;
   /** Summarizes a section's saved text; `signal` aborts the request when it is no longer needed. */
   summarize(request: SummaryRequest, signal?: AbortSignal): Promise<SummaryResult>;
@@ -195,6 +197,9 @@ export const httpApi: Api = {
   },
   async renumberSection(path, id, uid, baseVersion) {
     return saveOutcome(await client.api.sections.renumber.$post({ json: { path, id, uid, baseVersion } }));
+  },
+  async renumberDocument(path, baseVersion) {
+    return saveOutcome(await client.api.sections["renumber-document"].$post({ json: { path, baseVersion } }));
   },
   async summaryStatus() {
     return json<SummaryStatus>(await client.api.summaries.status.$get());

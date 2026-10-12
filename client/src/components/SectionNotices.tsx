@@ -22,7 +22,9 @@ export function noticeText(notice: SectionNotice): string {
     case "uid-replaced":
       return `${notice.id} in “${notice.title}” carried another section's UID and got its own.`;
     case "not-anchored":
-      return "This file holds merge conflict markers, so its section anchors were left alone. Resolve the conflict and save again.";
+      return notice.reason === "copied-document"
+        ? "This file and another one are copies of one document, so their section anchors were left alone. Renumber the copy in Section problems."
+        : "This file holds merge conflict markers, so its section anchors were left alone. Resolve the conflict and save again.";
   }
 }
 

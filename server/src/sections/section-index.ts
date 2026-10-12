@@ -18,9 +18,10 @@ import {
 import { baseName, isSameOrInside, renamedPath } from "@specquer/shared/paths";
 import { UID_LENGTH, formatSectionId } from "@specquer/shared/sections";
 import type { FileService } from "../files.ts";
+import { gitTrackedFiles } from "../git.ts";
 import { type PrefixConfig, PrefixConfigFile } from "./config.ts";
-import { DataFiles, type SectionData, emptyData, emptyPrefixData } from "./data.ts";
-import { type DocumentFix, type Duplicate, type RenumberRequest, type ScannedDocument, reconcile } from "./reconcile.ts";
+import { DataFiles, type SectionData, documentIds, emptyData, emptyPrefixData } from "./data.ts";
+import { type CopiedDocument, type DocumentFix, type Duplicate, type RenumberRequest, type ScannedDocument, reconcile } from "./reconcile.ts";
 
 /**
  * The server's index of sections: the prefix configuration, the data files and, for each
@@ -37,6 +38,10 @@ import { type DocumentFix, type Duplicate, type RenumberRequest, type ScannedDoc
  * renaming and deleting in Specquer, renumbering a duplicate, and **Add section anchors**. A data
  * file written then holds the whole reconciled state, fixes found by scans included. Updates run
  * one at a time.
+ *
+ * When a whole file was copied, the original keeps the document ID: the file where this session
+ * last saw the document alone, or else the one Git tracks. Otherwise the copy waits for the user
+ * (Step 007); nothing records documents by path.
  */
 
 interface IndexedDocument {
@@ -70,6 +75,15 @@ export class SectionIndex {
   private data: SectionData = emptyData();
   private fixes = new Map<string, DocumentFix>();
   private duplicates: Duplicate[] = [];
+  private copiedDocuments: CopiedDocument[] = [];
+  /** Document IDs recorded or found, for recognizing root anchors. */
+  private knownDocumentIds = new Set<string>();
+  /** Where this session last saw each document ID held by one file alone. */
+  private readonly lastSeen = new Map<string, string>();
+  /** For document IDs held by several files: the original, from `lastSeen` or Git. */
+  private originals = new Map<string, string>();
+  /** Git's answers, by document ID and paths, so a scan asks once per set of copies. */
+  private readonly gitOriginals = new Map<string, string | null>();
   private readonly documents = new Map<string, IndexedDocument>();
   private loaded = false;
   private queue: Promise<unknown> = Promise.resolve();
@@ -112,7 +126,7 @@ export class SectionIndex {
   }
 
   private analyze(body: string) {
-    return analyzeBody(body, { isDocumentUid: (uid) => this.data.documents.has(uid) });
+    return analyzeBody(body, { isDocumentUid: (uid) => this.knownDocumentIds.has(uid) });
   }
 
   private static scannedOf(path: string, sections: readonly FoundSection[], frozen: boolean): ScannedDocument {
@@ -123,10 +137,13 @@ export class SectionIndex {
     return [...this.documents.values()].map((doc) => SectionIndex.scannedOf(doc.path, doc.sections, doc.frozen));
   }
 
-  private reconcile(config: PrefixConfig, extra?: ScannedDocument, requests?: RenumberRequest[]) {
+  private reconcile(config: PrefixConfig, extra?: ScannedDocument, requests?: RenumberRequest[], copyRequests?: string[]) {
     const scanned = this.scanned().filter((doc) => doc.path !== extra?.path);
     if (extra !== undefined) scanned.push(extra);
-    return reconcile(this.data, scanned, this.knownPrefixes(config), this.newUid, requests);
+    return reconcile(this.data, scanned, this.knownPrefixes(config), this.newUid, requests, {
+      originals: this.originals,
+      ...(copyRequests === undefined ? {} : { copyRequests }),
+    });
   }
 
   private apply(config: PrefixConfig): void {
@@ -134,6 +151,44 @@ export class SectionIndex {
     this.data = result.data;
     this.fixes = result.fixes;
     this.duplicates = result.duplicates;
+    this.copiedDocuments = result.copiedDocuments;
+    this.knownDocumentIds = new Set([...documentIds(result.data), ...result.documents.keys()]);
+    // A document ID held by one file alone: remember where, to tell the original from a later copy
+    const holders = new Map<string, string[]>();
+    for (const doc of this.documents.values()) {
+      const uid = doc.sections[0]?.uid;
+      if (uid !== null && uid !== undefined) holders.set(uid, [...(holders.get(uid) ?? []), doc.path]);
+    }
+    for (const [uid, paths] of holders) if (paths.length === 1) this.lastSeen.set(uid, paths[0]!);
+  }
+
+  /**
+   * The originals of document IDs held by several files: where this session last saw the
+   * document alone, or else the one file Git's index tracks.
+   */
+  private async findOriginals(): Promise<void> {
+    const holders = new Map<string, string[]>();
+    for (const doc of this.documents.values()) {
+      const uid = doc.sections[0]?.uid;
+      if (uid !== null && uid !== undefined) holders.set(uid, [...(holders.get(uid) ?? []), doc.path]);
+    }
+    const originals = new Map<string, string>();
+    for (const [uid, paths] of holders) {
+      if (paths.length < 2) continue;
+      const seen = this.lastSeen.get(uid);
+      if (seen !== undefined && paths.includes(seen)) {
+        originals.set(uid, seen);
+        continue;
+      }
+      const key = [uid, ...paths.sort()].join("\0");
+      if (!this.gitOriginals.has(key)) {
+        const tracked = await gitTrackedFiles(this.files.root, paths);
+        this.gitOriginals.set(key, tracked?.length === 1 ? tracked[0]! : null);
+      }
+      const original = this.gitOriginals.get(key);
+      if (original !== null && original !== undefined) originals.set(uid, original);
+    }
+    this.originals = originals;
   }
 
   private parse(path: string, text: string, stamp: { mtimeMs: number; size: number }): IndexedDocument {
@@ -166,6 +221,7 @@ export class SectionIndex {
     const wanted = new Set(paths);
     for (const path of this.documents.keys()) if (!wanted.has(path)) this.documents.delete(path);
     for (const path of paths) await this.index(path);
+    await this.findOriginals();
     this.apply(config);
     return config;
   }
@@ -197,13 +253,17 @@ export class SectionIndex {
    * the user should be told. Allocates IDs; with `dryRun` it only reports whether anything would
    * change. A file with merge conflict markers is left as it is.
    */
-  private anchor(config: PrefixConfig, path: string, text: string, dryRun = false, requests?: RenumberRequest[]): Anchored {
+  private anchor(config: PrefixConfig, path: string, text: string, dryRun = false, requests?: RenumberRequest[], copyRequests?: string[]): Anchored {
     const prefix = config.prefixFor(path);
     if (prefix === undefined) return { text, edits: [], notices: [] };
     const { body, rebuild } = prepareText(text);
     if (hasConflictMarkers(body)) return { text, edits: [], notices: dryRun ? [] : [{ kind: "not-anchored" }] };
     const sections = this.analyze(body).sections;
-    const reconciled = this.reconcile(config, SectionIndex.scannedOf(path, sections, false), requests);
+    const reconciled = this.reconcile(config, SectionIndex.scannedOf(path, sections, false), requests, copyRequests);
+    // A copy whose original isn't known is left alone until the user says which file is the copy
+    if (reconciled.copiedDocuments.some((copied) => copied.paths.includes(path))) {
+      return { text, edits: [], notices: dryRun ? [] : [{ kind: "not-anchored", reason: "copied-document" }] };
+    }
     const fix = reconciled.fixes.get(path)!;
     const needed = sections.flatMap((section, index) => (section.id === null || fix.renumber.has(index) ? [index] : []));
     if (dryRun) {
@@ -286,7 +346,7 @@ export class SectionIndex {
         this.documents.delete(path);
         this.documents.set(moved, { ...doc, path: moved });
       }
-      for (const entry of this.data.documents.values()) entry.path = renamedPath(entry.path, from, to) ?? entry.path;
+      for (const [documentId, path] of this.lastSeen) this.lastSeen.set(documentId, renamedPath(path, from, to) ?? path);
       await this.scanFiles();
       await this.dataFiles.write(this.data);
     });
@@ -296,6 +356,7 @@ export class SectionIndex {
   deleted(path: string): Promise<void> {
     return this.run(async () => {
       for (const doc of [...this.documents.keys()]) if (isSameOrInside(doc, path)) this.documents.delete(doc);
+      for (const [documentId, seen] of [...this.lastSeen]) if (isSameOrInside(seen, path)) this.lastSeen.delete(documentId);
       await this.scanFiles();
       await this.dataFiles.write(this.data);
     });
@@ -357,13 +418,36 @@ export class SectionIndex {
   }
 
   /**
-   * The problems in a folder's sectioned files: duplicates and collisions waiting for the user,
-   * stray anchors, and files with merge conflict markers.
+   * Renumbers a whole file as a copy of another document, at the user's request: every section
+   * gets a new ID, the root section included, as a copy's do. The file is rewritten as a save
+   * would, if it is still at `baseVersion`.
+   */
+  renumberDocument(path: string, baseVersion: string): Promise<SaveResult> {
+    return this.run(async () => {
+      const config = await this.scanFiles();
+      const file = await this.files.readFile(path);
+      if (file.version !== baseVersion) return { ok: false, reason: "conflict", version: file.version };
+      if (!config.isSectioned(path)) return { ok: true, version: file.version };
+      const anchored = this.anchor(config, path, file.text, false, [], [path]);
+      const result = await this.files.saveFile(path, anchored.text, baseVersion);
+      if (!result.ok) return result;
+      await this.written(config, path, anchored.text);
+      return SectionIndex.result(result, anchored);
+    });
+  }
+
+  /**
+   * The problems in a folder's sectioned files: whole files copied with no known original,
+   * duplicates and collisions waiting for the user, stray anchors, and files with merge conflict
+   * markers.
    */
   problems(folder: string): Promise<SectionProblem[]> {
     return this.run(async () => {
       await this.scanFiles();
       const problems: SectionProblem[] = [];
+      for (const copied of this.copiedDocuments) {
+        if (copied.paths.some((path) => isSameOrInside(path, folder))) problems.push({ kind: "copied-document", paths: copied.paths });
+      }
       for (const duplicate of this.duplicates) {
         if (!duplicate.occurrences.some((o) => isSameOrInside(o.path, folder))) continue;
         problems.push({

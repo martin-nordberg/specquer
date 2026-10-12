@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from "bun:test";
 import { join } from "node:path";
 import { tempRoot } from "../test-support.ts";
-import { DataFiles, emptyData, formatDocumentsFile, formatSectionsFile, parseDocumentsFile, parseSectionsFile } from "./data.ts";
+import { DataFiles, documentIds, emptyData, formatSectionsFile, parseSectionsFile } from "./data.ts";
 
 let cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => {
@@ -10,20 +10,6 @@ afterEach(async () => {
 });
 
 test("one entry per line, in order, read back unchanged", () => {
-  const documents = new Map([
-    ["zz1", { path: "b.md" }],
-    ["aa2", { path: "docs/a file: with, odd chars.md" }],
-    ["mm3", { path: "true.md" }],
-  ]);
-  const text = formatDocumentsFile(documents);
-  expect(text.split("\n").slice(1, 5)).toEqual([
-    "documents:",
-    "  zz1: { path: b.md }",
-    '  aa2: { path: "docs/a file: with, odd chars.md" }',
-    "  mm3: { path: true.md }",
-  ]);
-  expect([...parseDocumentsFile(text)]).toEqual([...documents]);
-
   const sections = { lastSequence: 12, sections: new Map([["k1", { id: "REQ-00012", documentId: "zz1" }]]), retired: new Map() };
   const sectionsText = formatSectionsFile(sections);
   expect(sectionsText).toContain("lastSequence: 12\nsections:\n  k1: { id: REQ-00012, documentId: zz1 }\n");
@@ -83,7 +69,7 @@ test("a section live on one side of a merge and retired on the other is live", (
 test("invalid entries are skipped and damaged files read as empty", () => {
   const parsed = parseSectionsFile("lastSequence: 3\nsections:\n  k1: { id: SPEC-00001, documentId: d1 }\n  k2: nope\n  k3: { id: REQ-00002, documentId: d1 }\n", "REQ");
   expect([...parsed.sections.keys()]).toEqual(["k3"]);
-  expect(parseDocumentsFile(": : :\n\t- [").size).toBe(0);
+  expect(parseSectionsFile(": : :\n\t- [", "REQ").sections.size).toBe(0);
 });
 
 test("writes only changed files and creates none for empty data", async () => {
@@ -92,9 +78,8 @@ test("writes only changed files and creates none for empty data", async () => {
   const files = new DataFiles(temp.root);
   await files.read();
   await files.write(emptyData());
-  expect(await Bun.file(join(temp.root, ".specquer/shared/documents.yaml")).exists()).toBe(false);
+  expect(await Bun.file(join(temp.root, ".specquer/shared/REQ/sections.yaml")).exists()).toBe(false);
   const data = emptyData();
-  data.documents.set("d1", { path: "a.md" });
   data.prefixes.set("REQ", { lastSequence: 1, sections: new Map([["k1", { id: "REQ-00001", documentId: "d1" }]]), retired: new Map() });
   await files.write(data);
   const again = await new DataFiles(temp.root).read();
@@ -109,7 +94,6 @@ test("notices changes on disk, but not its own writes", async () => {
   await files.read();
   expect(await files.changed()).toBe(false);
   const data = emptyData();
-  data.documents.set("d1", { path: "a.md" });
   data.prefixes.set("REQ", { lastSequence: 1, sections: new Map([["d1", { id: "REQ-00001", documentId: "d1" }]]), retired: new Map() });
   await files.write(data);
   expect(await files.changed()).toBe(false);
@@ -119,12 +103,26 @@ test("notices changes on disk, but not its own writes", async () => {
   const read = await files.read();
   expect(read.prefixes.get("SPEC")?.lastSequence).toBe(3);
   expect(await files.changed()).toBe(false);
+  // An old documents.yaml is neither watched nor written
   await Bun.write(join(temp.root, ".specquer/shared/documents.yaml"), "documents:\n  d2: { path: b.md }\n");
-  expect(await files.changed()).toBe(true);
+  expect(await files.changed()).toBe(false);
   // A vanished file is written again even with unchanged content
-  expect([...(await files.read()).documents.keys()]).toEqual(["d2"]);
   await Bun.$`rm ${join(temp.root, ".specquer/shared/REQ/sections.yaml")}`.quiet();
   await files.read();
   await files.write(data);
   expect(await Bun.file(join(temp.root, ".specquer/shared/REQ/sections.yaml")).exists()).toBe(true);
+});
+
+test("the document IDs are the UIDs recorded as their own document", () => {
+  const data = emptyData();
+  data.prefixes.set("REQ", {
+    lastSequence: 3,
+    sections: new Map([
+      ["d1", { id: "REQ-00001", documentId: "d1" }],
+      ["s2", { id: "REQ-00002", documentId: "d1" }],
+      ["d3", { id: "REQ-00003", documentId: "d3" }],
+    ]),
+    retired: new Map([["d4", { id: "REQ-00004" }]]),
+  });
+  expect([...documentIds(data)]).toEqual(["d1", "d3"]);
 });

@@ -9,15 +9,13 @@ function uids() {
   return () => `new${++n}`;
 }
 
-/** Data files: documents by ID, live sections by UID, retired sections by UID. */
+/** Data files: live sections by UID, retired sections by UID. */
 function data(
-  documents: Record<string, string>,
   sections: Record<string, [id: string, documentId: string]>,
   lastSequence = 0,
   retired: Record<string, string> = {},
 ): SectionData {
   const result = emptyData();
-  for (const [id, path] of Object.entries(documents)) result.documents.set(id, { path });
   const ensure = (id: string) => {
     const prefix = id.split("-")[0]!;
     const prefixData = result.prefixes.get(prefix) ?? emptyPrefixData(lastSequence);
@@ -42,7 +40,7 @@ function doc(path: string, root: string | null, ...sections: Array<string | null
   return { path, sections: [section(root), ...sections.map(section)] };
 }
 
-const docs = (d: SectionData) => Object.fromEntries([...d.documents].map(([id, e]) => [id, e.path]));
+const docs = (r: ReturnType<typeof reconcile>) => Object.fromEntries(r.documents);
 const sections = (d: SectionData, prefix = "REQ") =>
   Object.fromEntries([...(d.prefixes.get(prefix)?.sections ?? [])].map(([uid, e]) => [uid, `${e.id}@${e.documentId}`]));
 const retired = (d: SectionData, prefix = "REQ") => Object.fromEntries([...(d.prefixes.get(prefix)?.retired ?? [])].map(([uid, e]) => [uid, e.id]));
@@ -51,12 +49,13 @@ const renumbered = (r: ReturnType<typeof reconcile>, path: string) => Object.fro
 const newUids = (r: ReturnType<typeof reconcile>, path: string) => Object.fromEntries(fix(r, path).uids);
 
 describe("documents", () => {
-  test("a new document gets a new ID; one without an ID gets the ID recorded for its path", () => {
-    const r = reconcile(data({ d1: "a.md" }, {}), [doc("a.md", null), doc("b.md", null)], KNOWN, uids());
+  test("a new document gets a new ID; one without an ID gets the one its sections record", () => {
+    const before = data({ d1: ["REQ-00001", "d1"], s2: ["REQ-00002", "d1"], s3: ["REQ-00003", "d1"], t4: ["REQ-00004", "d9"] });
+    const r = reconcile(before, [doc("a.md", null, "REQ-00002/s2", "REQ-00003/s3", "REQ-00004/t4"), doc("b.md", null)], KNOWN, uids());
     expect(fix(r, "a.md").documentId).toBe("d1");
     expect(fix(r, "b.md").documentId).toBe("new1");
     expect(newUids(r, "a.md")).toEqual({ 0: "d1" });
-    expect(docs(r.data)).toEqual({ d1: "a.md", new1: "b.md" });
+    expect(docs(r)).toEqual({ d1: "a.md", new1: "b.md" });
   });
 
   test("the root section is recorded under the document ID", () => {
@@ -65,59 +64,82 @@ describe("documents", () => {
     expect(newUids(r, "a.md")).toEqual({});
   });
 
-  test("a moved document keeps its ID and its path is updated", () => {
-    const before = data({ d1: "old.md" }, { d1: ["REQ-00001", "d1"], s2: ["REQ-00002", "d1"] });
+  test("a moved document keeps its ID", () => {
+    const before = data({ d1: ["REQ-00001", "d1"], s2: ["REQ-00002", "d1"] });
     const r = reconcile(before, [doc("new.md", "REQ-00001/d1", "REQ-00002/s2")], KNOWN, uids());
-    expect(docs(r.data)).toEqual({ d1: "new.md" });
+    expect(docs(r)).toEqual({ d1: "new.md" });
     expect(sections(r.data)).toEqual({ d1: "REQ-00001@d1", s2: "REQ-00002@d1" });
     expect(renumbered(r, "new.md")).toEqual({});
   });
 
-  test("a copy gets a new document ID and all its sections are renumbered", () => {
-    const before = data({ d1: "b.md" }, { d1: ["REQ-00001", "d1"], s2: ["REQ-00002", "d1"] });
-    const r = reconcile(before, [doc("a.md", "REQ-00001/d1", "REQ-00002/s2"), doc("b.md", "REQ-00001/d1", "REQ-00002/s2")], KNOWN, uids());
+  test("a copy of a known original gets a new document ID and all its sections are renumbered", () => {
+    const before = data({ d1: ["REQ-00001", "d1"], s2: ["REQ-00002", "d1"] });
+    const scanned = [doc("a.md", "REQ-00001/d1", "REQ-00002/s2"), doc("b.md", "REQ-00001/d1", "REQ-00002/s2")];
+    const r = reconcile(before, scanned, KNOWN, uids(), [], { originals: new Map([["d1", "b.md"]]) });
     expect(fix(r, "b.md").documentId).toBe("d1");
     expect(fix(r, "a.md").documentId).toBe("new1");
     expect(renumbered(r, "a.md")).toEqual({ 0: "copy", 1: "copy" });
     expect(newUids(r, "a.md")).toEqual({ 0: "new1", 1: "new2" });
     expect(renumbered(r, "b.md")).toEqual({});
     expect(r.duplicates).toEqual([]);
+    expect(r.copiedDocuments).toEqual([]);
     expect(sections(r.data)).toEqual({ d1: "REQ-00001@d1", s2: "REQ-00002@d1" });
   });
 
-  test("a copy with no file at the recorded path: the first by path keeps the ID", () => {
-    const r = reconcile(data({ d1: "gone.md" }, {}), [doc("b.md", "/d1"), doc("a.md", "/d1")], KNOWN, uids());
-    expect(fix(r, "a.md").documentId).toBe("d1");
-    expect(fix(r, "b.md").documentId).toBe("new1");
-    expect(docs(r.data)).toEqual({ d1: "a.md", new1: "b.md" });
+  test("a copy with no known original waits for the user, and both files are left alone", () => {
+    const before = data({ d1: ["REQ-00001", "d1"], s2: ["REQ-00002", "d1"] });
+    const scanned = [doc("b.md", "REQ-00001/d1", "REQ-00002/s2", null), doc("a.md", "REQ-00001/d1", "REQ-00002/s2")];
+    const r = reconcile(before, scanned, KNOWN, uids());
+    expect(r.copiedDocuments).toEqual([{ documentId: "d1", paths: ["a.md", "b.md"] }]);
+    expect(docs(r)).toEqual({ d1: "a.md" });
+    expect(renumbered(r, "b.md")).toEqual({});
+    expect(newUids(r, "b.md")).toEqual({});
+    expect(r.duplicates).toEqual([]);
+    expect(sections(r.data)).toEqual({ d1: "REQ-00001@d1", s2: "REQ-00002@d1" });
+    // An original that isn't one of the files decides nothing
+    expect(reconcile(before, scanned, KNOWN, uids(), [], { originals: new Map([["d1", "gone.md"]]) }).copiedDocuments).toHaveLength(1);
   });
 
-  test("documents no file holds are removed and their sections retired", () => {
-    const before = data({ d1: "a.md", d2: "b.md" }, { d1: ["REQ-00001", "d1"], d2: ["REQ-00002", "d2"], s3: ["REQ-00003", "d2"] }, 5);
+  test("the user renumbering one file as the copy settles it", () => {
+    const before = data({ d1: ["REQ-00001", "d1"], s2: ["REQ-00002", "d1"] });
+    const scanned = [doc("a.md", "REQ-00001/d1", "REQ-00002/s2"), doc("b.md", "REQ-00001/d1", "REQ-00002/s2")];
+    const r = reconcile(before, scanned, KNOWN, uids(), [], { copyRequests: ["a.md"] });
+    expect(r.copiedDocuments).toEqual([]);
+    expect(fix(r, "b.md").documentId).toBe("d1");
+    expect(renumbered(r, "a.md")).toEqual({ 0: "copy", 1: "copy" });
+    // With three files, the two left still wait
+    const three = reconcile(before, [...scanned, doc("c.md", "REQ-00001/d1")], KNOWN, uids(), [], { copyRequests: ["a.md"] });
+    expect(three.copiedDocuments).toEqual([{ documentId: "d1", paths: ["b.md", "c.md"] }]);
+    expect(renumbered(three, "a.md")).toEqual({ 0: "copy", 1: "copy" });
+  });
+
+  test("documents no file holds are dropped and their sections retired", () => {
+    const before = data({ d1: ["REQ-00001", "d1"], d2: ["REQ-00002", "d2"], s3: ["REQ-00003", "d2"] }, 5);
     const r = reconcile(before, [doc("a.md", "REQ-00001/d1")], KNOWN, uids());
-    expect(docs(r.data)).toEqual({ d1: "a.md" });
+    expect(docs(r)).toEqual({ d1: "a.md" });
     expect(sections(r.data)).toEqual({ d1: "REQ-00001@d1" });
     expect(retired(r.data)).toEqual({ d2: "REQ-00002", s3: "REQ-00003" });
     expect(r.data.prefixes.get("REQ")!.lastSequence).toBe(5);
   });
 
-  test("the ID recorded for a path isn't reused when another file holds it", () => {
-    const r = reconcile(data({ d1: "a.md" }, {}), [doc("a.md", null), doc("moved.md", "/d1")], KNOWN, uids());
+  test("the ID a file's sections record isn't reused when another file holds it", () => {
+    const before = data({ d1: ["REQ-00001", "d1"], s2: ["REQ-00002", "d1"] });
+    const r = reconcile(before, [doc("a.md", null, "REQ-00002/s2"), doc("moved.md", "REQ-00001/d1")], KNOWN, uids());
     expect(fix(r, "a.md").documentId).toBe("new1");
-    expect(docs(r.data)).toEqual({ d1: "moved.md", new1: "a.md" });
+    expect(docs(r)).toEqual({ d1: "moved.md", new1: "a.md" });
   });
 });
 
 describe("sections", () => {
   test("a section without a UID takes the one recorded for its ID; a new one gets a new UID", () => {
-    const before = data({ d1: "a.md" }, { d1: ["REQ-00001", "d1"], s2: ["REQ-00002", "d1"] });
+    const before = data({ d1: ["REQ-00001", "d1"], s2: ["REQ-00002", "d1"] });
     const r = reconcile(before, [doc("a.md", "REQ-00001/d1", "REQ-00002", "REQ-00007", null)], KNOWN, uids());
     expect(newUids(r, "a.md")).toEqual({ 1: "s2", 2: "new2", 3: "new1" });
     expect(sections(r.data)).toEqual({ d1: "REQ-00001@d1", s2: "REQ-00002@d1", new2: "REQ-00007@d1" });
   });
 
   test("an edited ID is put back", () => {
-    const before = data({ d1: "a.md" }, { d1: ["REQ-00001", "d1"], s2: ["REQ-00002", "d1"] });
+    const before = data({ d1: ["REQ-00001", "d1"], s2: ["REQ-00002", "d1"] });
     const r = reconcile(before, [doc("a.md", "REQ-00001/d1", "REQ-00009/s2")], KNOWN, uids());
     expect(Object.fromEntries(fix(r, "a.md").restore)).toEqual({ 1: "REQ-00002" });
     expect(renumbered(r, "a.md")).toEqual({});
@@ -128,14 +150,14 @@ describe("sections", () => {
   });
 
   test("an edited ID stays when another section now holds the recorded ID", () => {
-    const before = data({ d1: "a.md" }, { d1: ["REQ-00001", "d1"], s2: ["REQ-00002", "d1"] });
+    const before = data({ d1: ["REQ-00001", "d1"], s2: ["REQ-00002", "d1"] });
     const r = reconcile(before, [doc("a.md", "REQ-00001/d1", "REQ-00009/s2", "REQ-00002/s3")], KNOWN, uids());
     expect(fix(r, "a.md").restore.size).toBe(0);
     expect(sections(r.data)).toEqual({ d1: "REQ-00001@d1", s2: "REQ-00009@d1", s3: "REQ-00002@d1" });
   });
 
   test("a copy within a document: the first occurrence keeps the ID, the copy is renumbered with a new UID", () => {
-    const before = data({ d1: "a.md" }, { d1: ["REQ-00001", "d1"], s2: ["REQ-00002", "d1"] });
+    const before = data({ d1: ["REQ-00001", "d1"], s2: ["REQ-00002", "d1"] });
     const r = reconcile(before, [doc("a.md", "REQ-00001/d1", "REQ-00002/s2", "REQ-00002/s2", "REQ-00002")], KNOWN, uids());
     expect(renumbered(r, "a.md")).toEqual({ 2: "copy", 3: "copy" });
     expect(newUids(r, "a.md")).toEqual({ 2: "new1", 3: "new2" });
@@ -143,13 +165,13 @@ describe("sections", () => {
   });
 
   test("a copy pasted above the original: the recorded UID wins over position", () => {
-    const before = data({ d1: "a.md" }, { d1: ["REQ-00001", "d1"], s2: ["REQ-00002", "d1"] });
+    const before = data({ d1: ["REQ-00001", "d1"], s2: ["REQ-00002", "d1"] });
     const r = reconcile(before, [doc("a.md", "REQ-00001/d1", "REQ-00002", "REQ-00002/s2")], KNOWN, uids());
     expect(renumbered(r, "a.md")).toEqual({ 1: "copy" });
   });
 
   test("a copy across documents waits for the user; a requested occurrence is renumbered with a new UID", () => {
-    const before = data({ d1: "a.md", d2: "b.md" }, { d1: ["REQ-00001", "d1"], d2: ["REQ-00002", "d2"], s3: ["REQ-00007", "d2"] });
+    const before = data({ d1: ["REQ-00001", "d1"], d2: ["REQ-00002", "d2"], s3: ["REQ-00007", "d2"] });
     const scanned = [doc("a.md", "REQ-00001/d1", "REQ-00007/s3"), doc("b.md", "REQ-00002/d2", "REQ-00007/s3")];
     const r = reconcile(before, scanned, KNOWN, uids());
     expect(renumbered(r, "a.md")).toEqual({});
@@ -175,7 +197,7 @@ describe("sections", () => {
   });
 
   test("a collision (different UIDs) waits for the user; a requested occurrence keeps its UID", () => {
-    const before = data({ d1: "a.md", d2: "b.md" }, { d1: ["REQ-00001", "d1"], d2: ["REQ-00002", "d2"], s3: ["REQ-00008", "d1"], s4: ["REQ-00008", "d2"] });
+    const before = data({ d1: ["REQ-00001", "d1"], d2: ["REQ-00002", "d2"], s3: ["REQ-00008", "d1"], s4: ["REQ-00008", "d2"] });
     const scanned = [doc("a.md", "REQ-00001/d1", "REQ-00008/s3"), doc("b.md", "REQ-00002/d2", "REQ-00008/s4")];
     const r = reconcile(before, scanned, KNOWN, uids());
     expect(r.duplicates.map((d) => [d.kind, d.occurrences.map((o) => `${o.path}:${o.keeps}`)])).toEqual([["collision", ["a.md:true", "b.md:false"]]]);
@@ -191,7 +213,7 @@ describe("sections", () => {
   });
 
   test("a copied UID: the occurrence with the recorded ID keeps it, the others get new UIDs", () => {
-    const before = data({ d1: "a.md" }, { d1: ["REQ-00001", "d1"], s2: ["REQ-00002", "d1"] });
+    const before = data({ d1: ["REQ-00001", "d1"], s2: ["REQ-00002", "d1"] });
     const r = reconcile(before, [doc("a.md", "REQ-00001/d1", "REQ-00009/s2", "REQ-00002/s2")], KNOWN, uids());
     expect(fix(r, "a.md").restore.size).toBe(0);
     expect(newUids(r, "a.md")).toEqual({ 1: "new1" });
@@ -200,7 +222,7 @@ describe("sections", () => {
   });
 
   test("a retired ID back with its UID is restored; with another UID or none it is reused and renumbered", () => {
-    const before = data({ d1: "a.md" }, { d1: ["REQ-00001", "d1"] }, 9, { s5: "REQ-00005", s6: "REQ-00006" });
+    const before = data({ d1: ["REQ-00001", "d1"] }, 9, { s5: "REQ-00005", s6: "REQ-00006" });
     const r = reconcile(before, [doc("a.md", "REQ-00001/d1", "REQ-00005/s5", "REQ-00006/other", "REQ-00006")], KNOWN, uids());
     expect(renumbered(r, "a.md")).toEqual({ 2: "reused", 3: "reused" });
     expect(sections(r.data)).toEqual({ d1: "REQ-00001@d1", s5: "REQ-00005@d1" });
@@ -208,7 +230,7 @@ describe("sections", () => {
   });
 
   test("unknown prefixes are renumbered; new IDs get entries; vanished sections are retired", () => {
-    const before = data({ d1: "a.md" }, { d1: ["REQ-00001", "d1"], s2: ["REQ-00002", "d1"], s3: ["REQ-00003", "d1"] });
+    const before = data({ d1: ["REQ-00001", "d1"], s2: ["REQ-00002", "d1"], s3: ["REQ-00003", "d1"] });
     const r = reconcile(before, [doc("a.md", "REQ-00001/d1", "XYZ-00001/x1", "REQ-00002/s2", "REQ-00010/s10", "SPEC-00004/s4")], KNOWN, uids());
     expect(renumbered(r, "a.md")).toEqual({ 1: "unknown-prefix" });
     expect(sections(r.data)).toEqual({ d1: "REQ-00001@d1", s2: "REQ-00002@d1", s10: "REQ-00010@d1" });
@@ -218,7 +240,7 @@ describe("sections", () => {
   });
 
   test("a section moved to another document keeps its entry", () => {
-    const before = data({ d1: "a.md", d2: "b.md" }, { d1: ["REQ-00001", "d1"], d2: ["REQ-00002", "d2"], s3: ["REQ-00003", "d1"] });
+    const before = data({ d1: ["REQ-00001", "d1"], d2: ["REQ-00002", "d2"], s3: ["REQ-00003", "d1"] });
     const r = reconcile(before, [doc("a.md", "REQ-00001/d1"), doc("b.md", "REQ-00002/d2", "REQ-00003/s3")], KNOWN, uids());
     expect(sections(r.data)).toEqual({ d1: "REQ-00001@d1", d2: "REQ-00002@d2", s3: "REQ-00003@d2" });
     expect(retired(r.data)).toEqual({});
@@ -226,7 +248,6 @@ describe("sections", () => {
 
   test("merge leftovers: several entries for one ID, the one in the occurrence's document wins", () => {
     const before = data(
-      { d1: "a.md", d2: "b.md" },
       { d1: ["REQ-00001", "d1"], d2: ["REQ-00002", "d2"], s1: ["REQ-00003", "d9"], s2: ["REQ-00003", "d2"], s3: ["REQ-00003", "d1"] },
     );
     const r = reconcile(before, [doc("a.md", "REQ-00001/d1", "REQ-00003"), doc("b.md", "REQ-00002/d2", "REQ-00003")], KNOWN, uids());
@@ -234,7 +255,7 @@ describe("sections", () => {
   });
 
   test("a frozen document counts its sections but gets no fixes", () => {
-    const before = data({ d1: "a.md" }, { d1: ["REQ-00001", "d1"], s2: ["REQ-00002", "d1"] }, 2);
+    const before = data({ d1: ["REQ-00001", "d1"], s2: ["REQ-00002", "d1"] }, 2);
     const frozen = { ...doc("a.md", "REQ-00001/d1", "REQ-00002/s2", "REQ-00012/x", "REQ-00012/y", null), frozen: true };
     const r = reconcile(before, [frozen], KNOWN, uids());
     expect(renumbered(r, "a.md")).toEqual({});
@@ -245,10 +266,10 @@ describe("sections", () => {
   });
 
   test("lastSequence is the highest number known, retired ones included", () => {
-    const before = data({ d1: "a.md" }, { d1: ["REQ-00004", "d1"] }, 2, { s9: "REQ-00030" });
+    const before = data({ d1: ["REQ-00004", "d1"] }, 2, { s9: "REQ-00030" });
     const r = reconcile(before, [doc("a.md", "REQ-00004/d1", "REQ-00009/x")], KNOWN, uids());
     expect(r.data.prefixes.get("REQ")!.lastSequence).toBe(30);
-    const stored = reconcile(data({}, { d1: ["REQ-00001", "d1"] }, 40), [doc("a.md", "REQ-00001/d1")], KNOWN, uids());
+    const stored = reconcile(data({ d1: ["REQ-00001", "d1"] }, 40), [doc("a.md", "REQ-00001/d1")], KNOWN, uids());
     expect(stored.data.prefixes.get("REQ")!.lastSequence).toBe(40);
   });
 
@@ -256,7 +277,7 @@ describe("sections", () => {
     const scanned = [doc("a.md", null, "REQ-00001", "REQ-00001"), doc("b.md", "/d1", "REQ-00002/u2")];
     const first = reconcile(emptyData(), scanned, KNOWN, uids());
     const second = reconcile(first.data, scanned, KNOWN, uids());
-    expect(docs(second.data)).toEqual(docs(first.data));
+    expect(docs(second)).toEqual(docs(first));
     expect(sections(second.data)).toEqual(sections(first.data));
   });
 });

@@ -67,8 +67,8 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 ### 3.5 Section Problems
 
 1. The open file is saved first.
-2. A modal dialog lists the problems in the folder's sectioned files: IDs used by copies of one section in several documents, IDs used by different sections (two branches issued one number), stray anchors (with their line), and files with merge conflict markers.
-3. Each occurrence opens its file, at the section. Each occurrence of a duplicate or colliding ID that doesn't keep the ID has **Renumber**, which gives it a new number; the list then reloads.
+2. A modal dialog lists the problems in the folder's sectioned files: whole files copied when Specquer can't tell the original from the copy, IDs used by copies of one section in several documents, IDs used by different sections (two branches issued one number), stray anchors (with their line), and files with merge conflict markers.
+3. Each occurrence opens its file, at the section. Each occurrence of a duplicate or colliding ID that doesn't keep the ID has **Renumber**, which gives it a new number; each file of a copied document has **Renumber this copy**, which renumbers all its sections (the open file is saved first and reloaded after). The list then reloads.
 
 <a id=""></a>
 ### 3.6 Folder Settings

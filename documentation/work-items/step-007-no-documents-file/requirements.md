@@ -176,3 +176,17 @@ _Proposed_; the work proceeds on them unless they are changed.
 | Both files committed before Specquer saw the copy | The same | The same |
 | A root anchor directly followed by a heading, in a document whose root was never recorded | Read as the heading's anchor | Today's rule for documents missing from `documents.yaml`; Specquer writes a blank line after root anchors |
 | Reconciliation tests depend on `documents.yaml` | Many test changes | `originals` takes its place one for one in the tests |
+
+<a id=""></a>
+## 9. Implementation Status
+
+Phases 1 to 4 were carried out in October 2026. What differs from the plan, or was learned doing it:
+
+1. **The renumber route** (§4.4) is a route of its own, `POST /api/sections/renumber-document` with `{ path, baseVersion }`, rather than a `document: true` variant of `/api/sections/renumber`; the two take different bodies, and separate schemas keep the typed client simple. The problem is `{ kind: "copied-document", paths }`, without the document ID, which the client doesn't need.
+2. **A copy never keeps a section ID its original holds.** Choosing which occurrence of a duplicated ID keeps it looked only at `sections.yaml`, so with no entries yet (a copy found before any save) the first by path kept it, which could be the copy. Copies are now never candidates while the original holds the ID. This was wrong before Step 007 too, hidden while `documents.yaml` decided most copies.
+3. **The stand-in** for an undecided copy is not anchored either: a save of either file returns `not-anchored` with `reason: "copied-document"`, and the client's notice says to renumber the copy in **Section problems**.
+4. **Git** (§4.3): `gitTrackedFiles` in `server/src/git.ts` runs `git --literal-pathspecs ls-files -z --cached` on the files holding the ID; answers are cached per document ID and set of paths, so a tree load asks Git at most once per set of copies.
+5. **Recognizing root anchors** reads the document IDs from `sections.yaml` plus those the last reconciliation found, so a document created in this session counts before its data file is written.
+6. **Tests.** Unit and component tests pass (427); the end-to-end suite passes on Chrome and WebKit (108), with `e2e/copies.spec.ts` covering a copied document reported and renumbered from **Section problems**.
+7. **This repository**: `.specquer/shared/documents.yaml` is deleted in the Step 007 commit.
+

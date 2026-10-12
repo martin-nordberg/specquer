@@ -88,8 +88,11 @@ export type SectionNotice =
   | { kind: "restored"; id: string; newId: string; title: string }
   /** A UID copied from another section was replaced. */
   | { kind: "uid-replaced"; id: string; title: string }
-  /** The file holds merge conflict markers and was saved as sent, without anchoring. */
-  | { kind: "not-anchored" };
+  /**
+   * Saved as sent, without anchoring: the file holds merge conflict markers, or (`copied-document`)
+   * it and another file hold one document ID and the original isn't known.
+   */
+  | { kind: "not-anchored"; reason?: "copied-document" };
 
 /** Something about the section anchors that needs the user's attention. */
 export type SectionProblem =
@@ -101,7 +104,9 @@ export type SectionProblem =
   /** An anchor with a section ID that isn't in a section's place. */
   | { kind: "stray"; path: string; id: string; line: number }
   /** A sectioned file with merge conflict markers, left alone until they are resolved. */
-  | { kind: "conflict-markers"; path: string };
+  | { kind: "conflict-markers"; path: string }
+  /** Files holding one document ID (a whole file copied) with no known original, left alone until the user renumbers the copy. */
+  | { kind: "copied-document"; paths: string[] };
 
 export interface SectionSearchResult extends SectionInfo {
   /** The document's workspace path. */
@@ -161,6 +166,13 @@ export const renumberSectionSchema = z.object({
   /** The occurrence to renumber: its section ID and UID (`null` for none). */
   id: z.string().max(100),
   uid: z.string().max(100).nullable(),
+  /** The version the user saw. */
+  baseVersion: z.string(),
+});
+
+/** Renumbering a whole file as a copy of another document. */
+export const renumberDocumentSchema = z.object({
+  path: markdownPathSchema,
   /** The version the user saw. */
   baseVersion: z.string(),
 });
