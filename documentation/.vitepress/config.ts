@@ -81,6 +81,14 @@ export default defineConfig({
                       {text: 'Design Changes', link: '/work-items/step-005-summarization-changes/summary-design-changes'},
                       {text: 'Implementation Plan', link: '/work-items/step-005-summarization-changes/implementation-plan'},
                     ]
+                  },
+                  {
+                    text: '006-Settings',
+                    collapsed: false,
+                    items: [
+                      {text: 'Requirements', link: '/work-items/step-006-settings/requirements'},
+                      {text: 'Implementation Plan', link: '/work-items/step-006-settings/implementation-plan'},
+                    ]
                   }
                 ]
               }
