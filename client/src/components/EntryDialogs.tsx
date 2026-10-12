@@ -13,6 +13,15 @@ export function splitExtension(node: Pick<TreeNode, "kind" | "name">): { stem: s
   return { stem: node.name.slice(0, dot), extension: node.name.slice(dot) };
 }
 
+/**
+ * The full name for what was typed: the fixed extension is added, unless the typed name already
+ * ends with it (in any case), so "spec.md" or "spec.MD" doesn't become "spec.md.md".
+ */
+export function nameWithExtension(typed: string, extension: string): string {
+  const stem = extension !== "" && typed.toLowerCase().endsWith(extension.toLowerCase()) ? typed.slice(0, -extension.length) : typed;
+  return stem + extension;
+}
+
 interface NameDialogProps {
   open: boolean;
   title: string;
@@ -43,9 +52,9 @@ function NameDialog(props: NameDialogProps) {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    const name = value + extension;
+    const name = nameWithExtension(value, extension);
     const check = checkName(name);
-    if (!check.ok || value === "") {
+    if (!check.ok || name === extension) {
       setError(check.ok ? "The name can't be empty." : check.reason);
       return;
     }

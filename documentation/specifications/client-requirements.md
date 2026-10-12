@@ -32,7 +32,7 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 ### 3.1 Rename
 
 1. A modal dialog has a text box with the current name, a **Rename** button and a **Cancel** button.
-2. For a file, the text box holds the name without its extension; the extension (`.md`) is shown after the text box and can't be changed.
+2. For a file, the text box holds the name without its extension; the extension (`.md`) is shown after the text box and can't be changed. A name typed with the extension, in any case (`spec.md`, `spec.MD`), keeps the file's own extension rather than getting a second one.
 3. Rename never moves an entry to another folder.
 4. An invalid name (empty, leading or trailing spaces, `/` or `\`, `.` or `..`, control characters, `.git`, `.specquer`, too long) keeps the dialog open with the reason, in the error color.
 5. A name already used by a file or folder in the same folder keeps the dialog open with "A file or folder with that name already exists."
@@ -42,7 +42,7 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 ### 3.2 New File and New Folder
 
 1. A modal dialog has an empty text box, a **Create** button and a **Cancel** button. It is titled **New file** or **New folder** and names the folder the entry is created in ("the root folder" for the root).
-2. For a file, the extension (`.md`) is shown after the text box and added to the name; a folder's name has no extension.
+2. For a file, the extension (`.md`) is shown after the text box and added to the name, unless the name typed already ends with it, in any case (`spec.md` and `spec.MD` both create `spec.md`); a folder's name has no extension.
 3. Invalid names and names already used in the folder keep the dialog open with the reason, as for rename (§3.1, items 4 and 5).
 4. After creating the entry, the folder it was created in (unless it is the root) is expanded and the tree is reloaded, so the new entry shows.
 5. A new file is created empty, or with its root section anchor if it is sectioned, and opened in the file pane (saving the previously open file first, as for any file switch).

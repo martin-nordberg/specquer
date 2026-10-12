@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, mock, test } from "bun:test";
 import type { DeletePreview, TreeNode } from "@specquer/shared/api";
-import { CreateDialog, type CreateRequest, DeleteDialog, RenameDialog, splitExtension } from "./EntryDialogs";
+import { CreateDialog, type CreateRequest, DeleteDialog, RenameDialog, nameWithExtension, splitExtension } from "./EntryDialogs";
 
 
 const file: TreeNode = { kind: "file", name: "spec.md", path: "docs/spec.md" };
@@ -10,6 +10,17 @@ const folder: TreeNode = { kind: "folder", name: "docs", path: "docs", children:
 test("splitExtension keeps the extension fixed for files only", () => {
   expect(splitExtension(file)).toEqual({ stem: "spec", extension: ".md" });
   expect(splitExtension({ kind: "folder", name: "a.b" })).toEqual({ stem: "a.b", extension: "" });
+});
+
+test("nameWithExtension doesn't add the extension twice, whatever its case", () => {
+  expect(nameWithExtension("spec", ".md")).toBe("spec.md");
+  expect(nameWithExtension("spec.md", ".md")).toBe("spec.md");
+  expect(nameWithExtension("spec.MD", ".md")).toBe("spec.md");
+  expect(nameWithExtension("spec.Md", ".MD")).toBe("spec.MD");
+  expect(nameWithExtension("spec.md.md", ".md")).toBe("spec.md.md");
+  expect(nameWithExtension("spec.mdx", ".md")).toBe("spec.mdx.md");
+  expect(nameWithExtension(".md", ".md")).toBe(".md");
+  expect(nameWithExtension("notes.md", "")).toBe("notes.md");
 });
 
 describe("RenameDialog", () => {
@@ -24,6 +35,14 @@ describe("RenameDialog", () => {
     (screen.getByRole("button", { name: "Rename" }) as HTMLButtonElement).click();
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(onRename).toHaveBeenCalledWith(file, "renamed.md");
+  });
+
+  test("a typed extension keeps the file's own", async () => {
+    const onRename = mock(async () => null);
+    render(<RenameDialog node={file} onClose={() => {}} onRename={onRename} />);
+    fireEvent.change(screen.getByRole("textbox", { name: "New name" }), { target: { value: "renamed.Md" } });
+    (screen.getByRole("button", { name: "Rename" }) as HTMLButtonElement).click();
+    await waitFor(() => expect(onRename).toHaveBeenCalledWith(file, "renamed.md"));
   });
 
   test("invalid names show an error and aren't sent", async () => {
@@ -75,6 +94,18 @@ describe("CreateDialog", () => {
     (screen.getByRole("button", { name: "Create" }) as HTMLButtonElement).click();
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(onCreate).toHaveBeenCalledWith(newFile, "spec.md");
+  });
+
+  test("a typed .md extension, in any case, isn't added again", async () => {
+    const onCreate = mock(async () => null);
+    render(<CreateDialog request={newFile} onClose={() => {}} onCreate={onCreate} />);
+    const input = screen.getByRole("textbox", { name: "New name" });
+    fireEvent.change(input, { target: { value: ".MD" } });
+    (screen.getByRole("button", { name: "Create" }) as HTMLButtonElement).click();
+    expect((await screen.findByRole("alert")).textContent).toContain("empty");
+    fireEvent.change(input, { target: { value: "spec.MD" } });
+    (screen.getByRole("button", { name: "Create" }) as HTMLButtonElement).click();
+    await waitFor(() => expect(onCreate).toHaveBeenCalledWith(newFile, "spec.md"));
   });
 
   test("names the root folder as such", () => {
