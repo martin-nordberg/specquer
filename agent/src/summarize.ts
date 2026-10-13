@@ -1,5 +1,6 @@
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
+import { messageText } from "./messages.ts";
 import { buildOutline } from "@specquer/shared/markdown";
 import { isShortSection, simplifySectionText, targetSentences, wordCount } from "@specquer/shared/summaries";
 
@@ -71,14 +72,6 @@ export function toPlainText(output: string): string {
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
-}
-
-function messageText(content: unknown): string {
-  if (typeof content === "string") return content;
-  if (Array.isArray(content)) {
-    return content.map((part) => (typeof part === "string" ? part : part?.type === "text" && typeof part.text === "string" ? part.text : "")).join("");
-  }
-  return "";
 }
 
 /** One model call. `signal` aborts it. */
