@@ -231,9 +231,6 @@ sections:
   rtf35suyz877: { id: WORK-00228, documentId: k3np6ol3g681 }
   cevn1z4gupnq: { id: WORK-00229, documentId: k3np6ol3g681 }
   oxs15noiu2ty: { id: WORK-00231, documentId: k3np6ol3g681 }
-  cf99s3al8ng9: { id: WORK-00232, documentId: k3np6ol3g681 }
-  fs5kql9qmx9n: { id: WORK-00233, documentId: k3np6ol3g681 }
-  c80fj2a938sr: { id: WORK-00234, documentId: k3np6ol3g681 }
   nv5gzm1tv0gl: { id: WORK-00235, documentId: k3np6ol3g681 }
   c5fzjupslwpq: { id: WORK-00236, documentId: k3np6ol3g681 }
   bx05k8h34coo: { id: WORK-00237, documentId: k3np6ol3g681 }
@@ -244,3 +241,6 @@ sections:
   lezsdvvfgb42: { id: WORK-00242, documentId: k3np6ol3g681 }
 retired:
   xr6chk1oivmk: { id: WORK-00230 }
+  cf99s3al8ng9: { id: WORK-00232 }
+  fs5kql9qmx9n: { id: WORK-00233 }
+  c80fj2a938sr: { id: WORK-00234 }
