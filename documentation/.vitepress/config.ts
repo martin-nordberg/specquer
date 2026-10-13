@@ -128,6 +128,7 @@ export default defineConfig({
                         {text: 'Agent-Delegated Summaries', link: '/notes/agent-delegated-summaries'},
                         {text: 'LangChain or AI SDK', link: '/notes/langchain-vs-ai-sdk'},
                         {text: 'Specification Gaps', link: '/notes/specification-gaps'},
+                        {text: 'Server Restart Options', link: '/notes/server-restart-options'},
                     ]
                 },
             ],
