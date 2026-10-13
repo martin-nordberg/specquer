@@ -129,7 +129,7 @@ The requirements' Precedence table applies. This plan adds:
   Runs one at a time; a request arriving during an update waits for it.
 - **`SearchIndex.search(query, { openFile, units, contextTokens })`:**
   1. `SELECT … FROM units_fts WHERE units_fts MATCH ? ORDER BY bm25(units_fts, 10.0, 3.0, 1.0) LIMIT ?`, asking for three times `units` rows. Titles weigh 10, headings 3, text 1.
-  2. The open file's rows rank higher: their score is halved. bm25 scores are negative, and lower is better.
+  2. The open file's matching rows come first, at most half of `units` of them, then the others in bm25 order. (Changed while implementing: halving or doubling the score couldn't outrank a strong title match elsewhere, which R4.7 requires.)
   3. The open file's first unit (its preamble, or its first heading) is put first if missing.
   4. Units are taken in order while the estimated tokens (`estimateTokens` from `agent`) fit `contextTokens`. A unit longer than its share (`contextTokens / units`) is cut to it, and marked cut.
 - **Freshness:**
@@ -482,7 +482,7 @@ _Proposed_; the work proceeds on them unless they are changed:
 - **D2. Abortable calls are opt-in per call** (§4.5), so summaries keep their "a started call finishes and is cached" behavior.
 - **D3. The router writes the stream** from an async iterable the handler returns (§4.6), so handlers stay free of Hono and testable on their own, and `shared` keeps every route in one place.
 - **D4. External-content FTS5 with a `files` table of stamps** (§4.2). The text is stored once, and re-indexing a file is a delete and an insert in one transaction.
-- **D5. Re-ranking in code, not in SQL** (§4.2): fetch three times the units, then boost the open file and apply the budget. It is simpler to test than a SQL expression, and fast at this size.
+- **D5. Re-ranking in code, not in SQL** (§4.2): fetch three times the units, then put the open file's matches first (at most half the units) and apply the budget. It is simpler to test than a SQL expression, and fast at this size.
 - **D6. Headings become bold paragraphs, links become text with their URL** (§4.1), rather than being dropped, so no content of the answer is lost.
 - **D7. The history file is written with the `yaml` package**, not `Bun.YAML`, so answers are block scalars a person can read; `uistate.yaml` keeps `Bun.YAML`.
 - **D8. Re-rendering every 150 ms while streaming** (§4.9), on the main thread.
