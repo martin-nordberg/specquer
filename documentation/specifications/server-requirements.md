@@ -3,7 +3,7 @@
 <a id="SPEC-00074" data-uid="unvuw5mk0cjh"></a>
 # Specquer Server Requirements
 
-Requirements for the back end (`server/`). They come from [Step 001](/work-items/step-001-doc-editing/requirements) and its [implementation plan](/work-items/step-001-doc-editing/implementation-plan), [Step 002](/work-items/step-002-sections/requirements) (sections), [Step 003](/work-items/step-003-section-uids/implementation-plan) (section UIDs and conflicts), [Step 004](/work-items/step-004-hierarchical-summarization/requirements) (summaries), [Step 005](/work-items/step-005-summarization-changes/implementation-plan) (the lookup, pre-filling and the cache), [Step 006](/work-items/step-006-settings/requirements) (settings), [Step 007](/work-items/step-007-no-documents-file/requirements) (no `documents.yaml`) and [Step 008](/work-items/step-008-refactor-settings/requirements) (folder types and prefixes). Security is specified separately in [Security](security.md).
+Requirements for the back end (`server/`). They come from [Step 001](/work-items/step-001-doc-editing/requirements) and its [implementation plan](/work-items/step-001-doc-editing/implementation-plan), [Step 002](/work-items/step-002-sections/requirements) (sections), [Step 003](/work-items/step-003-section-uids/implementation-plan) (section UIDs and conflicts), [Step 004](/work-items/step-004-hierarchical-summarization/requirements) (summaries), [Step 005](/work-items/step-005-summarization-changes/implementation-plan) (the lookup, pre-filling and the cache), [Step 006](/work-items/step-006-settings/requirements) (settings), [Step 007](/work-items/step-007-no-documents-file/requirements) (no `documents.yaml`) [Step 008](/work-items/step-008-refactor-settings/requirements) (folder types and prefixes) and [Step 009](/work-items/step-009-single-instance/requirements) (one Specquer per root folder). Security is specified separately in [Security](security.md).
 
 <a id="SPEC-00075" data-uid="sb2taf3fhmvs"></a>
 ## 1. Command Line
@@ -12,7 +12,7 @@ Requirements for the back end (`server/`). They come from [Step 001](/work-items
 specquer [root] [--port <n>] [--no-open]
 ```
 
-1. **`root`** (optional): the folder to work in, absolute or relative to the working directory; it defaults to the working directory. Specquer resolves it to its real path at startup and exits with an error (exit code 2) if it doesn't exist or isn't a folder.
+1. **`root`** (optional): the folder to work in, absolute or relative to the working directory; it defaults to the working directory. Specquer resolves it to its real path at startup and exits with an error (exit code 2) if it doesn't exist or isn't a folder. Exit code 3 means another Specquer already serves the root folder (§2).
 2. **`--port <n>`**: listen on this port, and fail if it is taken. Without it, Specquer tries port 4870 and falls back to a free port, so it can run in several folders at once.
 3. **`--no-open`**: don't open a browser. For a future desktop shell or a coding agent, which read the URL from the output instead.
 4. Arguments are parsed with `parseArgs` from `node:util`. Unknown options or more than one root are errors.
@@ -20,11 +20,13 @@ specquer [root] [--port <n>] [--no-open]
 <a id="SPEC-00076" data-uid="h9hdfvo6dcom"></a>
 ## 2. Launch
 
-1. The server listens on `127.0.0.1` only.
-2. Once listening, it prints the root folder and the launch URL, `http://127.0.0.1:<port>/?token=<token>`.
-3. Unless `--no-open` is given, it opens the launch URL in the default browser: `open` on macOS, `xdg-open` on Linux, `cmd /c start "" <url>` on Windows. Failure to open a browser is reported but not fatal.
-4. Under `bun --hot` (development) the token is kept and the browser is opened at most once per process.
-5. The development command (`bun run dev`) serves the repository itself on port 3000.
+1. **One Specquer per root folder** ([Step 009](/work-items/step-009-single-instance/requirements)). Before it serves anything or reads the section data, Specquer takes an exclusive lock on `.specquer/user/instance.lock`: an open `BEGIN EXCLUSIVE` transaction on an SQLite database, held for the life of the process and released by the operating system however the process ends. If another process holds it, the launch starts no server and writes nothing: it prints `Specquer is already serving <root>` and `Open <url>` with the running instance's URL, opens that URL unless `--no-open` is given, and exits with code 3. `--port` is then ignored, with a warning. If the running instance hasn't written its URL yet, the launch says Specquer is already running and opens nothing. If the lock can't be created for another reason (a read-only folder), Specquer warns and starts without it.
+2. **The instance file.** Holding the lock, Specquer deletes any `.specquer/user/instance.json` left by a crash, and once listening writes `{ pid, port, url, root, startedAt }` there, atomically and readable by its owner only. A clean exit (including SIGINT and SIGTERM) deletes it.
+3. The server listens on `127.0.0.1` only.
+4. Once listening, it prints the root folder and the launch URL, `http://127.0.0.1:<port>/?token=<token>`.
+5. Unless `--no-open` is given, it opens the launch URL in the default browser: `open` on macOS, `xdg-open` on Linux, `cmd /c start "" <url>` on Windows. Failure to open a browser is reported but not fatal.
+6. Under `bun --hot` (development) the token and the instance lock are kept, the instance file is written once, and the browser is opened at most once per process.
+7. The development command (`bun run dev`) serves the repository itself on port 3000.
 
 <a id="SPEC-00077" data-uid="i1pnvwdznkri"></a>
 ## 3. File Tree

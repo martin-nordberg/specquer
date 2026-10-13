@@ -1,4 +1,4 @@
-import { expect, launch, test } from "./fixtures";
+import { expect, launch, launchAgain, test } from "./fixtures";
 
 test("the launch URL signs in and drops the token from the address bar", async ({ page, specquer }) => {
   await launch(page, specquer);
@@ -35,4 +35,13 @@ test("the favicon and the app icon load under the Content-Security-Policy", asyn
   await expect(icon).toBeVisible();
   expect(await icon.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
   expect(violations).toEqual([]);
+});
+
+test("a second launch on the same root hands over to the running Specquer", async ({ page, specquer }) => {
+  const { code, stdout } = await launchAgain(specquer.root);
+  expect(code).toBe(3);
+  expect(stdout).toContain(`Specquer is already serving ${specquer.root}`);
+  expect(stdout.match(/Open (http:\/\/\S+)/)?.[1]).toBe(specquer.url);
+  // The running instance keeps working
+  await launch(page, specquer);
 });

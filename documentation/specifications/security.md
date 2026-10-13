@@ -5,7 +5,7 @@
 
 Specquer is a local web server that can read, write, rename and delete files under its root folder. Anything that can talk to it can do the same, so the server is protected against other websites in the user's browser, other machines on the network and malicious content in the Markdown files themselves.
 
-The rules below are implemented in `server/src/security.ts`, `server/src/files.ts`, `server/src/summaries/`, `server/src/settings/` and the shared preview pipeline, and are covered by unit tests (`server/src/security.test.ts`, `server/src/files.test.ts`, `server/src/settings/settings.test.ts`, `server/src/settings/settings-api.test.ts`, `shared/src/markdown/preview.test.ts`) and end-to-end tests (`e2e/launch.spec.ts`, `e2e/views.spec.ts`, `e2e/settings.spec.ts`).
+The rules below are implemented in `server/src/security.ts`, `server/src/files.ts`, `server/src/instance.ts`, `server/src/summaries/`, `server/src/settings/` and the shared preview pipeline, and are covered by unit tests (`server/src/security.test.ts`, `server/src/files.test.ts`, `server/src/settings/settings.test.ts`, `server/src/settings/settings-api.test.ts`, `server/src/instance.test.ts`, `shared/src/markdown/preview.test.ts`) and end-to-end tests (`e2e/launch.spec.ts`, `e2e/views.spec.ts`, `e2e/settings.spec.ts`).
 
 <a id="SPEC-00064" data-uid="iqgf4njjhp4m"></a>
 ## 1. Threats
@@ -38,6 +38,7 @@ The rules below are implemented in `server/src/security.ts`, `server/src/files.t
 - The page at `/` also needs the cookie; without it the server answers `401` with a short explanation.
 - Tokens are compared in constant time.
 - **Known exposure:** opening the browser passes the launch URL, token included, to the operating system's opener (`xdg-open`, `open`, `start`), so it is briefly visible in the process list to other local users. This is acceptable for a single-user workstation tool. `--no-open` avoids it.
+- **The instance file:** the launch URL, token included, is also stored in `.specquer/user/instance.json` while Specquer runs, so a second launch on the same root can hand over to it (Server Requirements §2). The file is created readable and writable by its owner only (mode `0600`; Windows ignores the mode, leaving the folder's permissions), is ignored by Git, is out of reach of the file API (§5), and is deleted on a clean exit. A program running as the same user could read it, but such a program can already read and write the specs.
 
 <a id="SPEC-00067" data-uid="dcqj07fp73a2"></a>
 ## 4. Host and Origin Checks
@@ -98,6 +99,7 @@ frame-ancestors 'none'
 - **Section anchors change files only when the user does.** Viewing a file and the background scan never write. Anchors are added when a sectioned file is saved or created, and by **Add section anchors** (reached through a folder's **Settings…**), which lists the files it will change and asks first. Making a folder unsectioned in its settings leaves its anchors in place. Only files the configuration names are sectioned. A duplicate ID across documents is renumbered only when the user asks, and a file with merge conflict markers is never anchored. `AGENTS.md` is written only when the user ticks the box in **Add section anchors**, and only appended to, once.
 - **Settings check the version too.** The settings dialogs send the version of the configuration file they read; a file changed on disk since (a pull, an edit by hand) answers `409` and the dialog reloads instead of overwriting it. A configuration file that isn't valid YAML is never rewritten.
 - **Delete preview.** Before deleting, the dialog lists every file that will be deleted, including files the tree doesn't show, and names the files not committed to Git (new, modified or ignored). Outside a Git repository it warns that nothing can be recovered.
+- **One Specquer per root folder.** An operating-system lock on `.specquer/user/instance.lock` keeps a second Specquer off a root folder that one already serves, so two processes never allocate section IDs or write the data files side by side (Server Requirements §2). File locks are unreliable on some network file systems, where this protection may not hold.
 - **Per-user state stays out of Git.** `.specquer/user/` gets a `.gitignore` containing `*` when Specquer creates it.
 
 <a id="SPEC-00072" data-uid="ipvsb7onaku1"></a>

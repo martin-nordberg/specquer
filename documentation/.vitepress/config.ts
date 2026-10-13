@@ -104,6 +104,14 @@ export default defineConfig({
                       {text: 'Requirements', link: '/work-items/step-008-refactor-settings/requirements'},
                       {text: 'Implementation Plan', link: '/work-items/step-008-refactor-settings/implementation-plan'},
                     ]
+                  },
+                  {
+                    text: '009-One Specquer per Root',
+                    collapsed: false,
+                    items: [
+                      {text: 'Requirements', link: '/work-items/step-009-single-instance/requirements'},
+                      {text: 'Implementation Plan', link: '/work-items/step-009-single-instance/implementation-plan'},
+                    ]
                   }
                 ]
               }

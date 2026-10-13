@@ -34,6 +34,8 @@ root folder
 ├── .specquer/user/          per-user state, ignored by Git
 │   ├── .gitignore           *
 │   ├── agent.config.yaml    optional: a personal model
+│   ├── instance.lock        held by the running Specquer
+│   ├── instance.json        the running Specquer's URL
 │   └── uistate.yaml
 ├── .specquer/cache/         per-user cache, ignored by Git
 │   ├── .gitignore           *
