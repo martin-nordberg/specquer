@@ -5,7 +5,7 @@
 
 Specquer is a local web server that can read, write, rename and delete files under its root folder. Anything that can talk to it can do the same, so the server is protected against other websites in the user's browser, other machines on the network and malicious content in the Markdown files themselves.
 
-The rules below are implemented in `server/src/security.ts`, `server/src/files.ts`, `server/src/summaries/` and the shared preview pipeline, and are covered by unit tests (`server/src/security.test.ts`, `server/src/files.test.ts`, `shared/src/markdown/preview.test.ts`) and end-to-end tests (`e2e/launch.spec.ts`, `e2e/views.spec.ts`).
+The rules below are implemented in `server/src/security.ts`, `server/src/files.ts`, `server/src/summaries/`, `server/src/settings/` and the shared preview pipeline, and are covered by unit tests (`server/src/security.test.ts`, `server/src/files.test.ts`, `server/src/settings/settings.test.ts`, `server/src/settings/settings-api.test.ts`, `shared/src/markdown/preview.test.ts`) and end-to-end tests (`e2e/launch.spec.ts`, `e2e/views.spec.ts`, `e2e/settings.spec.ts`).
 
 <a id="SPEC-00064" data-uid="iqgf4njjhp4m"></a>
 ## 1. Threats

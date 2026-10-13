@@ -3,7 +3,7 @@
 <a id="SPEC-00074" data-uid="unvuw5mk0cjh"></a>
 # Specquer Server Requirements
 
-Requirements for the back end (`server/`). They come from [Step 001](/work-items/step-001-doc-editing/requirements) and its [implementation plan](/work-items/step-001-doc-editing/implementation-plan), and [Step 002](/work-items/step-002-sections/requirements) (sections). Security is specified separately in [Security](security.md).
+Requirements for the back end (`server/`). They come from [Step 001](/work-items/step-001-doc-editing/requirements) and its [implementation plan](/work-items/step-001-doc-editing/implementation-plan), [Step 002](/work-items/step-002-sections/requirements) (sections), [Step 003](/work-items/step-003-section-uids/implementation-plan) (section UIDs and conflicts), [Step 004](/work-items/step-004-hierarchical-summarization/requirements) (summaries), [Step 005](/work-items/step-005-summarization-changes/implementation-plan) (the lookup, pre-filling and the cache), [Step 006](/work-items/step-006-settings/requirements) (settings), [Step 007](/work-items/step-007-no-documents-file/requirements) (no `documents.yaml`) and [Step 008](/work-items/step-008-refactor-settings/requirements) (folder types and prefixes). Security is specified separately in [Security](security.md).
 
 <a id="SPEC-00075" data-uid="sb2taf3fhmvs"></a>
 ## 1. Command Line

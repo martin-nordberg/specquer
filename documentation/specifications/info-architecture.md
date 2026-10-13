@@ -22,7 +22,7 @@ This document describes what Specquer works with and how its screen is organized
 | Folder configuration | A folder's `.specquer-config.yaml`: its type (Baseline, Change, Auxiliary or Non-sectioned) and default prefix, each inherited by the folders in it unless they set their own. Edited in the folder settings dialog; not shown in the tree. |
 | Shared data | The section data files in `.specquer/shared/`, committed to Git: per prefix, `sections.yaml` (live and retired sections, the root sections keyed by the document ID). |
 | Agent guide | Optional section anchor rules for coding agents in the root folder's `AGENTS.md`, added on request by **Add section anchors** (in a folder's settings). |
-| Summary | An AI-generated summary of a heading section, or of the whole document, shown in the preview in place of the section's content by the summary slider. Made from the saved file by the model named in the agent configuration, and cached for 30 days. See [Data Architecture](data-architecture.md) §4. |
+| Summary | An AI-generated summary of a heading section, or of the whole document, shown in the preview in place of the section's content by the summary slider. Made from the saved file by the model named in the agent configuration, and cached until unused for 60 days. See [Data Architecture](data-architecture.md) §4. |
 | Agent configuration | `.specquer/shared/agent.config.yaml` (committed) names the model for agent features and the environment variable holding its key; an optional `.specquer/user/agent.config.yaml` overrides it for one user. Without it, Specquer makes no network calls. |
 | Summary cache | `.specquer/cache/summaries.db`, per user and ignored by Git. |
 

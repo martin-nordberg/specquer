@@ -13,13 +13,13 @@ The Markdown domain is the code that works on the content of spec files, as oppo
 <a id="SPEC-00004" data-uid="y0ccxd7qi8hq"></a>
 ### 1.1. Scope
 
-| Now (Steps 001 to 004) | Later |
+| Now (Steps 001 to 008) | Later |
 | ---------------------- | ----- |
 | Splitting a file into front matter and body, and joining them | Rewriting the Markdown syntax tree (renames, link updates) |
 | Checking front matter for YAML syntax errors | Collapsing individual sections |
 | The preview pipeline (Markdown to a sanitized HTML syntax tree) | |
 | Finding section anchors and the edits that add them (`sections.ts`, see §2) | |
-| The heading outline, the summary slider's stops, and summaries in the preview tree (`outline.ts`, `summary-tree.ts`, see §1.6) | |
+| The heading outline, the summary slider's stops, and summaries in the preview tree (`outline.ts`, `summary-tree.ts`, see §1.5) | |
 
 <a id="SPEC-00005" data-uid="yhgres48khvu"></a>
 ### 1.2. Front Matter

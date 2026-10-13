@@ -3,7 +3,7 @@
 <a id="SPEC-00040" data-uid="j3ujxrx9s2cl"></a>
 # Specquer Client Requirements
 
-Requirements for the browser user interface (`client/`). They come from [Step 001](/work-items/step-001-doc-editing/requirements), its [implementation plan](/work-items/step-001-doc-editing/implementation-plan), [New File and Folder](/work-items/step-001-doc-editing/new-file-folder) [Step 002](/work-items/step-002-sections/requirements) (sections) and [Step 003](/work-items/step-003-section-uids/implementation-plan) (section UIDs and conflicts). The screen layout is in [Information Architecture](info-architecture.md).
+Requirements for the browser user interface (`client/`). They come from [Step 001](/work-items/step-001-doc-editing/requirements), its [implementation plan](/work-items/step-001-doc-editing/implementation-plan), [New File and Folder](/work-items/step-001-doc-editing/new-file-folder), [Step 002](/work-items/step-002-sections/requirements) (sections), [Step 003](/work-items/step-003-section-uids/implementation-plan) (section UIDs and conflicts), [Step 004](/work-items/step-004-hierarchical-summarization/requirements) (the summary slider), [Step 005](/work-items/step-005-summarization-changes/implementation-plan) (summaries from other models), [Step 006](/work-items/step-006-settings/requirements) (the settings dialogs), [Step 007](/work-items/step-007-no-documents-file/requirements) (copied documents) and [Step 008](/work-items/step-008-refactor-settings/requirements) (folder types and prefixes). The screen layout is in [Information Architecture](info-architecture.md).
 
 <a id="SPEC-00041" data-uid="n5x7fnnix37v"></a>
 ## 1. General

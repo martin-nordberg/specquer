@@ -38,3 +38,4 @@ Details:
 * [Server Requirements](server-requirements.md)
 * [Security](security.md)
 * [Data Architecture](data-architecture.md)
+* [Glossary](../references/glossary.md)

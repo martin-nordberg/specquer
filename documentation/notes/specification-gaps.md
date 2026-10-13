@@ -43,6 +43,8 @@ _Notes from October 2026, after Step 008._
 <a id=""></a>
 ## Out of Date or Inconsistent
 
+_All fixed in the specifications since._
+
 - [Information Architecture](/specifications/info-architecture) §1 says summaries are "cached for 30 days". Everywhere else they are kept until unused for 60 days.
 - [Technical Architecture](/specifications/technical-architecture) §4 lists the shared package's exports without `@specquer/shared/summaries`, and describes `/settings` as holding "a folder's prefix setting", which predates Step 008's folder type. §5's Settings row says "the folders' prefix entries" in the same way.
 - Data Architecture §1.1 is headed "Now (Steps 001 to 004)", and it points to §1.6 for the outline, which is in §1.5 (§1.6 is the tests).

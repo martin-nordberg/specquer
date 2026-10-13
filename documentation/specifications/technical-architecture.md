@@ -76,7 +76,8 @@ The shared package holds everything both sides need. It must run unchanged in th
 | Markdown | `@specquer/shared/markdown` | Front matter split and join, YAML syntax check (`yaml` package), the preview pipeline, finding and adding section anchors; see [Data Architecture](data-architecture.md) §1 and §2 |
 | Sections | `@specquer/shared/sections` | Section ID and UID formats; the section anchor rules for coding agents |
 | UI state | `@specquer/shared/uistate` | Zod schema, defaults and pure update functions; see [Data Architecture](data-architecture.md) §3 |
-| Settings | `@specquer/shared/settings` | Zod schemas of the agent configuration (`model:`, `summaries:`, re-exported by `agent`) and of a folder's prefix setting, so the settings dialogs validate as the server does |
+| Summaries | `@specquer/shared/summaries` | Text simplification, the length rule and `summaryTargets`, the sections the slider summarizes, so the server's cache keys match the client's requests; see [Data Architecture](data-architecture.md) §4.1 |
+| Settings | `@specquer/shared/settings` | Zod schemas of the agent configuration (`model:`, `summaries:`, re-exported by `agent`), the folder types and a folder's settings (`folderType`, `defaultPrefix`), so the settings dialogs validate as the server does |
 
 | Aspect | Decision |
 | ------ | -------- |
@@ -102,7 +103,7 @@ The router's type is what the client's typed Hono client uses, so the client get
 | Sections | `SectionIndex` (`server/src/sections/`): an in-memory index of the sectioned files and the data files in `.specquer/shared/`, which the `yaml` package reads and writes (it keeps key order and writes one flow mapping per line); document IDs and section UIDs are 12-character CUID2s (`@paralleldrive/cuid2`'s `init({ length: 12 })`) carried in the anchors' `data-uid`; the data files are read again when they change on disk; see [Data Architecture](data-architecture.md) §2 |
 | Security | Session token, Host and Origin checks, Content-Security-Policy; see [Security](security.md) |
 | AI features | Delegated to `agent`. The summary service (`server/src/summaries/`) reads the agent configuration, keeps summaries in a SQLite cache (`bun:sqlite`, `.specquer/cache/summaries.db`), queues model calls with two priorities, looks summaries up by section ID, and pre-fills the cache in the background when switched on; see [Data Architecture](data-architecture.md) §4 |
-| Settings | `server/src/settings/`: the agent configuration files and the folders' prefix entries, read and written for the settings dialogs with the `yaml` package's document API (keeping comments), with versions against overwriting changes made on disk; after a write the readers are told to read the file again |
+| Settings | `server/src/settings/`: the agent configuration files and the folders' `.specquer-config.yaml` files (folder type and default prefix), read and written for the settings dialogs with the `yaml` package's document API (keeping comments), with versions against overwriting changes made on disk; after a write the readers are told to read the file again |
 | Outbound network | Only to the configured model provider, and only when summaries are configured or the user tests a model; see [Security](security.md) §9 |
 | Development port | 3000 |
 | Development mode | `bun --hot` (reloads on change) |
