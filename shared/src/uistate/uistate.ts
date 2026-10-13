@@ -13,6 +13,11 @@ export const MAX_RECENT_FILES = 10;
 export const MIN_TREE_PANE_FRACTION = 0.1;
 export const MAX_TREE_PANE_FRACTION = 0.7;
 export const DEFAULT_TREE_PANE_FRACTION = 0.25;
+export const MIN_CHAT_PANE_FRACTION = 0.15;
+export const MAX_CHAT_PANE_FRACTION = 0.5;
+export const DEFAULT_CHAT_PANE_FRACTION = 0.3;
+/** The file pane never gets narrower than this fraction of the window (Step 010, R1.4). */
+export const MIN_FILE_PANE_FRACTION = 0.3;
 /** Six heading levels and the whole document. */
 export const MAX_SUMMARY_STEPS = 7;
 
@@ -50,6 +55,14 @@ export const uiStateSchema = z.object({
     .min(MIN_TREE_PANE_FRACTION)
     .max(MAX_TREE_PANE_FRACTION)
     .catch(DEFAULT_TREE_PANE_FRACTION),
+  /** Whether the chat pane is open (Step 010). */
+  chatOpen: z.boolean().catch(false),
+  /** Width of the chat pane as a fraction of the window. */
+  chatPaneFraction: z
+    .number()
+    .min(MIN_CHAT_PANE_FRACTION)
+    .max(MAX_CHAT_PANE_FRACTION)
+    .catch(DEFAULT_CHAT_PANE_FRACTION),
   expandedFolders: pathListSchema.catch([]),
   /** Most recent first, excluding the current file. */
   recentFiles: pathListSchema.transform((paths) => paths.slice(0, MAX_RECENT_FILES)).catch([]),
@@ -73,6 +86,8 @@ export const uiStatePatchSchema = z
   .object({
     theme: themeSchema.nullable(),
     treePaneFraction: z.number().min(MIN_TREE_PANE_FRACTION).max(MAX_TREE_PANE_FRACTION),
+    chatOpen: z.boolean(),
+    chatPaneFraction: z.number().min(MIN_CHAT_PANE_FRACTION).max(MAX_CHAT_PANE_FRACTION),
     expandedFolders: z.array(z.string()),
     recentFiles: z.array(z.string()).max(MAX_RECENT_FILES),
     currentFile: z.string().nullable(),
@@ -85,6 +100,8 @@ export function defaultUiState(): UiState {
   return {
     version: UI_STATE_VERSION,
     treePaneFraction: DEFAULT_TREE_PANE_FRACTION,
+    chatOpen: false,
+    chatPaneFraction: DEFAULT_CHAT_PANE_FRACTION,
     expandedFolders: [],
     recentFiles: [],
     files: {},
@@ -112,6 +129,8 @@ export function diffUiState(from: UiState, to: UiState): UiStatePatch {
   const patch: UiStatePatch = {};
   if (from.theme !== to.theme) patch.theme = to.theme ?? null;
   if (from.treePaneFraction !== to.treePaneFraction) patch.treePaneFraction = to.treePaneFraction;
+  if (from.chatOpen !== to.chatOpen) patch.chatOpen = to.chatOpen;
+  if (from.chatPaneFraction !== to.chatPaneFraction) patch.chatPaneFraction = to.chatPaneFraction;
   if (!same(from.expandedFolders, to.expandedFolders)) patch.expandedFolders = to.expandedFolders;
   if (!same(from.recentFiles, to.recentFiles)) patch.recentFiles = to.recentFiles;
   if (from.currentFile !== to.currentFile) patch.currentFile = to.currentFile ?? null;
@@ -178,6 +197,33 @@ export function clampTreePaneFraction(fraction: number): number {
 
 export function setTreePaneFraction(state: UiState, fraction: number): UiState {
   return { ...state, treePaneFraction: clampTreePaneFraction(fraction) };
+}
+
+export function clampChatPaneFraction(fraction: number): number {
+  return Math.min(MAX_CHAT_PANE_FRACTION, Math.max(MIN_CHAT_PANE_FRACTION, fraction));
+}
+
+export function setChatOpen(state: UiState, open: boolean): UiState {
+  return state.chatOpen === open ? state : { ...state, chatOpen: open };
+}
+
+export function setChatPaneFraction(state: UiState, fraction: number): UiState {
+  return { ...state, chatPaneFraction: clampChatPaneFraction(fraction) };
+}
+
+/**
+ * The widths shown, as fractions of the window: the file pane keeps at least
+ * `MIN_FILE_PANE_FRACTION`, the chat pane giving way first (down to its minimum), then the folder
+ * pane (Step 010, R1.4). The stored fractions aren't changed, so closing the chat restores the
+ * folder pane's own width.
+ */
+export function paneWidths(tree: number, chat: number, chatOpen: boolean): { tree: number; chat: number; file: number } {
+  let shownTree = clampTreePaneFraction(tree);
+  let shownChat = chatOpen ? clampChatPaneFraction(chat) : 0;
+  const room = 1 - MIN_FILE_PANE_FRACTION;
+  if (shownTree + shownChat > room && chatOpen) shownChat = Math.max(MIN_CHAT_PANE_FRACTION, room - shownTree);
+  if (shownTree + shownChat > room) shownTree = Math.max(MIN_TREE_PANE_FRACTION, room - shownChat);
+  return { tree: shownTree, chat: shownChat, file: 1 - shownTree - shownChat };
 }
 
 export function setFolderExpanded(state: UiState, folder: string, expanded: boolean): UiState {

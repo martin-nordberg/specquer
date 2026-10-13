@@ -50,6 +50,31 @@ export type SummarySettingKey = (typeof SUMMARY_SETTING_KEYS)[number];
 
 export const DEFAULT_SUMMARIES: SummariesConfig = summariesConfigSchema.parse({});
 
+/** Each chat setting alone, without its default, for validating one value (Step 010). */
+export const chatSettingSchemas = {
+  /** Retrieved sections sent with a question. */
+  units: z.number().int().min(1).max(20),
+  /** Their budget, in estimated tokens. */
+  contextTokens: z.number().int().min(1000).max(100_000),
+  /** Earlier questions and answers sent with a question. */
+  historyTurns: z.number().int().min(0).max(50),
+  /** Their budget, in estimated tokens. */
+  historyTokens: z.number().int().min(0).max(100_000),
+};
+
+export const chatConfigSchema = z.object({
+  units: chatSettingSchemas.units.default(8),
+  contextTokens: chatSettingSchemas.contextTokens.default(12_000),
+  historyTurns: chatSettingSchemas.historyTurns.default(10),
+  historyTokens: chatSettingSchemas.historyTokens.default(8_000),
+});
+export type ChatConfig = z.infer<typeof chatConfigSchema>;
+
+export const CHAT_SETTING_KEYS = ["units", "contextTokens", "historyTurns", "historyTokens"] as const;
+export type ChatSettingKey = (typeof CHAT_SETTING_KEYS)[number];
+
+export const DEFAULT_CHAT: ChatConfig = chatConfigSchema.parse({});
+
 /** Which agent configuration file a setting is written to. */
 export type SettingsScope = "shared" | "personal";
 

@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import {
   MAX_RECENT_FILES,
+  MIN_FILE_PANE_FRACTION,
+  paneWidths,
+  setChatOpen,
+  setChatPaneFraction,
   applyUiStatePatch,
   defaultUiState,
   deleteInUiState,
@@ -119,5 +123,44 @@ describe("summaryStop", () => {
     state = setSummaryStop(state, "a.md", 0);
     expect(state.files["a.md"]).toEqual({ viewType: "text" });
     expect(setSummaryStop(state, "a.md", 99).files["a.md"]?.summaryStop).toBe(7);
+  });
+});
+
+describe("the chat pane (Step 010)", () => {
+  test("is closed at 0.3 by default, and invalid values fall back alone", () => {
+    expect(defaultUiState()).toMatchObject({ chatOpen: false, chatPaneFraction: 0.3 });
+    const state = parseUiState({ chatOpen: "yes", chatPaneFraction: 0.9, treePaneFraction: 0.4 });
+    expect(state).toMatchObject({ chatOpen: false, chatPaneFraction: 0.3, treePaneFraction: 0.4 });
+    expect(parseUiState({ chatOpen: true, chatPaneFraction: 0.2 })).toMatchObject({ chatOpen: true, chatPaneFraction: 0.2 });
+  });
+
+  test("setters clamp, and patches carry the fields", () => {
+    const open = setChatOpen(defaultUiState(), true);
+    expect(open.chatOpen).toBe(true);
+    expect(setChatPaneFraction(open, 0.9).chatPaneFraction).toBe(0.5);
+    expect(setChatPaneFraction(open, 0.01).chatPaneFraction).toBe(0.15);
+    const patch = diffUiState(defaultUiState(), setChatPaneFraction(open, 0.4));
+    expect(patch).toEqual({ chatOpen: true, chatPaneFraction: 0.4 });
+    expect(applyUiStatePatch(defaultUiState(), patch)).toMatchObject({ chatOpen: true, chatPaneFraction: 0.4 });
+  });
+
+  test("paneWidths keeps the file pane at 30% or more, the chat pane giving way first", () => {
+    const close = (a: number, b: number) => expect(a).toBeCloseTo(b, 10);
+    const check = (tree: number, chat: number, open: boolean, expected: [number, number]) => {
+      const widths = paneWidths(tree, chat, open);
+      close(widths.tree, expected[0]);
+      close(widths.chat, expected[1]);
+      close(widths.file, 1 - expected[0] - expected[1]);
+    };
+    check(0.25, 0.3, true, [0.25, 0.3]);
+    check(0.25, 0.3, false, [0.25, 0]);
+    check(0.7, 0.3, false, [0.7, 0]);
+    // The chat pane gives way first, down to its minimum
+    check(0.5, 0.3, true, [0.5, 0.2]);
+    // Then the folder pane
+    check(0.7, 0.5, true, [0.55, 0.15]);
+    for (const [tree, chat] of [[0.1, 0.5], [0.7, 0.15], [0.4, 0.4], [0.6, 0.5]] as const) {
+      expect(paneWidths(tree, chat, true).file).toBeGreaterThanOrEqual(MIN_FILE_PANE_FRACTION - 1e-9);
+    }
   });
 });

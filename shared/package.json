@@ -26,6 +26,7 @@
     "./uistate": "./src/uistate/index.ts",
     "./sections": "./src/sections/index.ts",
     "./summaries": "./src/summaries/index.ts",
-    "./settings": "./src/settings/index.ts"
+    "./settings": "./src/settings/index.ts",
+    "./chat": "./src/chat/index.ts"
   }
 }

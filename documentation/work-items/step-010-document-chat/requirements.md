@@ -18,7 +18,7 @@ Specquer shows and summarizes specs, but it can't yet answer a question about th
 
 Answers are untrusted model output. They are rendered as a limited subset of Markdown, and the only links in them are citations the server checked (R3, R5).
 
-<a id=""></a>
+<a id="WORK-00423" data-uid="pd74uhwjqsy7"></a>
 ## 2. Precedence
 
 Step 010 takes precedence over the specifications and earlier steps where they conflict:
@@ -33,10 +33,10 @@ Step 010 takes precedence over the specifications and earlier steps where they c
 | Files in `.specquer/cache/` | `summaries.db` | Also `search.db` (R4) |
 | Output from the server | JSON responses | Also a stream of server-sent events for `POST /api/chat` (R7) |
 
-<a id=""></a>
+<a id="WORK-00424" data-uid="jjwwod719l75"></a>
 ## 3. Requirements
 
-<a id=""></a>
+<a id="WORK-00425" data-uid="ci1hpj4p82rx"></a>
 ### R1. The Chat Pane
 
 1. **Toggle:** a **Chat** button in the header, left of the light/dark toggle, opens and closes the pane. It is a toggle button with the accessible name "Chat", `aria-pressed`, and a lucide icon (such as `MessageSquare`). The settings gear stays rightmost.
@@ -46,7 +46,7 @@ Step 010 takes precedence over the specifications and earlier steps where they c
 5. **UI state:** `chatOpen` (default `false`) and `chatPaneFraction` (default 0.3) are new optional top-level fields of `uistate.yaml`, so its `version` stays 1. A reload or a restart reopens the pane as it was.
 6. **Without a model or key:** the pane opens, but the input is disabled, with a hint naming `.specquer/shared/agent.config.yaml` and the reason as a tooltip, as for the summary slider (Client Requirements §6.2 item 5). The client asks for the status at the same times as for summaries, so a configuration change needs no reload.
 
-<a id=""></a>
+<a id="WORK-00426" data-uid="zi5tu3j8o81c"></a>
 ### R2. Asking
 
 1. **Input:** a text area at the bottom of the pane. **Enter** sends the question; **Shift+Enter** starts a new line.
@@ -61,7 +61,7 @@ Step 010 takes precedence over the specifications and earlier steps where they c
 7. **Stop:** while an answer is under way, a **Stop** button replaces the send button. Stopping aborts the request (R3.6). Only one question is answered at a time; Enter does nothing until the answer has ended.
 8. **Commands:** `/clear` clears the conversation (R6.5). Any other input starting with `/` is answered with "Unknown command" under the input, and not sent.
 
-<a id=""></a>
+<a id="WORK-00427" data-uid="m9uzwfqrlmrc"></a>
 ### R3. Answers
 
 1. **Streaming:** an answer streams into its box as the model writes it.
@@ -85,7 +85,7 @@ Step 010 takes precedence over the specifications and earlier steps where they c
 9. **Scrolling:** the conversation follows a streaming answer, unless the user has scrolled up.
 10. **Accessibility:** a streaming answer has `aria-busy`, and is announced once, when it ends, through a polite live region; tokens are never announced one by one.
 
-<a id=""></a>
+<a id="WORK-00428" data-uid="sdppw0aqcq7o"></a>
 ### R4. Grounding
 
 1. **Which files:** every Markdown file `GET /api/tree` lists, sectioned or not, by the same rules (Git's ignore rules; never `.git`, `.specquer` or `node_modules`; the 10,000-file limit; Server Requirements §3). A file the tree doesn't show is never searched or sent.
@@ -105,7 +105,7 @@ Step 010 takes precedence over the specifications and earlier steps where they c
 8. **Budget:** at most `chat.units` units (default 8), within `chat.contextTokens` (default 12,000, estimated at four characters a token). A unit longer than its share is cut.
 9. **What leaves the machine:** building the index sends nothing. A question sends the provider the question, the retrieved units with their paths and headings, and the conversation (R6.3).
 
-<a id=""></a>
+<a id="WORK-00429" data-uid="bw1uf7v3pcdm"></a>
 ### R5. Citations
 
 1. **The list:** before the answer's text, the server sends the retrieved units as a numbered list: number, path, outline path, section ID (if any), heading title.
@@ -118,7 +118,7 @@ Step 010 takes precedence over the specifications and earlier steps where they c
    - The open file is saved first, as for any file switch. A summary hiding the section moves the slider to the full text, as for section links (§6.2 item 9).
    - **The view:** a citation always shows the section in the preview. From the Text or WYSIWYG view, the file opens in Preview, and Preview becomes its remembered view type, as if the user had chosen it. Split and Preview stay as they are, since both show the preview.
 
-<a id=""></a>
+<a id="WORK-00430" data-uid="j7zmfrhbfrho"></a>
 ### R6. History
 
 1. **One conversation per root folder.** It is kept in `.specquer/user/chat-history.yaml` (per user, ignored by Git), written atomically after each answer ends. YAML stays the format, readable and consistent with the other files, unless rewriting the whole file after each answer turns out to be a problem in practice; JSON lines, which only append, are the fallback.
@@ -130,7 +130,7 @@ Step 010 takes precedence over the specifications and earlier steps where they c
 7. **Several tabs:** the pane reads the history again when the tab gets focus. If two tabs send questions at once, both are kept, in the order they ended.
 8. **Damaged file:** a history file that isn't valid is moved aside (`chat-history.yaml.damaged-<time>`) and an empty conversation starts; it never stops the server.
 
-<a id=""></a>
+<a id="WORK-00431" data-uid="nf928as5jjyn"></a>
 ### R7. Server and Configuration
 
 1. **Routes**, in the shared router like every route:
@@ -151,7 +151,7 @@ Step 010 takes precedence over the specifications and earlier steps where they c
 
 5. **Settings dialog:** a **Chat** tab next to **Model** and **Summarization**, with the same **Personal** / **Shared** choice (Client Requirements §10).
 
-<a id=""></a>
+<a id="WORK-00432" data-uid="w0fklt1p6dhh"></a>
 ### R8. Tests
 
 1. **Unit:**
@@ -163,7 +163,7 @@ Step 010 takes precedence over the specifications and earlier steps where they c
 4. **End to end:** `e2e/fake-model.ts` answers `stream: true` requests with OpenAI-style chunks. A test asks a question on a fixture, sees the streamed answer with a working citation, clears, and reloads.
 5. **No real model** is ever called, as for summaries.
 
-<a id=""></a>
+<a id="WORK-00433" data-uid="dzpz8c4nwqon"></a>
 ## 4. Out of Scope
 
 - Editing specs from the chat, or proposing changes to them.
@@ -173,7 +173,7 @@ Step 010 takes precedence over the specifications and earlier steps where they c
 - Highlighting of code blocks in answers.
 - A keyboard shortcut to open the chat pane.
 
-<a id=""></a>
+<a id="WORK-00434" data-uid="qb9bdtq44s2b"></a>
 ## 5. Specifications to Update
 
 - **[Information Architecture](/specifications/info-architecture):** the third pane in the layout, its region in the table, `chat-history.yaml` and `search.db` in the folder diagram.
@@ -184,7 +184,7 @@ Step 010 takes precedence over the specifications and earlier steps where they c
 - **[Security](/specifications/security):** §9: what chat sends, saved text only, nothing sent to build the index, the rules for rendering answers and citations, and the history file's contents (excerpts of the specs) kept out of Git.
 - **`CLAUDE.md`:** the new modules and files.
 
-<a id=""></a>
+<a id="WORK-00435" data-uid="chy6ozz3q0on"></a>
 ## 6. Risks
 
 | Risk | Impact | Mitigation |
@@ -196,7 +196,7 @@ Step 010 takes precedence over the specifications and earlier steps where they c
 | A third pane on a small screen | A cramped file pane | The 30% minimum (R1.4); the pane can be closed |
 | The history holds excerpts of the specs | Shared by accident | It lives in `.specquer/user/`, ignored by Git |
 
-<a id=""></a>
+<a id="WORK-00436" data-uid="a0zp6uyh8g95"></a>
 ## 7. Open Questions
 
 None. All were decided while reviewing the requirements.

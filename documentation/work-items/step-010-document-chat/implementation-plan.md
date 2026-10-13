@@ -1,11 +1,11 @@
-<a id=""></a>
+<a id="WORK-00395" data-uid="joesjovjlrin"></a>
 
-<a id=""></a>
+<a id="WORK-00396" data-uid="sia1bkx4ijqu"></a>
 # Step 010 - Implementation Plan
 
 _Plan for the [Document Chat requirements](requirements.md). Drafted October 2026._
 
-<a id=""></a>
+<a id="WORK-00397" data-uid="q5ypt53jh02f"></a>
 ## 1. Summary
 
 Step 010 adds a chat pane that answers questions about the specs. Answers are grounded in a full-text index of every Markdown file in the tree, stream in as the model writes them, and cite their sources.
@@ -34,7 +34,7 @@ There are seven phases (§5):
 
 Decisions taken while planning are in §6, marked _Proposed_; the work proceeds on them unless they are changed.
 
-<a id=""></a>
+<a id="WORK-00398" data-uid="ow3uqojzom03"></a>
 ## 2. Precedence
 
 The requirements' Precedence table applies. This plan adds:
@@ -48,7 +48,7 @@ The requirements' Precedence table applies. This plan adds:
 | Opening a file at a place | By section ID; the preview scrolls | Also by outline path; a citation also switches the file's view to Preview (§4.10) |
 | `SectionSummary`'s box and label | Its own markup | `AiBox`, shared with chat answers (§4.9) |
 
-<a id=""></a>
+<a id="WORK-00399" data-uid="dkea2u39hiye"></a>
 ## 3. Starting Point
 
 - **Summaries, server** (`server/src/summaries/`):
@@ -82,10 +82,10 @@ The requirements' Precedence table applies. This plan adds:
   - Bun keeps a streamed response open across a 12-second pause between chunks (its idle timeout doesn't cut it).
   - Hono's `streamSSE` is available to `shared` (`hono/streaming`).
 
-<a id=""></a>
+<a id="WORK-00400" data-uid="ntqyx45yomsd"></a>
 ## 4. Proposed Design
 
-<a id=""></a>
+<a id="WORK-00401" data-uid="wnyzm0a38dja"></a>
 ### 4.1 The Answer Pipeline (`shared/src/markdown/answer.ts`)
 
 - **`answerToHast(markdown, citationNumbers): Root`**, a frozen unified processor of its own (decision D3 of Step 001 applies), with no `rehype-raw`:
@@ -102,7 +102,7 @@ The requirements' Precedence table applies. This plan adds:
 - **Speed:** the pipeline runs on the main thread; answers are small.
 - **Export:** `@specquer/shared/markdown` exports `answerToHast`, so tests run in `shared`.
 
-<a id=""></a>
+<a id="WORK-00402" data-uid="oo7wyo7pv57d"></a>
 ### 4.2 The Search Index (`server/src/chat/search-index.ts`)
 
 - **Units** (`searchUnits(path, text)`, pure, in `server/src/chat/units.ts`):
@@ -137,7 +137,7 @@ The requirements' Precedence table applies. This plan adds:
   - `ChatService.filesChanged()` (called where `summaries.filesChanged()` is) schedules an update after a short delay.
   - `search()` runs `update()` first.
 
-<a id=""></a>
+<a id="WORK-00403" data-uid="qagotakf1fpu"></a>
 ### 4.3 The Query (`server/src/chat/query.ts`)
 
 - **`ftsQuery(question, previousQuestion?)`:**
@@ -150,7 +150,7 @@ The requirements' Precedence table applies. This plan adds:
   It returns `undefined` when no term is left. The search then gives only the open file's first unit.
 - It is pure, and tested with questions holding `"`, `*`, `-`, `NEAR`, `AND`, parentheses and column filters (`title:`).
 
-<a id=""></a>
+<a id="WORK-00404" data-uid="kb7yoz98pm6f"></a>
 ### 4.4 The Model Runtime (`server/src/model-runtime.ts`)
 
 - **What moves out of `SummaryService`:** `AgentConfigFiles`, the resolved model (with its signature), `concurrency` and the `CallQueue` move into `ModelRuntime`.
@@ -160,7 +160,7 @@ The requirements' Precedence table applies. This plan adds:
 - **`app.ts`** creates the runtime once and passes it to both. The settings routes call `runtime.configChanged()` instead of `summaries.configChanged()`.
 - This is a refactor with no change in behavior, done first in Phase 4 with the summary tests unchanged.
 
-<a id=""></a>
+<a id="WORK-00405" data-uid="xlcatb1x9rfq"></a>
 ### 4.5 Stopping a Started Call (`CallQueue`)
 
 - **`run(key, task, signal, priority, { abortable })`:** the task takes an `AbortSignal`, `task(signal)`.
@@ -168,7 +168,7 @@ The requirements' Precedence table applies. This plan adds:
 - **Summaries** pass `abortable: false` and behave as today.
 - **Chat** passes `abortable: true` with a unique key (`chat:<uuid>`), so a chat call is never shared.
 
-<a id=""></a>
+<a id="WORK-00406" data-uid="sr4efitjeedf"></a>
 ### 4.6 The Chat Route and Events
 
 - **Shared** (`shared/src/chat/`, exported as `@specquer/shared/chat`):
@@ -198,7 +198,7 @@ The requirements' Precedence table applies. This plan adds:
   - **History routes:** `GET`, `DELETE` and `PUT /api/chat/history` are ordinary JSON routes.
 - **Errors before the stream starts** are ordinary JSON errors: `503 not_configured`, and `400` for an invalid body. Once the stream has started, failures are `error` events: `rate_limited` for `429`, `provider_error`, and `aborted` (never sent; the client already knows).
 
-<a id=""></a>
+<a id="WORK-00407" data-uid="l2ajryrmw8hk"></a>
 ### 4.7 The Chat Service and History (`server/src/chat/`)
 
 - **`ChatService.ask(request, signal): AsyncIterable<ChatEvent>`:**
@@ -231,7 +231,7 @@ The requirements' Precedence table applies. This plan adds:
   - **Clear:** `clear()` returns the cleared turns; `restore(turns)` puts them back in front of turns added since (for **Undo**).
 - **History sent to the model:** the last `chat.historyTurns` turns, newest first, while their estimated tokens fit `chat.historyTokens`. Only the questions and the answers' text are sent, not citations or earlier units (R6.3).
 
-<a id=""></a>
+<a id="WORK-00408" data-uid="nu87cn4rw75h"></a>
 ### 4.8 The Three Panes (`client/src/components/PaneLayout.tsx`, `shared/src/uistate/`)
 
 - **UI state:**
@@ -248,7 +248,7 @@ The requirements' Precedence table applies. This plan adds:
   - A drag is clamped by the layout rule live, so a pane stops instead of jumping.
 - **The file pane** is unchanged inside.
 
-<a id=""></a>
+<a id="WORK-00409" data-uid="ti6fachs7gga"></a>
 ### 4.9 The Chat Pane (`client/src/components/chat/`)
 
 - **`ChatToggle`** in the header, left of `ThemeToggle`: `aria-pressed`, the `MessageSquare` icon, and the label "Chat".
@@ -291,7 +291,7 @@ The requirements' Precedence table applies. This plan adds:
   - parses each event with `chatEventSchema`;
   - yields typed events and stops on abort.
 
-<a id=""></a>
+<a id="WORK-00410" data-uid="xdqs43sxbyqg"></a>
 ### 4.10 Opening a Citation (`App.tsx`, `Preview.tsx`)
 
 - **`ScrollTarget`** becomes `{ sectionId } | { outlinePath }`, with the `request` stamp.
@@ -307,7 +307,7 @@ The requirements' Precedence table applies. This plan adds:
     - If no such heading exists, it scrolls to the top.
 - **Cited files that no longer exist:** when an answer is shown, citations without a section ID are checked against the tree the client already has, and those with one are looked up as in step 1 (all of an answer's IDs together, cached for the session). A citation found nowhere is shown as text with the "no longer exists" mark (R6.6).
 
-<a id=""></a>
+<a id="WORK-00411" data-uid="a81xjkkjkrla"></a>
 ### 4.11 The Agent (`agent/src/chat.ts`)
 
 - **`chatMessages({ question, units, history }): BaseMessage[]`:**
@@ -331,17 +331,17 @@ The requirements' Precedence table applies. This plan adds:
   - `parseAgentConfig` and `mergeAgentConfig` handle `chat:` key by key, like `summaries:`.
 - **Tests:** `FakeListChatModel` with `responses` streams them, so `streamAnswer` is tested for order, abort and errors. `chatMessages` is tested with a unit whose text holds `</source>` and instructions after it, and a path holding `"`: the output has exactly one closing tag per source.
 
-<a id=""></a>
+<a id="WORK-00412" data-uid="b3pt2lj0mkhb"></a>
 ### 4.12 Settings
 
 - **`GET` and `PUT /api/settings/agent`** carry `chat` as they carry `summaries`: values, sources, warnings, and `null` to remove one.
 - **`agent-settings.ts`** writes `chat:` with the document API, keeping comments.
 - **`SettingsDialog`** gets a **Chat** tab with the four values, validated by `chatSettingSchemas`. The Personal/Shared choice, badges and **Reset** work as on **Summarization**. The logic goes in `settings-form.ts`.
 
-<a id=""></a>
+<a id="WORK-00413" data-uid="glx804yc35ko"></a>
 ## 5. Phases
 
-<a id=""></a>
+<a id="WORK-00414" data-uid="u3esqq14khvq"></a>
 ### Phase 1: Shared Foundations
 
 - `shared/src/chat/` (schemas, events, history types, limits).
@@ -357,7 +357,7 @@ The requirements' Precedence table applies. This plan adds:
   - `uistate.test.ts`: the new fields' parsing and fallbacks, and `paneWidths` at the edges.
   - The event schemas, round-tripped.
 
-<a id=""></a>
+<a id="WORK-00415" data-uid="jw8iva9ak8lk"></a>
 ### Phase 2: The Search Index
 
 - **First, FTS5 on every platform.** Check `CREATE VIRTUAL TABLE … USING fts5` under the pinned Bun on macOS, where Bun uses the system's SQLite, and in the compiled executable (`bun run build`) on Linux. If macOS lacks it, stop and decide before building on it (the fallback is Bun's `Database.setCustomSQLite` with a bundled library). `SearchIndex` checks for FTS5 when it opens the database. Without it, the chat says "full-text search isn't available in this build" instead of failing obscurely, and a unit test covers the check.
@@ -375,7 +375,7 @@ The requirements' Precedence table applies. This plan adds:
     - a damaged database moved aside;
     - another `user_version` rebuilt.
 
-<a id=""></a>
+<a id="WORK-00416" data-uid="s2w8wghu7cep"></a>
 ### Phase 3: The Agent
 
 - `chat.ts` (messages, streaming).
@@ -387,7 +387,7 @@ The requirements' Precedence table applies. This plan adds:
   - an abort part-way;
   - the configuration's parsing and merging.
 
-<a id=""></a>
+<a id="WORK-00417" data-uid="gdvmpr9zbgek"></a>
 ### Phase 4: The Server
 
 1. **`ModelRuntime`**, taken out of `SummaryService`. The summary and settings tests must pass unchanged.
@@ -414,7 +414,7 @@ The requirements' Precedence table applies. This plan adds:
      - a hidden (ignored) file never cited;
      - an anchor ID in a non-sectioned file, or one the section index doesn't hold there, cited without a section ID.
 
-<a id=""></a>
+<a id="WORK-00418" data-uid="dpxpnl2lgscx"></a>
 ### Phase 5: The Client
 
 1. **`PaneLayout`**, replacing `SplitPane`, and `ChatToggle`. Component tests: toggle and `aria-pressed`, both bars by keyboard, the layout rule when the window narrows.
@@ -445,7 +445,7 @@ The requirements' Precedence table applies. This plan adds:
    - a citation found nowhere shows "no longer exists".
 7. **The settings dialog's Chat tab.** Tests next to the Summarization tab's.
 
-<a id=""></a>
+<a id="WORK-00419" data-uid="b43c9mocnfwp"></a>
 ### Phase 6: End-to-End Tests
 
 - **`e2e/fake-model.ts`:**
@@ -463,7 +463,7 @@ The requirements' Precedence table applies. This plan adds:
   - without a model configured, check that the input is disabled with the hint.
 - **`e2e/summaries.spec.ts`** must pass unchanged after the `ModelRuntime` refactor.
 
-<a id=""></a>
+<a id="WORK-00420" data-uid="d4j8pkzifw2s"></a>
 ### Phase 7: Documentation
 
 - The specifications listed in the requirements' §5.
@@ -473,7 +473,7 @@ The requirements' Precedence table applies. This plan adds:
   - `search.db`.
 - **Technical Architecture §5.1:** the one streaming route, and why the router writes server-sent events itself.
 
-<a id=""></a>
+<a id="WORK-00421" data-uid="ru55knlcg3jn"></a>
 ## 6. Decisions
 
 _Proposed_; the work proceeds on them unless they are changed:
@@ -488,7 +488,7 @@ _Proposed_; the work proceeds on them unless they are changed:
 - **D8. Re-rendering every 150 ms while streaming** (§4.9), on the main thread.
 - **D9. One question at a time per tab.** A second tab can ask at the same time; the server serves both, and the queue limits the calls.
 
-<a id=""></a>
+<a id="WORK-00422" data-uid="jfmlb1g2cp0m"></a>
 ## 7. Risks
 
 | Risk | Impact | Mitigation |
