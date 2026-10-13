@@ -1,7 +1,9 @@
 import { Hono } from "hono";
 import { setCookie } from "hono/cookie";
 import { type ApiHandlers, createApiRouter } from "@specquer/shared/api";
+import { ChatService, type ChatServiceOptions } from "./chat/service.ts";
 import { FileService } from "./files.ts";
+import { ModelRuntime } from "./model-runtime.ts";
 import { addAgentGuideFile, hasAgentGuideFile } from "./sections/agent-guide.ts";
 import { SectionIndex } from "./sections/section-index.ts";
 import { AgentSettingsFiles } from "./settings/agent-settings.ts";
@@ -26,11 +28,24 @@ export interface AppConfig extends SecurityConfig {
   development: boolean;
   /** Fetches the bundled client page, which Bun serves from an internal route. */
   fetchPage: () => Promise<Response>;
-  /** Overrides for the summary service (tests use a fake model). */
+  /** Overrides for the summary service and the model runtime (tests use a fake model). */
   summaries?: SummaryServiceOptions;
+  /** Overrides for document chat. */
+  chat?: ChatServiceOptions;
 }
 
-export function createHandlers(files: FileService, uiState: UiStateStore, sections: SectionIndex, summaries: SummaryService): ApiHandlers {
+export function createHandlers(
+  files: FileService,
+  uiState: UiStateStore,
+  sections: SectionIndex,
+  summaries: SummaryService,
+  chat: ChatService,
+): ApiHandlers {
+  // Pre-filling and the chat's search index catch up after files change
+  const filesChanged = () => {
+    summaries.filesChanged();
+    chat.filesChanged();
+  };
   // The settings files, written one at a time
   const settingsQueue = new WriteQueue();
   const agentSettings = new AgentSettingsFiles(files.root, settingsQueue);
@@ -41,13 +56,13 @@ export function createHandlers(files: FileService, uiState: UiStateStore, sectio
       // Files may have changed outside Specquer; catch up in the background. Pre-filling skips
       // files that haven't changed
       sections.scan().catch((err) => console.error(err));
-      summaries.filesChanged();
+      filesChanged();
       return tree;
     },
     readFile: (path) => files.readFile(path),
     async saveFile(path, text, baseVersion) {
       const result = await sections.save(path, text, baseVersion);
-      if (result.ok) summaries.filesChanged();
+      if (result.ok) filesChanged();
       return result;
     },
     async create(parent, name, kind, options = {}) {
@@ -59,21 +74,21 @@ export function createHandlers(files: FileService, uiState: UiStateStore, sectio
         const result = await folderSettings.write(path, setting, "");
         if (result.ok) sections.configChanged();
       }
-      summaries.filesChanged();
+      filesChanged();
       return { ok: true, path };
     },
     async rename(path, newName) {
       const newPath = await files.rename(path, newName);
       if (newPath === null) return { ok: false, reason: "exists" };
       if (newPath !== path) await sections.renamed(path, newPath);
-      summaries.filesChanged();
+      filesChanged();
       return { ok: true, path: newPath, uiState: await uiState.renamed(path, newPath) };
     },
     deletePreview: (path) => files.deletePreview(path),
     async deleteEntry(path) {
       await files.deleteEntry(path);
       await sections.deleted(path);
-      summaries.filesChanged();
+      filesChanged();
       return uiState.deleted(path);
     },
     getUiState: () => uiState.load(),
@@ -83,7 +98,7 @@ export function createHandlers(files: FileService, uiState: UiStateStore, sectio
     async anchorFolder(folder, dryRun, addAgentGuide) {
       const changed = await sections.anchorFolder(folder, dryRun);
       if (!dryRun && addAgentGuide) await addAgentGuideFile(files);
-      if (!dryRun && changed.length > 0) summaries.filesChanged();
+      if (!dryRun && changed.length > 0) filesChanged();
       return { files: changed, agentGuide: await hasAgentGuideFile(files) };
     },
     sectionProblems: (folder) => sections.problems(folder),
@@ -100,6 +115,10 @@ export function createHandlers(files: FileService, uiState: UiStateStore, sectio
     },
     envSet: async (name) => summaries.keySet(name),
     testModel: (config, signal) => summaries.testModel(config, signal),
+    chat: (request, signal) => chat.ask(request, signal),
+    chatHistory: () => chat.history.read(),
+    clearChatHistory: () => chat.history.clear(),
+    restoreChatHistory: (turns) => chat.history.restore(turns),
     async folderSettings(path) {
       await files.assertFolder(path);
       return folderSettings.read(path);
@@ -111,7 +130,7 @@ export function createHandlers(files: FileService, uiState: UiStateStore, sectio
       // Sections of files that stopped being sectioned are retired, and come back when they are again
       sections.configChanged();
       await sections.scan();
-      summaries.filesChanged();
+      filesChanged();
       return { ...result, sectioned: FolderSettingsFile.isSectioned(await folderSettings.read(path)) };
     },
   };
@@ -123,14 +142,17 @@ const UNAUTHORIZED_PAGE = `<!doctype html><html lang="en"><head><meta charset="u
 
 /**
  * The Hono app: security checks, the client page with its token exchange, and the API; and the
- * section index, which the caller scans once the server is listening, and the summary service,
- * whose unused summaries the caller purges and whose pre-filling it starts.
+ * section index, which the caller scans once the server is listening, the summary service,
+ * whose unused summaries the caller purges and whose pre-filling it starts, and document chat,
+ * whose search index the caller starts building.
  */
 export function createApp(config: AppConfig) {
   const files = new FileService(config.root);
   const uiState = new UiStateStore(config.root, (path) => files.kindOf(path));
   const sections = new SectionIndex(files);
-  const summaries = new SummaryService(config.root, { files, sections }, config.summaries);
+  const runtime = new ModelRuntime(config.root, config.summaries);
+  const summaries = new SummaryService(config.root, { files, sections }, { ...config.summaries, runtime });
+  const chat = new ChatService(config.root, runtime, { files, sections }, config.chat);
   const app = new Hono();
 
   app.use(hostCheck(config));
@@ -174,9 +196,9 @@ export function createApp(config: AppConfig) {
     }),
   );
 
-  app.route("/", createApiRouter(createHandlers(files, uiState, sections, summaries)));
+  app.route("/", createApiRouter(createHandlers(files, uiState, sections, summaries, chat)));
 
   app.notFound((c) => (c.req.path.startsWith("/api/") ? c.json({ error: "not_found", message: "Not found" }, 404) : c.text("Not found", 404)));
-  return { app, sections, summaries };
+  return { app, sections, summaries, chat };
 }
 

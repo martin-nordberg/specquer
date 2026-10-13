@@ -1,0 +1,59 @@
+import { type AgentConfig, type ResolvedModel, createChatModel } from "@specquer/agent";
+import { AgentConfigFiles } from "./summaries/config.ts";
+import { CallQueue } from "./summaries/queue.ts";
+
+/**
+ * What the agent features share (Step 010, decision D1): the agent configuration (read again when
+ * it changes), the model it names (resolved again when the configuration or the key changes), and
+ * the call queue, so `summaries.concurrency` limits summaries and chat together, and with them the
+ * calls to the provider.
+ */
+
+export interface ModelRuntimeOptions {
+  /** Where API keys come from: the server's environment. */
+  env?: Record<string, string | undefined>;
+  createModel?: typeof createChatModel;
+  warn?: (message: string) => void;
+}
+
+export class ModelRuntime {
+  readonly queue: CallQueue;
+  readonly env: Record<string, string | undefined>;
+  readonly createModel: typeof createChatModel;
+  private readonly config: AgentConfigFiles;
+  private concurrencySetting = 2;
+  private resolved: { signature: string; model: ResolvedModel } | null = null;
+
+  constructor(root: string, options: ModelRuntimeOptions = {}) {
+    this.env = options.env ?? process.env;
+    this.createModel = options.createModel ?? createChatModel;
+    this.config = new AgentConfigFiles(root, options.warn ?? ((message: string) => console.warn(`specquer: ${message}`)));
+    this.queue = new CallQueue(() => this.concurrencySetting);
+  }
+
+  /** Model calls at once (`summaries.concurrency`), as last read. */
+  get concurrency(): number {
+    return this.concurrencySetting;
+  }
+
+  /** The configuration in effect and its model. */
+  async current(): Promise<{ config: AgentConfig; model: ResolvedModel }> {
+    const config = await this.config.load();
+    this.concurrencySetting = config.summaries.concurrency;
+    const key = config.model === undefined ? undefined : this.env[config.model.apiKeyEnv];
+    const signature = JSON.stringify([config.model, key]);
+    if (this.resolved?.signature !== signature) this.resolved = { signature, model: this.createModel(config.model, this.env) };
+    return { config, model: this.resolved.model };
+  }
+
+  /** Whether an environment variable is set (for the settings dialog; never its value). */
+  keySet(name: string): boolean {
+    const value = this.env[name];
+    return value !== undefined && value.trim() !== "";
+  }
+
+  /** Reads the agent configuration again on the next call, after Specquer wrote it. */
+  configChanged(): void {
+    this.config.invalidate();
+  }
+}

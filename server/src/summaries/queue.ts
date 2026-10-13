@@ -8,13 +8,19 @@
  * interactive calls start first, and background calls take at most `concurrency - 1` slots (at
  * least one), so an interactive call never waits for more than the calls already running
  * (Step 005, D6). An interactive request that joins a waiting background call promotes it.
+ *
+ * A call can be `abortable` (Step 010, chat): when its last request is aborted, it is stopped
+ * even once started, through the signal its task gets.
  */
 
 export type Priority = "interactive" | "background";
 
 interface Entry {
   key: string;
-  task: () => Promise<unknown>;
+  task: (signal: AbortSignal) => Promise<unknown>;
+  /** Stopped when its last request leaves, even once started. */
+  abortable: boolean;
+  controller: AbortController;
   /** Requests still waiting for the result. */
   waiters: number;
   started: boolean;
@@ -42,8 +48,17 @@ export class CallQueue {
     return this.queued.length;
   }
 
-  /** Runs `task` for `key`, or joins the call already queued or running for it. */
-  run<T>(key: string, task: () => Promise<T>, signal?: AbortSignal, priority: Priority = "interactive"): Promise<T> {
+  /**
+   * Runs `task` for `key`, or joins the call already queued or running for it. The task's signal
+   * aborts only for an `abortable` call whose requests have all gone.
+   */
+  run<T>(
+    key: string,
+    task: (signal: AbortSignal) => Promise<T>,
+    signal?: AbortSignal,
+    priority: Priority = "interactive",
+    options: { abortable?: boolean } = {},
+  ): Promise<T> {
     if (signal?.aborted) return Promise.reject(signal.reason);
     let entry = this.entries.get(key);
     if (entry === undefined) {
@@ -55,7 +70,7 @@ export class CallQueue {
       });
       // Nobody may be listening when a dropped call rejects
       promise.catch(() => undefined);
-      entry = { key, task, waiters: 0, started: false, priority, promise, resolve, reject };
+      entry = { key, task, abortable: options.abortable ?? false, controller: new AbortController(), waiters: 0, started: false, priority, promise, resolve, reject };
       this.entries.set(key, entry);
       this.queued.push(entry);
     }
@@ -77,7 +92,11 @@ export class CallQueue {
 
   private leave(entry: Entry): void {
     entry.waiters--;
-    if (entry.waiters > 0 || entry.started) return;
+    if (entry.waiters > 0) return;
+    if (entry.started) {
+      if (entry.abortable) entry.controller.abort(new DOMException("Stopped", "AbortError"));
+      return;
+    }
     this.entries.delete(entry.key);
     const index = this.queued.indexOf(entry);
     if (index !== -1) this.queued.splice(index, 1);
@@ -102,7 +121,7 @@ export class CallQueue {
       this.running++;
       if (background) this.runningBackground++;
       Promise.resolve()
-        .then(() => started.task())
+        .then(() => started.task(started.controller.signal))
         .then(started.resolve, started.reject)
         .finally(() => {
           this.running--;

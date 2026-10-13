@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { $ } from "bun";
 import { createApp } from "./app.ts";
+import type { ChatServiceOptions } from "./chat/service.ts";
 import type { SummaryServiceOptions } from "./summaries/service.ts";
 import { sessionCookieName } from "./security.ts";
 
@@ -24,14 +25,21 @@ export async function tempRoot(files: Record<string, string> = {}, options: { gi
   return { root, cleanup: () => rm(root, { recursive: true, force: true }) };
 }
 
-export function testApp(root: string, page = "<!doctype html><script>inline()</script>", summaries: SummaryServiceOptions = { env: {} }) {
-  const { app, sections, summaries: summaryService } = createApp({
+export function testApp(
+  root: string,
+  page = "<!doctype html><script>inline()</script>",
+  summaries: SummaryServiceOptions = { env: {} },
+  // A question updates the chat's index itself; no background update after a test is over
+  chat: ChatServiceOptions = { indexDelay: 3_600_000 },
+) {
+  const { app, sections, summaries: summaryService, chat: chatService } = createApp({
     root,
     token: TEST_TOKEN,
     port: () => TEST_PORT,
     development: false,
     fetchPage: async () => new Response(page),
     summaries,
+    chat,
   });
   const cookie = `${sessionCookieName(TEST_PORT)}=${TEST_TOKEN}`;
   /** A request as the signed-in browser would send it. */
@@ -47,5 +55,5 @@ export function testApp(root: string, page = "<!doctype html><script>inline()</s
       },
       body: init.body === undefined ? undefined : JSON.stringify(init.body),
     });
-  return { app, sections, summaries: summaryService, request };
+  return { app, sections, summaries: summaryService, chat: chatService, request };
 }

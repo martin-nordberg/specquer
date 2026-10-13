@@ -57,9 +57,27 @@ describe("agent settings", () => {
     expect(settings.personal.summaries).toEqual({ concurrency: 4 });
     expect(settings.personal.warnings).toHaveLength(1);
     expect(settings.effective.summaries).toEqual({ concurrency: 4, tokenBudget: 24_000, prefill: true });
-    expect(settings.sources).toEqual({ model: "shared", summaries: { concurrency: "personal", tokenBudget: "default", prefill: "shared" } });
+    expect(settings.sources).toEqual({
+      model: "shared",
+      summaries: { concurrency: "personal", tokenBudget: "default", prefill: "shared" },
+      chat: { units: "default", contextTokens: "default", historyTurns: "default", historyTokens: "default" },
+    });
     expect(settings.keys).toEqual({ NVIDIA_API_KEY: true });
     expect(settings.personal.version).not.toBe("");
+  });
+
+  test("chat settings are read with their sources and written in their own block, removed when empty", async () => {
+    const { agent, environment, read } = await setup({ [SHARED]: SHARED_TEXT });
+    const { shared } = await agent.read(environment);
+    expect((await agent.write({ scope: "shared", baseVersion: shared.version, chat: { units: 5, historyTurns: 2 } })).ok).toBe(true);
+    expect(await read(SHARED)).toContain("chat:\n  units: 5\n  historyTurns: 2\n");
+    const settings = await agent.read(environment);
+    expect(settings.shared.chat).toEqual({ units: 5, historyTurns: 2 });
+    expect(settings.effective.chat).toEqual({ units: 5, contextTokens: 12_000, historyTurns: 2, historyTokens: 8_000 });
+    expect(settings.sources.chat).toEqual({ units: "shared", contextTokens: "default", historyTurns: "shared", historyTokens: "default" });
+    const removed = await agent.write({ scope: "shared", baseVersion: settings.shared.version, chat: { units: null, historyTurns: null } });
+    expect(removed.ok).toBe(true);
+    expect(await read(SHARED)).not.toContain("chat:");
   });
 
   test("changes only the values given, keeping comments, order and unknown keys", async () => {
@@ -97,6 +115,7 @@ describe("agent settings", () => {
     expect((await agent.read(environment)).sources).toEqual({
       model: "shared",
       summaries: { concurrency: "shared", tokenBudget: "default", prefill: "shared" },
+      chat: { units: "default", contextTokens: "default", historyTurns: "default", historyTokens: "default" },
     });
   });
 

@@ -15,12 +15,12 @@ import {
 import { ApiError, type SectionSummaryLookup, type SummaryRequest, type SummaryResult, type SummaryStatus } from "@specquer/shared/api";
 import { isShortSection } from "@specquer/shared/summaries";
 import type { FileService } from "../files.ts";
+import { ModelRuntime } from "../model-runtime.ts";
 import type { SectionIndex } from "../sections/section-index.ts";
 import { SummaryCache, textKey } from "./cache.ts";
-import { AgentConfigFiles } from "./config.ts";
 import { lookupSection } from "./lookup.ts";
 import { PREFILL_BACKOFF, PREFILL_DELAY, PREFILL_MAX_BACKOFF, Prefill } from "./prefill.ts";
-import { CallQueue, type Priority } from "./queue.ts";
+import type { Priority } from "./queue.ts";
 
 /**
  * The summary service: short sections come back as written, cached summaries at once, the rest
@@ -41,6 +41,8 @@ export interface SummaryServiceOptions {
   prefillDelay?: number;
   /** The first pause after a rate limit while pre-filling (1 min); it doubles up to 15 min. */
   prefillBackoff?: number;
+  /** The model runtime shared with chat; without one, the service makes its own. */
+  runtime?: ModelRuntime;
 }
 
 /** Where the service reads documents: for lookups by section ID and for pre-filling. */
@@ -72,15 +74,10 @@ export function providerError(err: unknown): ApiError {
 }
 
 export class SummaryService {
-  private readonly config: AgentConfigFiles;
+  private readonly runtime: ModelRuntime;
   private readonly cache: SummaryCache;
-  private readonly queue: CallQueue;
   private readonly prefill: Prefill;
-  private readonly env: Record<string, string | undefined>;
-  private readonly createModel: NonNullable<SummaryServiceOptions["createModel"]>;
   private readonly now: () => number;
-  private concurrency = 2;
-  private resolved: { signature: string; model: ResolvedModel } | null = null;
   /** What pre-filling last ran with: whether it may run, and the model. */
   private prefillSignature: string | null = null;
   private purgedAt = -Infinity;
@@ -91,20 +88,17 @@ export class SummaryService {
     private readonly sources: SummarySources,
     options: SummaryServiceOptions = {},
   ) {
-    this.env = options.env ?? process.env;
-    this.createModel = options.createModel ?? createChatModel;
     this.now = options.now ?? Date.now;
     const warn = options.warn ?? ((message: string) => console.warn(`specquer: ${message}`));
-    this.config = new AgentConfigFiles(root, warn);
+    this.runtime = options.runtime ?? new ModelRuntime(root, options);
     this.cache = new SummaryCache(root, this.now, warn);
-    this.queue = new CallQueue(() => this.concurrency);
     this.prefill = new Prefill(
       {
         ready: async () => {
           const { config, model } = await this.current();
           return config.summaries.prefill && model.ok ? model.key : undefined;
         },
-        slots: () => Math.max(1, this.concurrency - 1),
+        slots: () => Math.max(1, this.runtime.concurrency - 1),
         files: () => sources.files.listMarkdownFiles(),
         stamp: async (path) => {
           const stamp = await sources.files.fileStamp(path);
@@ -144,12 +138,7 @@ export class SummaryService {
   }
 
   private async current(): Promise<{ config: AgentConfig; model: ResolvedModel }> {
-    const config = await this.config.load();
-    this.concurrency = config.summaries.concurrency;
-    const key = config.model === undefined ? undefined : this.env[config.model.apiKeyEnv];
-    const signature = JSON.stringify([config.model, key]);
-    if (this.resolved?.signature !== signature) this.resolved = { signature, model: this.createModel(config.model, this.env) };
-    const model = this.resolved.model;
+    const { config, model } = await this.runtime.current();
     // Switched on or off, or another model: pre-filling starts again
     const prefillSignature = config.summaries.prefill && model.ok ? model.key : "";
     if (this.prefillSignature !== null && this.prefillSignature !== prefillSignature) this.prefill.restart();
@@ -206,7 +195,7 @@ export class SummaryService {
       summarizePart: (part) => this.summarizeInput(part, model, tokenBudget, signal, priority),
       call: (callInput) => {
         const callKey = textKey(callInput.text, callInput.sentences);
-        return this.queue.run(
+        return this.runtime.queue.run(
           `${model.key}\n${callKey}`,
           async () => {
             const summary = await summarizeSection(model.model, callInput);
@@ -225,13 +214,12 @@ export class SummaryService {
 
   /** Whether an environment variable is set (for the settings dialog; never its value). */
   keySet(name: string): boolean {
-    const value = this.env[name];
-    return value !== undefined && value.trim() !== "";
+    return this.runtime.keySet(name);
   }
 
   /** Reads the agent configuration again on the next call, after Specquer wrote it. */
   configChanged(): void {
-    this.config.invalidate();
+    this.runtime.configChanged();
   }
 
   /** One small call to check a model configuration; a test running already is aborted. */
@@ -242,7 +230,7 @@ export class SummaryService {
     const abort = () => controller.abort();
     signal.addEventListener("abort", abort);
     try {
-      return await testModel(config, this.env, controller.signal, this.createModel);
+      return await testModel(config, this.runtime.env, controller.signal, this.runtime.createModel);
     } catch (err) {
       // Replaced by a newer test, not dropped by the client: the answer still reaches it
       if (controller.signal.aborted && !signal.aborted) return { ok: false, problem: "Stopped: another test started." };

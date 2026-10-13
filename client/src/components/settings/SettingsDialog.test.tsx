@@ -7,11 +7,14 @@ import { buildUpdates, emptyModelDraft, emptySummaryDraft } from "./settings-for
 
 const MODEL = { provider: "nvidia" as const, name: "google/gemma-4-31b-it", baseUrl: "https://integrate.api.nvidia.com/v1", apiKeyEnv: "NVIDIA_API_KEY" };
 
+const CHAT_DEFAULTS = { units: 8, contextTokens: 12_000, historyTurns: 10, historyTokens: 8_000 };
+const CHAT_SOURCES = { units: "default", contextTokens: "default", historyTurns: "default", historyTokens: "default" } as const;
+
 const SETTINGS: AgentSettings = {
-  shared: { version: "v-shared", model: MODEL, summaries: { concurrency: 2 }, warnings: [] },
-  personal: { version: "v-personal", summaries: { concurrency: 4 }, warnings: [] },
-  effective: { model: MODEL, summaries: { concurrency: 4, tokenBudget: 24_000, prefill: false } },
-  sources: { model: "shared", summaries: { concurrency: "personal", tokenBudget: "default", prefill: "default" } },
+  shared: { version: "v-shared", model: MODEL, summaries: { concurrency: 2 }, chat: {}, warnings: [] },
+  personal: { version: "v-personal", summaries: { concurrency: 4 }, chat: {}, warnings: [] },
+  effective: { model: MODEL, summaries: { concurrency: 4, tokenBudget: 24_000, prefill: false }, chat: CHAT_DEFAULTS },
+  sources: { model: "shared", summaries: { concurrency: "personal", tokenBudget: "default", prefill: "default" }, chat: CHAT_SOURCES },
   keys: { NVIDIA_API_KEY: true },
   status: { enabled: true, model: "google/gemma-4-31b-it" },
 };

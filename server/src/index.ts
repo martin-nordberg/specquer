@@ -75,7 +75,7 @@ if (processState.specquerLock === undefined) {
 
 const development = process.env.NODE_ENV !== "production";
 let port = 0;
-const { app, sections, summaries } = createApp({
+const { app, sections, summaries, chat } = createApp({
   root,
   token,
   development,
@@ -113,6 +113,8 @@ sections.scan().catch((err) => console.error(err));
 // pre-filling if it is switched on
 summaries.purge().catch((err) => console.error(err));
 summaries.filesChanged();
+// Build the chat's search index in the background, so the first question rarely waits for it
+chat.startIndexing();
 
 const url = `http://${LOOPBACK_HOST}:${port}/?token=${token}`;
 console.log(`Specquer is serving ${root}\nOpen ${url}`);

@@ -2,6 +2,9 @@ import { z } from "zod";
 import { entryNameSchema, entryPathSchema, markdownPathSchema, workspacePathSchema } from "../paths/paths.ts";
 import { SECTION_ID_PATTERN } from "../sections/ids.ts";
 import {
+  type ChatConfig,
+  type ChatSettingKey,
+  chatSettingSchemas,
   type FolderSetting,
   type FolderType,
   type ModelConfig,
@@ -255,6 +258,8 @@ export interface AgentConfigFileSettings {
   model?: ModelConfig;
   /** The summaries settings it sets (the valid ones). */
   summaries: Partial<SummariesConfig>;
+  /** The chat settings it sets (the valid ones). */
+  chat: Partial<ChatConfig>;
   /** Values in the file ignored as invalid. */
   warnings: string[];
   /** Set when the file isn't valid YAML: it can't be saved until it is fixed by hand. */
@@ -265,8 +270,8 @@ export interface AgentConfigFileSettings {
 export interface AgentSettings {
   shared: AgentConfigFileSettings;
   personal: AgentConfigFileSettings;
-  effective: { model?: ModelConfig; summaries: SummariesConfig };
-  sources: { model: SettingSource; summaries: Record<SummarySettingKey, SettingSource> };
+  effective: { model?: ModelConfig; summaries: SummariesConfig; chat: ChatConfig };
+  sources: { model: SettingSource; summaries: Record<SummarySettingKey, SettingSource>; chat: Record<ChatSettingKey, SettingSource> };
   /** Whether the environment variable each file names in `apiKeyEnv` is set (never its value). */
   keys: Record<string, boolean>;
   status: SummaryStatus;
@@ -287,8 +292,17 @@ export const agentSettingsUpdateSchema = z.object({
       prefill: summarySettingSchemas.prefill.nullable().optional(),
     })
     .default({}),
+  chat: z
+    .object({
+      units: chatSettingSchemas.units.nullable().optional(),
+      contextTokens: chatSettingSchemas.contextTokens.nullable().optional(),
+      historyTurns: chatSettingSchemas.historyTurns.nullable().optional(),
+      historyTokens: chatSettingSchemas.historyTokens.nullable().optional(),
+    })
+    .default({}),
 });
-export type AgentSettingsUpdate = z.infer<typeof agentSettingsUpdateSchema>;
+/** What a caller sends: the blocks may be left out. */
+export type AgentSettingsUpdate = z.input<typeof agentSettingsUpdateSchema>;
 
 /** A settings save's outcome: the new version, a conflict (changed on disk), or a file that isn't valid YAML. */
 export type SettingsSaveResult =

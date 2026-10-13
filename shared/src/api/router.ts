@@ -1,7 +1,9 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
+import { streamSSE } from "hono/streaming";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { ZodType } from "zod";
+import { type ChatEvent, type ChatRequest, type ChatTurn, chatRequestSchema, chatRestoreSchema } from "../chat/chat.ts";
 import type { BodyEdit } from "../markdown/sections.ts";
 import type { FolderSetting, FolderType, ModelConfig } from "../settings/settings.ts";
 import { type UiState, type UiStatePatch, uiStatePatchSchema } from "../uistate/uistate.ts";
@@ -111,7 +113,20 @@ export interface ApiHandlers {
   testModel(config: ModelConfig, signal: AbortSignal): Promise<ModelTestResult>;
   folderSettings(path: string): Promise<FolderSettings>;
   saveFolderSettings(path: string, setting: FolderSetting, baseVersion: string): Promise<FolderSettingsSaveResult>;
+  /**
+   * Answers a question as a stream of events (Step 010). Throws `ApiError` (e.g. `503` without a
+   * model) before the stream starts; later failures are `error` events. `signal` stops the answer.
+   */
+  chat(request: ChatRequest, signal: AbortSignal): Promise<AsyncIterable<ChatEvent>>;
+  chatHistory(): Promise<ChatTurn[]>;
+  /** Clears the conversation; returns the turns cleared, for Undo. */
+  clearChatHistory(): Promise<ChatTurn[]>;
+  /** Puts cleared turns back in front of any added since; returns the conversation. */
+  restoreChatHistory(turns: ChatTurn[]): Promise<ChatTurn[]>;
 }
+
+/** While an answer's stream is quiet, a comment goes out this often, so nothing in between takes it for dead. */
+export const CHAT_KEEP_ALIVE = 15_000;
 
 /** A failed settings save as a response: a conflict, or a file that isn't valid YAML. */
 function settingsFailure(result: Extract<SettingsSaveResult, { ok: false }>) {
@@ -255,6 +270,27 @@ export function createApiRouter(handlers: ApiHandlers) {
         return c.json(failure.body, failure.status);
       }
       return c.json({ version: result.version, sectioned: result.sectioned }, 200);
+    })
+    .post("/chat", validate("json", chatRequestSchema), async (c) => {
+      const signal = c.req.raw.signal;
+      const events = await handlers.chat(c.req.valid("json"), signal);
+      // The one streaming route: server-sent events, each a JSON `ChatEvent` named by its type
+      return streamSSE(c, async (stream) => {
+        const keepAlive = setInterval(() => void stream.write(": keep-alive\n\n").catch(() => undefined), CHAT_KEEP_ALIVE);
+        try {
+          // After a stop the handler still runs to its end (it keeps the stopped answer); nothing more is sent
+          for await (const event of events) {
+            if (!signal.aborted && !stream.aborted) await stream.writeSSE({ event: event.type, data: JSON.stringify(event) });
+          }
+        } finally {
+          clearInterval(keepAlive);
+        }
+      });
+    })
+    .get("/chat/history", async (c) => c.json({ turns: await handlers.chatHistory() }))
+    .delete("/chat/history", async (c) => c.json({ turns: await handlers.clearChatHistory() }))
+    .put("/chat/history", validate("json", chatRestoreSchema), async (c) => {
+      return c.json({ turns: await handlers.restoreChatHistory(c.req.valid("json").turns) });
     });
 }
 

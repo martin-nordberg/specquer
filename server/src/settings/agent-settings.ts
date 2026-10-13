@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { type AgentConfigFile, mergeAgentConfig, parseAgentConfig } from "@specquer/agent";
 import type { AgentConfigFileSettings, AgentSettings, AgentSettingsUpdate, SettingsSaveResult, SummaryStatus } from "@specquer/shared/api";
-import { NVIDIA_BASE_URL, SUMMARY_SETTING_KEYS, type SettingsScope, type SettingSource } from "@specquer/shared/settings";
+import { CHAT_SETTING_KEYS, NVIDIA_BASE_URL, SUMMARY_SETTING_KEYS, type SettingsScope, type SettingSource } from "@specquer/shared/settings";
 import { type Document, isMap } from "yaml";
 import { SHARED_AGENT_CONFIG, USER_AGENT_CONFIG } from "../summaries/config.ts";
 import { ensureUserFolder } from "../user-folder.ts";
@@ -13,7 +13,7 @@ import { type WriteQueue, YamlFile, type YamlFileContent } from "./yaml-file.ts"
  */
 
 const SHARED_HEADER =
-  " The model for agent features (summaries in the preview). The API key is never written here:\n" +
+  " The model for agent features (summaries in the preview, the chat). The API key is never written here:\n" +
   " apiKeyEnv names the environment variable that holds it. A personal .specquer/user/agent.config.yaml\n" +
   " overrides this file.";
 const PERSONAL_HEADER = " Personal agent settings; they override .specquer/shared/agent.config.yaml. Not committed.";
@@ -37,13 +37,14 @@ export class AgentSettingsFiles {
   }
 
   private static view(content: YamlFileContent, path: string): AgentConfigFileSettings & { parsed: AgentConfigFile } {
-    if (content.error !== undefined) return { version: content.version, summaries: {}, warnings: [], error: content.error, parsed: { summaries: {} } };
+    if (content.error !== undefined) return { version: content.version, summaries: {}, chat: {}, warnings: [], error: content.error, parsed: { summaries: {} } };
     const warnings: string[] = [];
     const parsed = parseAgentConfig(content.doc.toJS(), path, (message) => warnings.push(message));
     return {
       version: content.version,
       ...(parsed.model === undefined ? {} : { model: parsed.model }),
       summaries: parsed.summaries,
+      chat: parsed.chat ?? {},
       warnings,
       parsed,
     };
@@ -58,13 +59,16 @@ export class AgentSettingsFiles {
     const summaries = Object.fromEntries(
       SUMMARY_SETTING_KEYS.map((key) => [key, source(personal.summaries[key] !== undefined, shared.summaries[key] !== undefined)]),
     ) as AgentSettings["sources"]["summaries"];
+    const chat = Object.fromEntries(
+      CHAT_SETTING_KEYS.map((key) => [key, source(personal.chat?.[key] !== undefined, shared.chat?.[key] !== undefined)]),
+    ) as AgentSettings["sources"]["chat"];
     const keys: Record<string, boolean> = {};
     for (const model of [shared.model, personal.model]) if (model !== undefined) keys[model.apiKeyEnv] = environment.keySet(model.apiKeyEnv);
     return {
       shared: sharedView,
       personal: personalView,
       effective,
-      sources: { model: source(personal.model !== undefined, shared.model !== undefined), summaries },
+      sources: { model: source(personal.model !== undefined, shared.model !== undefined), summaries, chat },
       keys,
       status: await environment.status(),
     };
@@ -78,7 +82,8 @@ export class AgentSettingsFiles {
         if (doc.contents !== null) doc.delete("model");
       }
       else if (update.model !== undefined) {
-        const model = update.model;
+        // The schema fills in the default URL; the update's type is what callers send
+        const model = { ...update.model, baseUrl: update.model.baseUrl ?? NVIDIA_BASE_URL };
         if (!isMap(doc.get("model"))) doc.set("model", doc.createNode({}));
         for (const key of MODEL_KEYS) {
           // The default URL isn't written into a file that leaves it out
@@ -86,21 +91,27 @@ export class AgentSettingsFiles {
           setIfChanged(doc, ["model", key], model[key]);
         }
       }
-      for (const key of SUMMARY_SETTING_KEYS) {
-        const value = update.summaries[key];
-        if (value === undefined) continue;
-        if (value === null) {
-          if (isMap(doc.get("summaries"))) doc.deleteIn(["summaries", key]);
-        }
-        else {
-          if (!isMap(doc.get("summaries"))) doc.set("summaries", doc.createNode({}));
-          setIfChanged(doc, ["summaries", key], value);
-        }
-      }
-      const summaries = doc.get("summaries");
-      if (isMap(summaries) && summaries.items.length === 0) doc.delete("summaries");
+      writeBlock(doc, "summaries", SUMMARY_SETTING_KEYS, update.summaries ?? {});
+      writeBlock(doc, "chat", CHAT_SETTING_KEYS, update.chat ?? {});
     });
   }
+}
+
+/** Writes a settings block's values (`null` removes one), and removes the block when it is left empty. */
+function writeBlock<K extends string>(doc: Document, block: string, keys: readonly K[], values: Partial<Record<K, string | number | boolean | null | undefined>>): void {
+  for (const key of keys) {
+    const value = values[key];
+    if (value === undefined) continue;
+    if (value === null) {
+      if (isMap(doc.get(block))) doc.deleteIn([block, key]);
+    }
+    else {
+      if (!isMap(doc.get(block))) doc.set(block, doc.createNode({}));
+      setIfChanged(doc, [block, key], value);
+    }
+  }
+  const map = doc.get(block);
+  if (isMap(map) && map.items.length === 0) doc.delete(block);
 }
 
 /** Sets a value only when it differs, so an unchanged value keeps its quoting and comments. */

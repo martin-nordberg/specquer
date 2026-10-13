@@ -138,3 +138,53 @@ test("an interactive request joining a waiting background call promotes it", asy
   busy.resolve("zero");
   expect(await Promise.all([running, waiting, other])).toEqual(["zero", "one", "two"]);
 });
+
+test("an abortable call is stopped when its last request is aborted, even once started (Step 010)", async () => {
+  const queue = new CallQueue(() => 1);
+  let taskSignal: AbortSignal | undefined;
+  const controller = new AbortController();
+  const result = queue.run(
+    "chat:1",
+    (signal) => {
+      taskSignal = signal;
+      return new Promise<string>((_, reject) => signal.addEventListener("abort", () => reject(signal.reason)));
+    },
+    controller.signal,
+    "interactive",
+    { abortable: true },
+  );
+  await Bun.sleep(0);
+  expect(taskSignal?.aborted).toBe(false);
+  controller.abort();
+  await expect(result).rejects.toBeDefined();
+  expect(taskSignal?.aborted).toBe(true);
+  // Its slot is free again
+  expect(await queue.run("k", async () => "next")).toBe("next");
+});
+
+test("a started call that isn't abortable runs to the end when its request is aborted", async () => {
+  const queue = new CallQueue(() => 1);
+  const gate = deferred<string>();
+  let taskSignal: AbortSignal | undefined;
+  const controller = new AbortController();
+  const result = queue.run(
+    "summary",
+    (signal) => {
+      taskSignal = signal;
+      return gate.promise;
+    },
+    controller.signal,
+  );
+  await Bun.sleep(0);
+  controller.abort();
+  await expect(result).rejects.toBeDefined();
+  expect(taskSignal?.aborted).toBe(false);
+  gate.resolve("done");
+});
+
+test("calls with unique keys are never shared", async () => {
+  const queue = new CallQueue(() => 2);
+  let calls = 0;
+  const run = (key: string) => queue.run(key, async () => ++calls, undefined, "interactive", { abortable: true });
+  expect(await Promise.all([run("chat:a"), run("chat:b")])).toEqual([1, 2]);
+});

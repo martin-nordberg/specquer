@@ -177,5 +177,5 @@ export function buildUpdates(
 
 /** Whether a save switches pre-filling on in the shared file, which needs the user's confirmation. */
 export function enablesSharedPrefill(settings: AgentSettings, updates: readonly AgentSettingsUpdate[]): boolean {
-  return updates.some((update) => update.scope === "shared" && update.summaries.prefill === true && settings.shared.summaries.prefill !== true);
+  return updates.some((update) => update.scope === "shared" && update.summaries?.prefill === true && settings.shared.summaries.prefill !== true);
 }
