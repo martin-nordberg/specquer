@@ -113,6 +113,14 @@ export default defineConfig({
                       {text: 'Implementation Plan', link: '/work-items/step-009-single-instance/implementation-plan'},
                       {text: 'Nested Specquer Folders', link: '/work-items/step-009-single-instance/nested-specquer'},
                     ]
+                  },
+                  {
+                    text: '010-Document Chat',
+                    collapsed: false,
+                    items: [
+                      {text: 'Requirements', link: '/work-items/step-010-document-chat/requirements'},
+                      {text: 'Implementation Plan', link: '/work-items/step-010-document-chat/implementation-plan'},
+                    ]
                   }
                 ]
               }
@@ -126,7 +134,7 @@ export default defineConfig({
                         {text: 'Database Choice', link: '/notes/database-choice'},
                         {text: 'Traceability Links', link: '/notes/traceability-links'},
                         {text: 'Agent-Delegated Summaries', link: '/notes/agent-delegated-summaries'},
-                        {text: 'LangChain or AI SDK', link: '/notes/langchain-vs-ai-sdk'},
+                        {text: 'LangChain or AI SDK (historical)', link: '/notes/langchain-vs-ai-sdk'},
                         {text: 'Specification Gaps', link: '/notes/specification-gaps'},
                         {text: 'Server Restart Options', link: '/notes/server-restart-options'},
                     ]

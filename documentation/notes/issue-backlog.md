@@ -12,4 +12,4 @@
 <a id="NOTE-00052" data-uid="nwnr301tg98g"></a>
 # TBD Issues
 
-* Switch back for Vercel AI SDK?
+* ~~Switch back for Vercel AI SDK?~~ Decided October 2026: keep LangChain.js ([historical note](/notes/langchain-vs-ai-sdk)).

@@ -1,5 +1,5 @@
 # Specquer's sections for one prefix, by unique ID; written by Specquer. Commit this file.
-lastSequence: 363
+lastSequence: 366
 sections:
   n8w0w4eq2ka6: { id: WORK-00001, documentId: n8w0w4eq2ka6 }
   o2v741k9khzq: { id: WORK-00002, documentId: n8w0w4eq2ka6 }
@@ -360,6 +360,9 @@ sections:
   sjo1fwvrgbp0: { id: WORK-00361, documentId: k3np6ol3g681 }
   ai2qk6ralt5p: { id: WORK-00362, documentId: k3np6ol3g681 }
   t2slxlx5kyr4: { id: WORK-00363, documentId: k3np6ol3g681 }
+  w00u7idpeqwz: { id: WORK-00364, documentId: w00u7idpeqwz }
+  u3i96vw4bknz: { id: WORK-00365, documentId: w00u7idpeqwz }
+  fc73z29tac8c: { id: WORK-00366, documentId: w00u7idpeqwz }
 retired:
   xr6chk1oivmk: { id: WORK-00230 }
   cf99s3al8ng9: { id: WORK-00232 }

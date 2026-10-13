@@ -5,6 +5,8 @@
 
 _Notes from October 2026._
 
+> **Historical.** Decided in October 2026: Specquer keeps LangChain.js. [Step 010](/work-items/step-010-document-chat/requirements), the document chat, builds on it. This note is kept for the reasoning behind the choice.
+
 **Summary:** Switching `agent` from LangChain.js to the Vercel AI SDK would be cheap today, because Specquer uses very little of LangChain. It would bring a lighter executable, a simpler API, a clean OpenAI-compatible provider for NVIDIA and one fewer telemetry hazard. It would cost LangGraph: durable, stateful, multi-step workflows with checkpoints and approvals. The choice depends on the agent features planned next, not on the summaries as they are.
 
 <a id="NOTE-00055" data-uid="p4lspp3o56j2"></a>
