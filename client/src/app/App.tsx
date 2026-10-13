@@ -1,11 +1,14 @@
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { CreateOptions, SummaryStatus, Tree, TreeFolder, TreeNode } from "@specquer/shared/api";
+import type { Citation } from "@specquer/shared/chat";
 import { isSameOrInside, renamedPath } from "@specquer/shared/paths";
 import {
   type UiState,
   closeFile,
   fileUiState,
   openFile,
+  setChatOpen,
+  setChatPaneFraction,
   setFolderExpanded,
   setFrontmatterHeight,
   setSummaryStop,
@@ -14,6 +17,8 @@ import {
   setViewType,
 } from "@specquer/shared/uistate";
 import { AnchorDialog } from "@/components/AnchorDialog";
+import { ChatPane } from "@/components/chat/ChatPane";
+import { ChatToggle } from "@/components/chat/ChatToggle";
 import { ConflictDialog } from "@/components/ConflictDialog";
 import { ContentView, ViewSwitcher } from "@/components/ContentView";
 import { CreateDialog, type CreateRequest, DeleteDialog, RenameDialog } from "@/components/EntryDialogs";
@@ -26,11 +31,12 @@ import { FolderSettingsDialog } from "@/components/settings/FolderSettingsDialog
 import { SettingsButton } from "@/components/settings/SettingsButton";
 import { SettingsDialog } from "@/components/settings/SettingsDialog";
 import { SectionNotices } from "@/components/SectionNotices";
-import { SplitPane } from "@/components/SplitPane";
+import { PaneLayout } from "@/components/PaneLayout";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import type { Api } from "@/lib/api";
 import { appIconSvg, svgDataUri } from "@/theme/logo";
 import { applyTheme, useSystemTheme } from "@/theme/theme";
+import { ChatStore } from "./chat-store";
 import { AUTOSAVE_INTERVAL, DocumentStore, type SaveStatus } from "./document-store";
 import { SummaryStore } from "./summaries";
 import { UiStateStore } from "./ui-state-store";
@@ -76,6 +82,30 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [folderSettings, setFolderSettings] = useState<TreeFolder | null>(null);
   const [scrollTarget, setScrollTarget] = useState<(ScrollTarget & { path: string }) | undefined>(undefined);
+  // The configured model, for an answer stopped before the server named it
+  const modelRef = useRef<string | undefined>(undefined);
+  const chatStore = useMemo(
+    () =>
+      new ChatStore({
+        api,
+        saveOpenFile: () => docStore.save(),
+        // Resolves once the conflict dialog has been answered
+        conflictSettled: () =>
+          new Promise<void>((resolve) => {
+            if (docStore.get().conflict === null) return resolve();
+            const unsubscribe = docStore.subscribe(() => {
+              if (docStore.get().conflict !== null) return;
+              unsubscribe();
+              resolve();
+            });
+          }),
+        openFile: () => docStore.get().document?.path,
+        model: () => modelRef.current,
+      }),
+    [api, docStore],
+  );
+  const chat = useSyncExternalStore(chatStore.subscribe, chatStore.get);
+  useEffect(() => () => chatStore.close(), [chatStore]);
   const [openError, setOpenError] = useState<string | null>(null);
 
   const systemTheme = useSystemTheme();
@@ -96,6 +126,17 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
     [api],
   );
   useEffect(() => {
+    modelRef.current = summaryStatus?.enabled === true ? summaryStatus.model : undefined;
+  }, [summaryStatus]);
+  // The conversation: loaded when the pane opens, and again when the tab gets focus
+  useEffect(() => {
+    if (!ui.chatOpen) return;
+    void chatStore.load();
+    const onFocus = () => void chatStore.load();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [ui.chatOpen, chatStore]);
+  useEffect(() => {
     loadSummaryStatus();
     window.addEventListener("focus", loadSummaryStatus);
     return () => window.removeEventListener("focus", loadSummaryStatus);
@@ -103,11 +144,12 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
 
   /**
    * Saves the current file, then opens another. Stays put if the save didn't succeed. With a
-   * section ID, the preview then scrolls to that section.
+   * section ID (or a heading's outline path), the preview then scrolls to that section.
    */
   const open = useCallback(
-    async (path: string, sectionId?: string) => {
-      if (sectionId !== undefined) setScrollTarget({ path, sectionId, request: Date.now() });
+    async (path: string, place?: string | { outlinePath: string }) => {
+      if (typeof place === "string") setScrollTarget({ path, sectionId: place, request: Date.now() });
+      else if (place !== undefined) setScrollTarget({ path, outlinePath: place.outlinePath, request: Date.now() });
       if (docStore.get().document?.path === path) return;
       const saved = await docStore.save();
       if (saved === "conflict" || saved === "error") return;
@@ -215,6 +257,44 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
   const fileState = document_ === null ? null : fileUiState(ui, document_.path);
   const expanded = useMemo(() => new Set(ui.expandedFolders), [ui.expandedFolders]);
   const openFromUi = useCallback((path: string, sectionId?: string) => void open(path, sectionId), [open]);
+
+  // Citations (Step 010, R5): a citation without a section ID is gone when its file is
+  const treeFiles = useMemo(() => {
+    const files = new Set<string>();
+    const walk = (folder: TreeFolder) => {
+      for (const child of folder.children) {
+        if (child.kind === "file") files.add(child.path);
+        else walk(child);
+      }
+    };
+    walk(tree.root);
+    return files;
+  }, [tree]);
+  const isCitationMissing = useCallback((citation: Citation) => citation.sectionId === undefined && !treeFiles.has(citation.path), [treeFiles]);
+
+  /**
+   * Opens a citation in the preview: a section ID is looked up first, so the citation follows a
+   * section moved since the answer; Text and WYSIWYG switch to Preview, which is remembered.
+   */
+  const openCitation = useCallback(
+    async (citation: Citation) => {
+      let path = citation.path;
+      if (citation.sectionId !== undefined) {
+        try {
+          const found = (await api.searchSections(citation.sectionId, { limit: 5 })).find((result) => result.id === citation.sectionId);
+          if (found !== undefined) path = found.path;
+        } catch {
+          // The stored path, then
+        }
+      }
+      const view = fileUiState(uiStore.get(), path).viewType;
+      if (view === "text" || view === "wysiwyg") uiStore.update((state) => setViewType(state, path, "preview"));
+      await open(path, citation.sectionId ?? { outlinePath: citation.outlinePath });
+    },
+    [api, uiStore, open],
+  );
+  const chatDisabled =
+    summaryStatus?.enabled === false ? { hint: "The chat needs a model: see .specquer/shared/agent.config.yaml", reason: summaryStatus.problem } : null;
   const searchSections = useCallback((query: string, path?: string) => api.searchSections(query, { path }), [api]);
 
   /** The dry run of **Add section anchors**, after saving the open file. */
@@ -414,16 +494,35 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
           Specquer
         </span>
         <span className="flex items-center gap-1">
+          <ChatToggle open={ui.chatOpen} onChange={(next) => uiStore.update((s) => setChatOpen(s, next))} />
           <ThemeToggle theme={theme} onChange={(next) => uiStore.update((s) => setTheme(s, next))} />
           <SettingsButton onClick={() => setSettingsOpen(true)} />
         </span>
       </header>
       <main className="min-h-0 flex-1">
-        <SplitPane
-          fraction={ui.treePaneFraction}
-          onFractionChange={(fraction) => uiStore.update((s) => setTreePaneFraction(s, fraction))}
+        <PaneLayout
+          treeFraction={ui.treePaneFraction}
+          chatFraction={ui.chatPaneFraction}
+          chatOpen={ui.chatOpen}
+          onTreeFractionChange={(fraction) => uiStore.update((s) => setTreePaneFraction(s, fraction))}
+          onChatFractionChange={(fraction) => uiStore.update((s) => setChatPaneFraction(s, fraction))}
           left={left}
-          right={right}
+          center={right}
+          right={
+            <ChatPane
+              state={chat}
+              disabled={chatDisabled}
+              onSend={(question) => void chatStore.send(question)}
+              onStop={() => chatStore.stop()}
+              onRetry={() => void chatStore.retry()}
+              onClear={() => void chatStore.clear()}
+              onUndo={() => void chatStore.undoClear()}
+              onOpenCitation={(citation) => void openCitation(citation)}
+              isMissing={isCitationMissing}
+              onTakeDraft={() => chatStore.takeDraft()}
+              onInput={() => chatStore.dismissUnknownCommand()}
+            />
+          }
         />
       </main>
       <CreateDialog request={creating} onClose={() => setCreating(null)} onCreate={create} loadSettings={api.folderSettings} />

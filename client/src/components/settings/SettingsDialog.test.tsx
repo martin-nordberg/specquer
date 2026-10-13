@@ -65,6 +65,20 @@ describe("SettingsDialog", () => {
     expect(onSaved).toHaveBeenCalled();
   });
 
+  test("the Chat tab shows the chat settings and saves the ones changed, invalid values keeping Save disabled", async () => {
+    const { api } = setup();
+    await waitFor(() => expect(field("Model ID").value).not.toBe(""));
+    openTab("Chat");
+    expect(field("Sections per question").value).toBe("8");
+    expect(field("Earlier questions sent").value).toBe("10");
+    fireEvent.change(field("Sections per question"), { target: { value: "50" } });
+    expect(dialog().textContent).toContain("Enter a whole number from 1 to 20.");
+    expect(button("Save").disabled).toBe(true);
+    fireEvent.change(field("Sections per question"), { target: { value: "5" } });
+    button("Save").click();
+    await waitFor(() => expect(api.saveAgentSettings).toHaveBeenCalledWith({ scope: "personal", baseVersion: "v-personal", summaries: {}, chat: { units: 5 } }));
+  });
+
   test("Reset removes a personal value", async () => {
     const { api } = setup();
     await waitFor(() => expect(field("Model ID").value).not.toBe(""));

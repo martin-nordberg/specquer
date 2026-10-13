@@ -20,6 +20,7 @@ import type {
   SummaryStatus,
   Tree,
 } from "@specquer/shared/api";
+import { type ChatEvent, type ChatRequest, type ChatTurn, chatEventSchema } from "@specquer/shared/chat";
 import type { BodyEdit } from "@specquer/shared/markdown";
 import type { FolderSetting, ModelConfig } from "@specquer/shared/settings";
 import type { UiState, UiStatePatch } from "@specquer/shared/uistate";
@@ -117,6 +118,50 @@ export interface Api {
   testModel(config: ModelConfig, signal?: AbortSignal): Promise<ModelTestResult>;
   folderSettings(path: string): Promise<FolderSettings>;
   saveFolderSettings(path: string, setting: FolderSetting, baseVersion: string): Promise<FolderSaveOutcome>;
+  /**
+   * Asks a question; the answer's events stream in (Step 010). Rejects with an `ApiRequestError`
+   * (e.g. `503` without a model) before the stream starts. `signal` stops the answer.
+   */
+  chat(request: ChatRequest, signal?: AbortSignal): Promise<AsyncIterable<ChatEvent>>;
+  chatHistory(): Promise<ChatTurn[]>;
+  /** Clears the conversation; resolves to the turns cleared, for Undo. */
+  clearChatHistory(): Promise<ChatTurn[]>;
+  /** Puts cleared turns back; resolves to the conversation. */
+  restoreChatHistory(turns: ChatTurn[]): Promise<ChatTurn[]>;
+}
+
+/**
+ * Reads a stream of server-sent events into chat events: blocks separated by a blank line,
+ * `data:` lines joined, comments (keep-alives) skipped. Each event is checked with its schema; a
+ * malformed one is an error, never trusted.
+ */
+export async function* readEvents(body: ReadableStream<Uint8Array>, signal?: AbortSignal): AsyncGenerator<ChatEvent> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  const stop = () => void reader.cancel().catch(() => undefined);
+  signal?.addEventListener("abort", stop, { once: true });
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true }).replace(/\r\n?/g, "\n");
+      let end = buffer.indexOf("\n\n");
+      while (end !== -1) {
+        const block = buffer.slice(0, end);
+        buffer = buffer.slice(end + 2);
+        const data = block
+          .split("\n")
+          .filter((line) => line.startsWith("data:"))
+          .map((line) => line.slice(line.startsWith("data: ") ? 6 : 5))
+          .join("\n");
+        if (data !== "") yield chatEventSchema.parse(JSON.parse(data));
+        end = buffer.indexOf("\n\n");
+      }
+    }
+  } finally {
+    signal?.removeEventListener("abort", stop);
+  }
 }
 
 /** A settings save's response: 409 and 422 are outcomes, not errors. */
@@ -228,5 +273,20 @@ export const httpApi: Api = {
   },
   async saveFolderSettings(path, setting, baseVersion) {
     return settingsOutcome<{ version: string; sectioned: boolean }>(await client.api.settings.folder.$put({ json: { path, setting, baseVersion } }));
+  },
+  async chat(request, signal) {
+    const res = await client.api.chat.$post({ json: request }, { init: { signal } });
+    if (!res.ok) throw await failure(res);
+    if (res.body === null) throw new ApiRequestError(res.status, "The answer's stream is missing.");
+    return readEvents(res.body, signal);
+  },
+  async chatHistory() {
+    return (await json<{ turns: ChatTurn[] }>(await client.api.chat.history.$get())).turns;
+  },
+  async clearChatHistory() {
+    return (await json<{ turns: ChatTurn[] }>(await client.api.chat.history.$delete())).turns;
+  },
+  async restoreChatHistory(turns) {
+    return (await json<{ turns: ChatTurn[] }>(await client.api.chat.history.$put({ json: { turns } }))).turns;
   },
 };

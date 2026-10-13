@@ -1,11 +1,15 @@
 import type { AgentSettings, AgentSettingsUpdate } from "@specquer/shared/api";
 import {
+  CHAT_SETTING_KEYS,
+  type ChatSettingKey,
+  DEFAULT_CHAT,
   DEFAULT_SUMMARIES,
   type ModelConfig,
   NVIDIA_BASE_URL,
   type SettingSource,
   type SettingsScope,
   type SummarySettingKey,
+  chatSettingSchemas,
   modelConfigSchema,
   summarySettingSchemas,
 } from "@specquer/shared/settings";
@@ -41,7 +45,15 @@ export interface SummaryDraft {
   reset: ReadonlySet<SummarySettingKey>;
 }
 
+/** The chat tab's edits (Step 010): numbers as typed, and the settings reset to the shared value. */
+export interface ChatDraft {
+  values: Partial<Record<ChatSettingKey, string>>;
+  reset: ReadonlySet<ChatSettingKey>;
+}
+
 export const emptyModelDraft = (): ModelDraft => ({ values: null, reset: false });
+export const emptyChatDraft = (): ChatDraft => ({ values: {}, reset: new Set() });
+export const isChatDirty = (draft: ChatDraft) => Object.keys(draft.values).length > 0 || draft.reset.size > 0;
 export const emptySummaryDraft = (): SummaryDraft => ({ values: {}, reset: new Set() });
 
 export const isModelDirty = (draft: ModelDraft) => draft.values !== null || draft.reset;
@@ -82,6 +94,54 @@ export function shownSummary<K extends SummarySettingKey>(
     source: value === undefined ? "default" : "shared",
     overridden: scope === "shared" && settings.sources.summaries[key] === "personal",
   };
+}
+
+/** A chat setting as a scope shows it, before edits. */
+export function shownChat(settings: AgentSettings, scope: SettingsScope, key: ChatSettingKey, withoutPersonal = false): Shown<number> {
+  if (scope === "personal" && !withoutPersonal) {
+    return { value: settings.effective.chat[key], source: settings.sources.chat[key], overridden: false };
+  }
+  const value = settings.shared.chat[key];
+  return {
+    value: value ?? DEFAULT_CHAT[key],
+    source: value === undefined ? "default" : "shared",
+    overridden: scope === "shared" && settings.sources.chat[key] === "personal",
+  };
+}
+
+export const CHAT_LIMITS: Record<ChatSettingKey, string> = {
+  units: "Enter a whole number from 1 to 20.",
+  contextTokens: "Enter a whole number from 1,000 to 100,000.",
+  historyTurns: "Enter a whole number from 0 to 50.",
+  historyTokens: "Enter a whole number from 0 to 100,000.",
+};
+
+/** A chat number as typed, or `undefined` when it isn't valid for the setting. */
+export function parseChatSetting(key: ChatSettingKey, text: string): number | undefined {
+  const trimmed = text.trim().replace(/[,_\s]/g, "");
+  if (!/^\d+$/.test(trimmed)) return undefined;
+  const value = Number(trimmed);
+  return chatSettingSchemas[key].safeParse(value).success ? value : undefined;
+}
+
+export function chatErrors(draft: ChatDraft): Partial<Record<ChatSettingKey, string>> {
+  const errors: Partial<Record<ChatSettingKey, string>> = {};
+  for (const key of CHAT_SETTING_KEYS) {
+    const text = draft.values[key];
+    if (text !== undefined && parseChatSetting(key, text) === undefined) errors[key] = CHAT_LIMITS[key];
+  }
+  return errors;
+}
+
+/** The chat tab's part of a save, or `undefined` when it has nothing to save. */
+export function chatUpdate(scope: SettingsScope, draft: ChatDraft): AgentSettingsUpdate["chat"] | undefined {
+  const chat: NonNullable<AgentSettingsUpdate["chat"]> = {};
+  if (scope === "personal") for (const key of draft.reset) chat[key] = null;
+  for (const key of CHAT_SETTING_KEYS) {
+    const text = draft.values[key];
+    if (text !== undefined) chat[key] = parseChatSetting(key, text) ?? null;
+  }
+  return Object.keys(chat).length === 0 ? undefined : chat;
 }
 
 function firstIssue(result: { success: boolean; error?: { issues: Array<{ message: string }> } }): string | undefined {
@@ -158,6 +218,8 @@ export function buildUpdates(
   modelDraft: ModelDraft,
   summaryScope: SettingsScope,
   summaryDraft: SummaryDraft,
+  chatScope: SettingsScope = "personal",
+  chatDraft: ChatDraft = emptyChatDraft(),
 ): AgentSettingsUpdate[] {
   const byScope = new Map<SettingsScope, AgentSettingsUpdate>();
   const forScope = (scope: SettingsScope) => {
@@ -172,6 +234,8 @@ export function buildUpdates(
   if (model !== undefined) Object.assign(forScope(modelScope), model);
   const summaries = summaryUpdate(summaryScope, summaryDraft);
   if (summaries !== undefined) forScope(summaryScope).summaries = summaries;
+  const chat = chatUpdate(chatScope, chatDraft);
+  if (chat !== undefined) forScope(chatScope).chat = chat;
   return [...byScope.values()];
 }
 

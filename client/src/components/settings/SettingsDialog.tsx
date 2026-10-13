@@ -1,7 +1,7 @@
 import { RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { AgentSettings, ModelTestResult } from "@specquer/shared/api";
-import { API_KEY_ENV_PATTERN, type SettingSource, type SettingsScope, type SummarySettingKey } from "@specquer/shared/settings";
+import { API_KEY_ENV_PATTERN, CHAT_SETTING_KEYS, type ChatSettingKey, type SettingSource, type SettingsScope, type SummarySettingKey } from "@specquer/shared/settings";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -11,18 +11,23 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Api } from "@/lib/api";
 import {
+  type ChatDraft,
   type ModelDraft,
   type ModelField,
   type ModelValues,
   type SummaryDraft,
   buildUpdates,
+  chatErrors,
+  emptyChatDraft,
   emptyModelDraft,
   emptySummaryDraft,
   enablesSharedPrefill,
+  isChatDirty,
   isModelDirty,
   isSummaryDirty,
   modelConfigOf,
   modelErrors,
+  shownChat,
   shownModel,
   shownSummary,
   summaryErrors,
@@ -36,7 +41,7 @@ export interface SettingsDialogProps {
   onSaved: () => void;
 }
 
-type Tab = "model" | "summarization";
+type Tab = "model" | "summarization" | "chat";
 
 const FILES: Record<SettingsScope, string> = {
   personal: ".specquer/user/agent.config.yaml",
@@ -62,10 +67,11 @@ export function SettingsDialog({ open, onClose, api, onSaved }: SettingsDialogPr
   const [settings, setSettings] = useState<AgentSettings | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("model");
-  const [scopes, setScopes] = useState<Record<Tab, SettingsScope>>({ model: "personal", summarization: "personal" });
+  const [scopes, setScopes] = useState<Record<Tab, SettingsScope>>({ model: "personal", summarization: "personal", chat: "personal" });
   const [pendingScope, setPendingScope] = useState<{ tab: Tab; scope: SettingsScope } | null>(null);
   const [modelDraft, setModelDraft] = useState<ModelDraft>(emptyModelDraft);
   const [summaryDraft, setSummaryDraft] = useState<SummaryDraft>(emptySummaryDraft);
+  const [chatDraft, setChatDraft] = useState<ChatDraft>(emptyChatDraft);
   const [message, setMessage] = useState<{ kind: "error" | "info"; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmingPrefill, setConfirmingPrefill] = useState(false);
@@ -79,19 +85,20 @@ export function SettingsDialog({ open, onClose, api, onSaved }: SettingsDialogPr
     }
     setModelDraft(emptyModelDraft());
     setSummaryDraft(emptySummaryDraft());
+    setChatDraft(emptyChatDraft());
   }, [api]);
 
   useEffect(() => {
     if (!open) return;
     setSettings(null);
     setTab("model");
-    setScopes({ model: "personal", summarization: "personal" });
+    setScopes({ model: "personal", summarization: "personal", chat: "personal" });
     setPendingScope(null);
     setMessage(null);
     void load();
   }, [open, load]);
 
-  const dirty: Record<Tab, boolean> = { model: isModelDirty(modelDraft), summarization: isSummaryDirty(summaryDraft) };
+  const dirty: Record<Tab, boolean> = { model: isModelDirty(modelDraft), summarization: isSummaryDirty(summaryDraft), chat: isChatDirty(chatDraft) };
 
   const changeScope = (which: Tab, scope: SettingsScope) => {
     if (scope === scopes[which]) return;
@@ -102,6 +109,7 @@ export function SettingsDialog({ open, onClose, api, onSaved }: SettingsDialogPr
   const discardAndSwitch = () => {
     if (pendingScope === null) return;
     if (pendingScope.tab === "model") setModelDraft(emptyModelDraft());
+    else if (pendingScope.tab === "chat") setChatDraft(emptyChatDraft());
     else setSummaryDraft(emptySummaryDraft());
     setScopes((current) => ({ ...current, [pendingScope.tab]: pendingScope.scope }));
     setPendingScope(null);
@@ -109,8 +117,10 @@ export function SettingsDialog({ open, onClose, api, onSaved }: SettingsDialogPr
 
   const modelValues = settings === null ? null : modelDraft.values ?? shownModel(settings, scopes.model, modelDraft.reset).value;
   const invalid =
-    (modelDraft.values !== null && Object.keys(modelErrors(modelDraft.values)).length > 0) || Object.keys(summaryErrors(summaryDraft)).length > 0;
-  const updates = settings === null ? [] : buildUpdates(settings, scopes.model, modelDraft, scopes.summarization, summaryDraft);
+    (modelDraft.values !== null && Object.keys(modelErrors(modelDraft.values)).length > 0) ||
+    Object.keys(summaryErrors(summaryDraft)).length > 0 ||
+    Object.keys(chatErrors(chatDraft)).length > 0;
+  const updates = settings === null ? [] : buildUpdates(settings, scopes.model, modelDraft, scopes.summarization, summaryDraft, scopes.chat, chatDraft);
   const brokenTarget = settings === null ? undefined : updates.map((update) => settings[update.scope].error).find((error) => error !== undefined);
 
   const save = async (confirmed: boolean) => {
@@ -150,7 +160,7 @@ export function SettingsDialog({ open, onClose, api, onSaved }: SettingsDialogPr
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
-          <DialogDescription>The model and summarization settings. Changes take effect without a restart.</DialogDescription>
+          <DialogDescription>The model, summarization and chat settings. Changes take effect without a restart.</DialogDescription>
         </DialogHeader>
         {loadError !== null && (
           <p role="alert" className="text-sm text-error-text">
@@ -162,8 +172,9 @@ export function SettingsDialog({ open, onClose, api, onSaved }: SettingsDialogPr
             <TabsList>
               <TabsTrigger value="model">Model</TabsTrigger>
               <TabsTrigger value="summarization">Summarization</TabsTrigger>
+              <TabsTrigger value="chat">Chat</TabsTrigger>
             </TabsList>
-            {(["model", "summarization"] as const).map((which) => (
+            {(["model", "summarization", "chat"] as const).map((which) => (
               <TabsContent key={which} value={which} className="grid gap-4">
                 <ScopeSwitch scope={scopes[which]} onChange={(scope) => changeScope(which, scope)} />
                 {pendingScope?.tab === which && (
@@ -187,6 +198,8 @@ export function SettingsDialog({ open, onClose, api, onSaved }: SettingsDialogPr
                     values={modelValues}
                     onChange={setModelDraft}
                   />
+                ) : which === "chat" ? (
+                  <ChatTab settings={settings} scope={scopes.chat} draft={chatDraft} onChange={setChatDraft} />
                 ) : (
                   <SummarizationTab settings={settings} scope={scopes.summarization} draft={summaryDraft} onChange={setSummaryDraft} />
                 )}
@@ -470,7 +483,7 @@ function ModelTab({
 }
 
 const NUMBER_FIELDS: Array<{ key: "concurrency" | "tokenBudget"; label: string; help: string }> = [
-  { key: "concurrency", label: "Concurrent model calls", help: "How many model calls run at once (1 to 16)." },
+  { key: "concurrency", label: "Concurrent model calls", help: "How many model calls run at once, for summaries and the chat together (1 to 16)." },
   {
     key: "tokenBudget",
     label: "Token budget",
@@ -544,6 +557,66 @@ function SummarizationTab({
           </p>
         )}
       </div>
+    </div>
+  );
+}
+
+const CHAT_FIELDS: Record<ChatSettingKey, { label: string; help: string }> = {
+  units: { label: "Sections per question", help: "How many of the best-matching sections are sent with a question (1 to 20)." },
+  contextTokens: { label: "Sections' token budget", help: "At most this many tokens of those sections; longer ones are cut (1,000 to 100,000)." },
+  historyTurns: { label: "Earlier questions sent", help: "How many earlier questions and answers are sent with a new question (0 to 50)." },
+  historyTokens: { label: "Earlier questions' token budget", help: "At most this many tokens of them, newest first (0 to 100,000)." },
+};
+
+function ChatTab({
+  settings,
+  scope,
+  draft,
+  onChange,
+}: {
+  settings: AgentSettings;
+  scope: SettingsScope;
+  draft: ChatDraft;
+  onChange: (draft: ChatDraft) => void;
+}) {
+  const id = useId();
+  const errors = chatErrors(draft);
+  const shown = (key: ChatSettingKey) => shownChat(settings, scope, key, draft.reset.has(key));
+  const sourceOf = (key: ChatSettingKey) => (draft.values[key] !== undefined ? scope : shown(key).source);
+  const canReset = (key: ChatSettingKey) => scope === "personal" && draft.values[key] === undefined && !draft.reset.has(key) && shown(key).source === "personal";
+  const edit = (key: ChatSettingKey, value: string) => {
+    const reset = new Set(draft.reset);
+    reset.delete(key);
+    onChange({ values: { ...draft.values, [key]: value }, reset });
+  };
+  const reset = (key: ChatSettingKey) => onChange({ values: draft.values, reset: new Set([...draft.reset, key]) });
+
+  return (
+    <div className="grid gap-4">
+      {CHAT_SETTING_KEYS.map((key) => {
+        const { label, help } = CHAT_FIELDS[key];
+        return (
+          <div key={key} className="grid gap-1.5">
+            <div className="flex items-center gap-2">
+              <Label htmlFor={`${id}-${key}`}>{label}</Label>
+              <span className="flex-1" />
+              <SourceBadge source={sourceOf(key)} overridden={shown(key).overridden} />
+              {canReset(key) && <ResetButton label={`Reset ${label.toLowerCase()} to the shared setting`} onClick={() => reset(key)} />}
+            </div>
+            <Input
+              id={`${id}-${key}`}
+              inputMode="numeric"
+              value={draft.values[key] ?? String(shown(key).value)}
+              aria-invalid={errors[key] !== undefined}
+              aria-describedby={`${id}-${key}-help`}
+              onChange={(event) => edit(key, event.target.value)}
+            />
+            <p id={`${id}-${key}-help`} className={errors[key] === undefined ? "text-xs text-muted-foreground" : "text-xs text-error-text"}>
+              {errors[key] ?? help}
+            </p>
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -1,5 +1,5 @@
-import { LoaderCircle, Sparkles } from "lucide-react";
 import type { SummaryEntry } from "@/app/summaries";
+import { AiBox, AiWaiting } from "@/components/AiBox";
 import { Button } from "@/components/ui/button";
 
 export interface SectionSummaryProps {
@@ -30,18 +30,11 @@ export function SectionSummary({ entry, outOfDate, onRetry, onShowFullText }: Se
     ...(done !== undefined && !done.current ? ["older model"] : []),
     ...(done?.truncated === true ? ["shortened"] : []),
     ...(outOfDate ? ["out of date"] : []),
-  ].join(" · ");
+  ];
   return (
-    <section aria-label="AI summary" className="my-3 rounded-md border border-dashed bg-muted/40 px-4 py-2" data-testid="section-summary">
-      <div className="mb-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-        <Sparkles className="size-3" aria-hidden />
-        <span title={done === undefined ? undefined : `Made by ${done.model}`}>{label}</span>
-      </div>
+    <AiBox name="AI summary" label={label} title={done === undefined ? undefined : `Made by ${done.model}`} testId="section-summary">
       {loading ? (
-        <p className="flex items-center gap-2 text-muted-foreground italic">
-          <LoaderCircle className="size-4 shrink-0 motion-safe:animate-spin" aria-hidden />
-          Summarizing...
-        </p>
+        <AiWaiting>Summarizing...</AiWaiting>
       ) : entry.state === "error" ? (
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-error-text">Couldn't summarize: {entry.message}</p>
@@ -69,6 +62,6 @@ export function SectionSummary({ entry, outOfDate, onRetry, onShowFullText }: Se
       <button type="button" className="mt-1 text-xs text-muted-foreground underline-offset-2 hover:underline" onClick={onShowFullText}>
         Show full text
       </button>
-    </section>
+    </AiBox>
   );
 }

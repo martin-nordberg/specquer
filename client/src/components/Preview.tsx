@@ -98,11 +98,11 @@ interface ShownSummary {
   outOfDate: boolean;
 }
 
-/** A request to scroll the preview to a section; `request` changes for each new request. */
-export interface ScrollTarget {
-  sectionId: string;
-  request: number;
-}
+/**
+ * A request to scroll the preview to a section, by its section ID or (for a citation of a section
+ * without one) by its heading's outline path; `request` changes for each new request.
+ */
+export type ScrollTarget = { request: number } & ({ sectionId: string } | { outlinePath: string });
 
 export interface PreviewProps {
   markdown: string;
@@ -305,6 +305,18 @@ export function Preview({
   // shows the full text first
   useEffect(() => {
     if (scrollTarget === undefined || scrolled.current === scrollTarget.request || content === null || tree === null) return;
+    if (!("sectionId" in scrollTarget)) {
+      // By outline path: the heading if it is shown; else the full text first; else the top
+      scrolled.current = scrollTarget.request;
+      const property = OUTLINE_PATH_PROPERTY.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+      const heading = scrollTarget.outlinePath === "" ? null : container.current?.querySelector(`[${property}="${scrollTarget.outlinePath}"]`);
+      if (heading !== null && heading !== undefined) heading.scrollIntoView({ block: "start" });
+      else if (scrollTarget.outlinePath !== "" && stop < stopCount - 1) {
+        setOutlineScroll({ path: scrollTarget.outlinePath, request: scrollTarget.request });
+        onStepsChange?.(0);
+      } else container.current?.scrollTo({ top: 0 });
+      return;
+    }
     const id = `${CLOBBER_PREFIX}${scrollTarget.sectionId}`;
     const target = container.current?.querySelector(`[id="${id}"]`);
     if (target === null || target === undefined) {
