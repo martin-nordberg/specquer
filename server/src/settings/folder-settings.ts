@@ -1,70 +1,92 @@
+import { dirname } from "node:path";
 import type { FolderSettings, SettingsSaveResult } from "@specquer/shared/api";
-import type { FolderSetting } from "@specquer/shared/settings";
-import { type Pair, Scalar, isMap, isScalar } from "yaml";
-import { CONFIG_FILE, folderKey, normalizeKey, parsePrefixConfig } from "../sections/config.ts";
+import { FOLDER_CONFIG_FILE, type FolderSetting, isSectionedType } from "@specquer/shared/settings";
+import { type YAMLMap, isMap, isScalar } from "yaml";
+import type { FileService } from "../files.ts";
+import { type FolderEntry, effectiveSettings, folderChain, folderConfigPath, parseFolderConfig } from "../sections/folder-config.ts";
 import { type WriteQueue, YamlFile } from "./yaml-file.ts";
 
 /**
- * Folders' entries in the prefix configuration, as the folder settings dialog reads and writes
- * them. A folder's key is found whatever its spelling (`./documentation/` or `documentation/`);
- * a new key is the folder path with its trailing `/`, or `./` for the root folder.
+ * Folders' `.specquer-config.yaml` files, as the folder settings and new folder dialogs read and
+ * write them. Only `folderType` and `defaultPrefix` are changed, keeping other keys and comments;
+ * a file left with no keys is deleted, and none is created to hold nothing. The file is reached
+ * only through an existing folder inside the root, and never through a symbolic link.
  */
 
-const HEADER = " Section prefixes by folder or file: the longest matching key wins; null leaves files unsectioned.";
+const HEADER = " Specquer's settings for this folder and the folders in it; a folder's own file overrides each key.";
 
-/** The folder a folder key stands for ("" for the root folder). */
-const keyFolder = (key: string) => (key === "" ? "" : key.slice(0, -1));
+const KEYS = ["folderType", "defaultPrefix"] as const;
+
+/** Removes a key from a mapping; a comment above it stays, above the next key. */
+function removeKeepingComment(map: YAMLMap, key: string): void {
+  const index = map.items.findIndex((pair) => isScalar(pair.key) && pair.key.value === key);
+  if (index < 0) return;
+  const [removed] = map.items.splice(index, 1);
+  const comment = isScalar(removed!.key) ? removed!.key.commentBefore : undefined;
+  const next = map.items[index]?.key;
+  if (comment && isScalar(next)) next.commentBefore = next.commentBefore ? `${comment}\n${next.commentBefore}` : comment;
+}
 
 export class FolderSettingsFile {
-  private readonly file: YamlFile;
+  constructor(
+    private readonly files: FileService,
+    private readonly queue: WriteQueue,
+  ) {}
 
-  constructor(root: string, queue: WriteQueue) {
-    this.file = new YamlFile(root, CONFIG_FILE, queue, HEADER);
+  private async file(folder: string): Promise<YamlFile> {
+    const target = await this.files.folderConfigFile(folder);
+    return new YamlFile(dirname(target), FOLDER_CONFIG_FILE, this.queue, HEADER, async () => {}, true, folderConfigPath(folder));
+  }
+
+  /** A folder's own entry, read from disk; `undefined` when it has no file or the file can't be read. */
+  private async entry(folder: string): Promise<FolderEntry | undefined> {
+    try {
+      const content = await (await this.file(folder)).read();
+      return content.exists && content.error === undefined ? parseFolderConfig(content.doc.toString(), folderConfigPath(folder)) : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   async read(folder: string): Promise<FolderSettings> {
-    const content = await this.file.read();
-    const config = parsePrefixConfig(content.error === undefined && content.exists ? content.doc.toString() : "");
-    const entry = config.entryFor(folder);
-    const inherited = config.inheritedFor(folder);
+    const content = await (await this.file(folder)).read();
+    const own = content.exists && content.error === undefined ? parseFolderConfig(content.doc.toString(), folderConfigPath(folder)) : {};
+    const above = new Map<string, FolderEntry | undefined>();
+    for (const current of folderChain(folder).slice(1)) above.set(current, await this.entry(current));
+    const inherited = folder === "" ? effectiveSettings("", () => undefined) : effectiveSettings(folderChain(folder)[1]!, (current) => above.get(current));
     return {
       path: folder,
       version: content.version,
-      own: entry === undefined ? { kind: "inherit" } : entry === null ? { kind: "off" } : { kind: "prefix", prefix: entry },
-      inherited: inherited === undefined ? null : { from: keyFolder(inherited.key), prefix: inherited.prefix },
-      fileKeys: config.fileKeysIn(folder).map(({ key, prefix }) => ({ path: key, prefix })),
+      own: { folderType: own.folderType ?? "inherit", defaultPrefix: own.defaultPrefix ?? "inherit" },
+      inherited,
       ...(content.error === undefined ? {} : { error: content.error }),
     };
   }
 
-  /** Sets, clears or removes the folder's entry, keeping every other entry and comment. */
-  write(folder: string, setting: FolderSetting, baseVersion: string): Promise<SettingsSaveResult> {
-    const key = folderKey(folder);
-    return this.file.edit(baseVersion, (doc) => {
-      if (doc.contents !== null && !isMap(doc.contents)) return `${CONFIG_FILE}: expected a mapping. Fix the file by hand first.`;
-      let prefixes = doc.get("prefixes", true);
-      if (prefixes === undefined || prefixes === null || (isScalar(prefixes) && prefixes.value === null)) {
-        if (setting.kind === "inherit") return;
-        prefixes = doc.createNode({});
-        doc.set("prefixes", prefixes);
+  /** Whether a folder is sectioned with these settings: a sectioned type and a prefix, own or inherited. */
+  static isSectioned(settings: Pick<FolderSettings, "own" | "inherited">): boolean {
+    const type = settings.own.folderType === "inherit" ? settings.inherited.folderType.value : settings.own.folderType;
+    const prefix = settings.own.defaultPrefix === "inherit" ? settings.inherited.defaultPrefix.value : settings.own.defaultPrefix;
+    return isSectionedType(type) && prefix !== null;
+  }
+
+  /** Sets or removes the folder's two keys, keeping every other key and comment. */
+  async write(folder: string, setting: FolderSetting, baseVersion: string): Promise<SettingsSaveResult> {
+    const file = await this.file(folder);
+    return file.edit(baseVersion, (doc) => {
+      if (doc.contents !== null && !isMap(doc.contents)) return `${folderConfigPath(folder)}: expected a mapping. Fix the file by hand first.`;
+      for (const key of KEYS) {
+        const value = setting[key];
+        if (value === "inherit") {
+          if (isMap(doc.contents)) removeKeepingComment(doc.contents, key);
+        } else if (doc.contents === null) doc.contents = doc.createNode({ [key]: value });
+        else {
+          // Changing the scalar in place keeps a comment after it
+          const node = doc.get(key, true);
+          if (isScalar(node)) node.value = value;
+          else doc.set(key, value);
+        }
       }
-      if (!isMap(prefixes)) return `${CONFIG_FILE}: 'prefixes' must be a mapping. Fix the file by hand first.`;
-      const matches = (pair: Pair) => isScalar(pair.key) && normalizeKey(String(pair.key.value)) === key;
-      if (setting.kind === "inherit") {
-        prefixes.items = prefixes.items.filter((pair) => !matches(pair));
-        return;
-      }
-      const value = setting.kind === "off" ? null : setting.prefix;
-      const pair = prefixes.items.find(matches);
-      if (pair !== undefined) {
-        // Changing the scalar in place keeps a comment after it
-        if (isScalar(pair.value)) pair.value.value = value;
-        else pair.value = doc.createNode(value);
-        return;
-      }
-      const newKey = new Scalar(key === "" ? "./" : key);
-      newKey.type = Scalar.QUOTE_DOUBLE;
-      prefixes.items.push(doc.createPair(newKey, value));
     });
   }
 }

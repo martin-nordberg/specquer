@@ -1,10 +1,13 @@
 import { AlertTriangle } from "lucide-react";
-import { type FormEvent, useEffect, useState } from "react";
-import type { DeletePreview, TreeFolder, TreeNode } from "@specquer/shared/api";
+import { type FormEvent, type ReactNode, useEffect, useId, useState } from "react";
+import type { CreateOptions, DeletePreview, FolderSettings, TreeFolder, TreeNode } from "@specquer/shared/api";
 import { MARKDOWN_EXTENSION, checkName } from "@specquer/shared/paths";
+import { isPrefix } from "@specquer/shared/sections";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { FolderFields, type FolderFieldValues, type Inherited, PREFIX_HELP, effectiveSettings, isSectioned, settingFor } from "./settings/FolderFields";
 
 /** Splits a file name into the editable part and its fixed extension. */
 export function splitExtension(node: Pick<TreeNode, "kind" | "name">): { stem: string; extension: string } {
@@ -36,6 +39,10 @@ interface NameDialogProps {
   onClose: () => void;
   /** Performs the action; resolves to an error message to show, or `null` on success. */
   onSubmit: (name: string) => Promise<string | null>;
+  /** More fields, below the name. */
+  children?: ReactNode;
+  /** The other fields hold a problem: the action can't be performed yet. */
+  blocked?: boolean;
 }
 
 /** A modal dialog with a text box for a file or folder name. */
@@ -93,13 +100,14 @@ function NameDialog(props: NameDialogProps) {
               {error}
             </p>
           )}
+          {props.children}
           <DialogFooter>
             <DialogClose asChild>
               <Button type="button" variant="secondary">
                 Cancel
               </Button>
             </DialogClose>
-            <Button type="submit" disabled={busy}>
+            <Button type="submit" disabled={busy || props.blocked === true}>
               {props.submitLabel}
             </Button>
           </DialogFooter>
@@ -145,12 +153,62 @@ export interface CreateRequest {
 export interface CreateDialogProps {
   request: CreateRequest | null;
   onClose: () => void;
-  /** Performs the create; resolves to an error message to show, or `null` on success. */
-  onCreate: (request: CreateRequest, name: string) => Promise<string | null>;
+  /**
+   * Performs the create; resolves to an error message to show, or `null` on success. `options`
+   * holds only values that differ from the inherited ones, and is left out when there are none.
+   */
+  onCreate: (request: CreateRequest, name: string, options?: CreateOptions) => Promise<string | null>;
+  /** The parent folder's settings, for a new file's prefix and a new folder's type and prefix. */
+  loadSettings?: (folder: string) => Promise<FolderSettings>;
 }
 
-export function CreateDialog({ request, onClose, onCreate }: CreateDialogProps) {
+/**
+ * The new file or folder dialog. In a sectioned folder, a new file also gets a prefix for its
+ * root section (the folder's default prefix unless changed); a new folder gets a type and a
+ * default prefix (inherited unless changed).
+ */
+export function CreateDialog({ request, onClose, onCreate, loadSettings }: CreateDialogProps) {
+  const id = useId();
   const isFile = request?.kind !== "folder";
+  const [inherited, setInherited] = useState<Inherited | null>(null);
+  const [prefix, setPrefix] = useState("");
+  const [values, setValues] = useState<FolderFieldValues>({ folderType: "inherit", prefix: "" });
+
+  useEffect(() => {
+    setInherited(null);
+    if (request === null || loadSettings === undefined) return;
+    let current = true;
+    loadSettings(request.parent.path)
+      .then((settings) => {
+        if (!current) return;
+        // A new entry inherits what is in effect for the folder
+        const effective = effectiveSettings(settings);
+        setInherited(effective);
+        setPrefix(effective.defaultPrefix.value ?? "");
+        setValues({ folderType: "inherit", prefix: effective.defaultPrefix.value ?? "" });
+      })
+      .catch(() => undefined);
+    return () => {
+      current = false;
+    };
+  }, [request, loadSettings]);
+
+  const sectioned = inherited !== null && isSectioned(inherited);
+  let options: CreateOptions = {};
+  let problem: string | undefined;
+  if (inherited !== null && isFile && sectioned) {
+    const typed = prefix.trim();
+    if (!isPrefix(typed)) problem = PREFIX_HELP;
+    else if (typed !== inherited.defaultPrefix.value) options = { prefix: typed };
+  } else if (inherited !== null && !isFile) {
+    const result = settingFor(values, inherited);
+    problem = result.problem;
+    options = {
+      ...(result.setting.folderType === "inherit" ? {} : { folderType: result.setting.folderType }),
+      ...(result.setting.defaultPrefix === "inherit" ? {} : { prefix: result.setting.defaultPrefix }),
+    };
+  }
+
   return (
     <NameDialog
       open={request !== null}
@@ -163,8 +221,34 @@ export function CreateDialog({ request, onClose, onCreate }: CreateDialogProps) 
       submitLabel="Create"
       errorId="create-error"
       onClose={onClose}
-      onSubmit={async (name) => (request === null ? null : onCreate(request, name))}
-    />
+      blocked={problem !== undefined}
+      onSubmit={async (name) => {
+        if (request === null) return null;
+        return Object.keys(options).length === 0 ? onCreate(request, name) : onCreate(request, name, options);
+      }}
+    >
+      {inherited !== null && isFile && sectioned && (
+        <div className="grid gap-1.5 text-sm">
+          <Label htmlFor={`${id}-prefix`}>Prefix</Label>
+          <Input
+            id={`${id}-prefix`}
+            className="w-32 font-mono"
+            value={prefix}
+            spellCheck={false}
+            autoComplete="off"
+            aria-invalid={problem !== undefined}
+            aria-describedby={`${id}-prefix-help`}
+            onChange={(event) => setPrefix(event.target.value.toUpperCase())}
+          />
+          <p id={`${id}-prefix-help`} className={problem === undefined ? "text-xs text-muted-foreground" : "text-xs text-error-text"}>
+            {problem ?? "The file's sections get IDs with this prefix, unless a section asks for another."}
+          </p>
+        </div>
+      )}
+      {inherited !== null && !isFile && (
+        <FolderFields id={id} values={values} inherited={inherited} {...(problem === undefined ? {} : { problem })} onChange={setValues} />
+      )}
+    </NameDialog>
   );
 }
 

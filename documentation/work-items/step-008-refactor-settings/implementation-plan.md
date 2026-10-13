@@ -286,3 +286,19 @@ _Proposed_; the work proceeds on them unless they are changed.
 | Many folder files | Slower scans | One stat per known file per load, and reading only changed files |
 | Writes outside `.specquer/` | A new write path for security | §4.7's confinement, with a symbolic-link test |
 | Rewriting the fixtures | Large test diffs | One fixture helper, in place of each test's config text |
+
+<a id=""></a>
+## 8. Implementation Status
+
+Phases 1 to 5 were carried out in October 2026. What differs from the plan, or was learned doing it:
+
+1. **A prefix change retires the old ID** (§4.4, D3). The plan left the old ID out of `sections.yaml`, relying on `lastSequence`. But a section ID typed by hand that no entry records is accepted as it is, so the old ID could have come back on another section. It is now retired under a fresh UID that no section holds, so it is renumbered if it appears again.
+2. **The UID's entry moves when the file is written.** If `sections.yaml` still recorded the UID under its old ID, the next reconciliation would read the new ID as an edited ID and put the old one back. `SectionIndex` therefore records each prefix change (`recordMoves`) once its file is saved, and before the data files are written.
+3. **Anchor paragraphs** (§4.3, D4). The section anchor of a paragraph made only of anchors is its first section anchor wherever it stands, not only when it comes first, so `<a id="intro"></a><a id="SPEC-00001"></a>` still works.
+4. **The folder settings API** (§4.5) reports `inherited` key by key as `{ value, from }`. The shared fields (`client/src/components/settings/FolderFields.tsx`, used by the folder settings and new folder dialogs) save a prefix equal to the inherited one as `inherit`, so files hold only values that differ.
+5. **Removing a key keeps the comment above it**, which moves to the next key. The `yaml` package stores that comment on the removed key.
+6. **The tree** shows a folder that holds only its `.specquer-config.yaml`, such as a new folder created with its own type. Otherwise the folder would disappear once it had settings.
+7. **Listing**: `FileService.listFiles()` returns `{ markdown, configs }`. Git's query gains the pathspec `:(glob)**/.specquer-config.yaml`, and the walk keeps files of that name. `YamlFile` gains `deleteWhenEmpty` and a display `label`. `FileService.folderConfigFile` confines the path as §4.7 requires.
+8. **Fixtures**: the tests write the folder files directly (`"docs/.specquer-config.yaml": "folderType: BASELINE\ndefaultPrefix: REQ\n"`) rather than through a helper; that was just as short.
+9. **This repository**: a script compared the old configuration (from `HEAD`) with the four new folder files and each file's root anchor. The same 35 files are sectioned with the same prefixes. `section-prefixes.config.yaml` is deleted, and so are the leftover mentions of it and of `documents.yaml` in the code, tests and specifications. `AGENTS.md` and `CLAUDE.md` carry the new agent rules.
+10. **Tests**: `bun run typecheck` and `bun test` (443) pass. The end-to-end suite passes on Chrome and WebKit (112), including the new `e2e/prefixes.spec.ts` (a new file with another prefix; `XYZ-?` typed over an ID in the text editor) and the rewritten folder settings tests.

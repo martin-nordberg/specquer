@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { ZodType } from "zod";
 import type { BodyEdit } from "../markdown/sections.ts";
-import type { FolderSetting, ModelConfig } from "../settings/settings.ts";
+import type { FolderSetting, FolderType, ModelConfig } from "../settings/settings.ts";
 import { type UiState, type UiStatePatch, uiStatePatchSchema } from "../uistate/uistate.ts";
 import {
   type AgentSettings,
@@ -75,11 +75,17 @@ export type FolderSettingsSaveResult = { ok: true; version: string; sectioned: b
 
 export type RenameResult = { ok: true; path: string; uiState: UiState } | { ok: false; reason: "exists" };
 
+/** A new file's prefix, or a new folder's type and default prefix, when not the inherited ones. */
+export interface CreateOptions {
+  prefix?: string;
+  folderType?: FolderType;
+}
+
 export interface ApiHandlers {
   getTree(): Promise<Tree>;
   readFile(path: string): Promise<FileContent>;
   saveFile(path: string, text: string, baseVersion: string): Promise<SaveResult>;
-  create(parent: string, name: string, kind: "file" | "folder"): Promise<CreateResult>;
+  create(parent: string, name: string, kind: "file" | "folder", options?: CreateOptions): Promise<CreateResult>;
   rename(path: string, newName: string): Promise<RenameResult>;
   deletePreview(path: string): Promise<DeletePreview>;
   deleteEntry(path: string): Promise<UiState>;
@@ -156,8 +162,11 @@ export function createApiRouter(handlers: ApiHandlers) {
       return c.json(saveBody(result), 200);
     })
     .post("/create", validate("json", createSchema), async (c) => {
-      const { parent, name, kind } = c.req.valid("json");
-      const result = await handlers.create(parent, name, kind);
+      const { parent, name, kind, prefix, folderType } = c.req.valid("json");
+      const result = await handlers.create(parent, name, kind, {
+        ...(prefix === undefined ? {} : { prefix }),
+        ...(folderType === undefined ? {} : { folderType }),
+      });
       if (!result.ok) {
         return c.json(
           { error: "exists", message: "A file or folder with that name already exists." } satisfies ApiErrorBody,

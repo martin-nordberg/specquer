@@ -19,12 +19,13 @@ import { baseName, isSameOrInside, renamedPath } from "@specquer/shared/paths";
 import { UID_LENGTH, formatSectionId } from "@specquer/shared/sections";
 import type { FileService } from "../files.ts";
 import { gitTrackedFiles } from "../git.ts";
-import { type PrefixConfig, PrefixConfigFile } from "./config.ts";
+import { type FolderConfig, FolderConfigs } from "./folder-config.ts";
+import { sectionPrefixes } from "./prefixes.ts";
 import { DataFiles, type SectionData, documentIds, emptyData, emptyPrefixData } from "./data.ts";
 import { type CopiedDocument, type DocumentFix, type Duplicate, type RenumberRequest, type ScannedDocument, reconcile } from "./reconcile.ts";
 
 /**
- * The server's index of sections: the prefix configuration, the data files and, for each
+ * The server's index of sections: the folder configuration, the data files and, for each
  * sectioned document, the sections found in it. It allocates section IDs, so two tabs can never
  * hand out the same number.
  *
@@ -62,16 +63,26 @@ function prepareText(text: string) {
   return { body, rebuild: (newBody: string) => joinFrontmatter(split.frontmatter, fromLf(newBody, eol), split.layout) };
 }
 
+/** A section that keeps its UID with an ID in another prefix (`XYZ-?`), recorded once its file is written. */
+interface PrefixMove {
+  uid: string;
+  documentId: string;
+  id: string;
+  /** The ID recorded for the UID before, retired so it is never reused. */
+  oldId: string | null;
+}
+
 interface Anchored {
   text: string;
   edits: BodyEdit[];
   notices: SectionNotice[];
+  moves?: PrefixMove[];
 }
 
 export class SectionIndex {
-  private readonly configFile: PrefixConfigFile;
+  private readonly configFiles: FolderConfigs;
   private readonly dataFiles: DataFiles;
-  private config: PrefixConfig | null = null;
+  private config: FolderConfig | null = null;
   private data: SectionData = emptyData();
   private fixes = new Map<string, DocumentFix>();
   private duplicates: Duplicate[] = [];
@@ -93,7 +104,7 @@ export class SectionIndex {
     private readonly newUid: () => string = init({ length: UID_LENGTH }),
     warn?: (message: string) => void,
   ) {
-    this.configFile = new PrefixConfigFile(files.root, warn);
+    this.configFiles = new FolderConfigs(files.root, async () => (await files.listFiles()).configs, warn);
     this.dataFiles = new DataFiles(files.root, warn);
   }
 
@@ -105,7 +116,7 @@ export class SectionIndex {
   }
 
   /** Loads the configuration, and the data files when they changed on disk since last read or written. */
-  private async load(): Promise<PrefixConfig> {
+  private async load(): Promise<FolderConfig> {
     if (!this.loaded || (await this.dataFiles.changed())) {
       const fresh = await this.dataFiles.read();
       // Numbers issued in this session stay issued, even if they never reached the files
@@ -117,11 +128,11 @@ export class SectionIndex {
       this.data = fresh;
       this.loaded = true;
     }
-    this.config = await this.configFile.load();
+    this.config = await this.configFiles.load();
     return this.config;
   }
 
-  private knownPrefixes(config: PrefixConfig): Set<string> {
+  private knownPrefixes(config: FolderConfig): Set<string> {
     return new Set([...config.prefixes(), ...this.data.prefixes.keys()]);
   }
 
@@ -130,14 +141,22 @@ export class SectionIndex {
   }
 
   private static scannedOf(path: string, sections: readonly FoundSection[], frozen: boolean): ScannedDocument {
-    return { path, frozen, sections: sections.map((section) => ({ id: section.id, uid: section.uid })) };
+    return {
+      path,
+      frozen,
+      sections: sections.map((section) => ({
+        id: section.id,
+        uid: section.uid,
+        ...(section.requestedPrefix === undefined ? {} : { requestedPrefix: section.requestedPrefix }),
+      })),
+    };
   }
 
   private scanned(): ScannedDocument[] {
     return [...this.documents.values()].map((doc) => SectionIndex.scannedOf(doc.path, doc.sections, doc.frozen));
   }
 
-  private reconcile(config: PrefixConfig, extra?: ScannedDocument, requests?: RenumberRequest[], copyRequests?: string[]) {
+  private reconcile(config: FolderConfig, extra?: ScannedDocument, requests?: RenumberRequest[], copyRequests?: string[]) {
     const scanned = this.scanned().filter((doc) => doc.path !== extra?.path);
     if (extra !== undefined) scanned.push(extra);
     return reconcile(this.data, scanned, this.knownPrefixes(config), this.newUid, requests, {
@@ -146,7 +165,7 @@ export class SectionIndex {
     });
   }
 
-  private apply(config: PrefixConfig): void {
+  private apply(config: FolderConfig): void {
     const result = this.reconcile(config);
     this.data = result.data;
     this.fixes = result.fixes;
@@ -215,9 +234,11 @@ export class SectionIndex {
     }
   }
 
-  private async scanFiles(): Promise<PrefixConfig> {
+  private async scanFiles(): Promise<FolderConfig> {
+    const listed = await this.files.listFiles();
+    this.configFiles.setFiles(listed.configs);
     const config = await this.load();
-    const paths = (await this.files.listMarkdownFiles()).filter((path) => config.isSectioned(path));
+    const paths = listed.markdown.filter((path) => config.isSectioned(path));
     const wanted = new Set(paths);
     for (const path of this.documents.keys()) if (!wanted.has(path)) this.documents.delete(path);
     for (const path of paths) await this.index(path);
@@ -226,9 +247,9 @@ export class SectionIndex {
     return config;
   }
 
-  /** Reads the prefix configuration again on the next load, after Specquer wrote it. */
+  /** Reads the folder configuration again on the next load, after Specquer wrote or deleted a file. */
   configChanged(): void {
-    this.configFile.invalidate();
+    this.configFiles.invalidate();
   }
 
   /** Brings the index up to date with the files. Writes nothing. */
@@ -253,7 +274,7 @@ export class SectionIndex {
    * the user should be told. Allocates IDs; with `dryRun` it only reports whether anything would
    * change. A file with merge conflict markers is left as it is.
    */
-  private anchor(config: PrefixConfig, path: string, text: string, dryRun = false, requests?: RenumberRequest[], copyRequests?: string[]): Anchored {
+  private anchor(config: FolderConfig, path: string, text: string, dryRun = false, requests?: RenumberRequest[], copyRequests?: string[]): Anchored {
     const prefix = config.prefixFor(path);
     if (prefix === undefined) return { text, edits: [], notices: [] };
     const { body, rebuild } = prepareText(text);
@@ -276,22 +297,54 @@ export class SectionIndex {
       if (current === undefined) this.data.prefixes.set(name, emptyPrefixData(prefixData.lastSequence));
       else current.lastSequence = Math.max(current.lastSequence, prefixData.lastSequence);
     }
-    const ids = new Map(needed.map((index) => [index, this.nextId(prefix)]));
+    // Each new ID in its section's prefix: requested, its own, or its parent's
+    const prefixes = sectionPrefixes(sections, prefix, this.knownPrefixes(config));
+    const ids = new Map(needed.map((index) => [index, this.nextId(prefixes[index]!)]));
     for (const [index, id] of fix.restore) ids.set(index, id);
     const edits = anchorEdits(body, sections, { ids, uids: fix.uids });
     const title = (index: number) => (index === 0 ? baseName(path) : sections[index]!.title);
     const notices: SectionNotice[] = [];
     for (const [index, reason] of fix.renumber) {
-      notices.push({ kind: "renumbered", reason, id: sections[index]!.anchor!.rawId, newId: ids.get(index)!, title: title(index) });
+      const id = fix.prefixChanges.get(index) ?? sections[index]!.anchor!.rawId;
+      notices.push({ kind: "renumbered", reason, id, newId: ids.get(index)!, title: title(index) });
     }
+    const moves: PrefixMove[] = [...fix.prefixChanges].map(([index, oldId]) => ({
+      uid: index === 0 ? fix.documentId : sections[index]!.uid!,
+      documentId: fix.documentId,
+      id: ids.get(index)!,
+      oldId,
+    }));
     for (const [index, id] of fix.restore) notices.push({ kind: "restored", id: sections[index]!.id!, newId: id, title: title(index) });
     for (const index of fix.uidReplaced) notices.push({ kind: "uid-replaced", id: sections[index]!.id!, title: title(index) });
     if (edits.length === 0) return { text, edits, notices };
-    return { text: rebuild(applyEdits(body, edits)), edits, notices };
+    return { text: rebuild(applyEdits(body, edits)), edits, notices, ...(moves.length === 0 ? {} : { moves }) };
+  }
+
+  /**
+   * Records sections that kept their UIDs with IDs in another prefix, once their file is written:
+   * the UID's entry moves to the new ID, and the old ID is retired under a UID no section holds,
+   * so it is never reused (and an edited ID isn't put back to it).
+   */
+  private recordMoves(moves: readonly PrefixMove[] = []): void {
+    for (const move of moves) {
+      for (const prefixData of this.data.prefixes.values()) prefixData.sections.delete(move.uid);
+      const prefix = move.id.slice(0, move.id.lastIndexOf("-"));
+      let prefixData = this.data.prefixes.get(prefix);
+      if (prefixData === undefined) {
+        prefixData = emptyPrefixData();
+        this.data.prefixes.set(prefix, prefixData);
+      }
+      prefixData.sections.set(move.uid, { id: move.id, documentId: move.documentId });
+      if (move.oldId !== null) {
+        const oldPrefix = move.oldId.slice(0, move.oldId.lastIndexOf("-"));
+        this.data.prefixes.get(oldPrefix)?.retired.set(this.newUid(), { id: move.oldId });
+      }
+    }
   }
 
   /** Records a file just written and writes the data files. */
-  private async written(config: PrefixConfig, path: string, text: string): Promise<void> {
+  private async written(config: FolderConfig, path: string, text: string, moves?: readonly PrefixMove[]): Promise<void> {
+    this.recordMoves(moves);
     const stamp = await this.files.fileStamp(path);
     if (stamp !== undefined && config.isSectioned(path)) this.documents.set(path, this.parse(path, text, stamp));
     this.apply(config);
@@ -318,18 +371,21 @@ export class SectionIndex {
       const anchored = this.anchor(config, path, text);
       const result = await this.files.saveFile(path, anchored.text, baseVersion);
       if (!result.ok) return result;
-      await this.written(config, path, anchored.text);
+      await this.written(config, path, anchored.text, anchored.moves);
       return SectionIndex.result(result, anchored);
     });
   }
 
-  /** Creates a file or folder; a sectioned file starts with its root anchor. */
-  create(parent: string, name: string, kind: "file" | "folder"): Promise<string | null> {
+  /**
+   * Creates a file or folder; a sectioned file starts with its root anchor, with an ID in
+   * `prefix` or else the folder's default prefix.
+   */
+  create(parent: string, name: string, kind: "file" | "folder", prefix?: string): Promise<string | null> {
     return this.run(async () => {
       const path = parent === "" ? name : `${parent}/${name}`;
       if (kind === "folder" || !(await this.load()).isSectioned(path)) return this.files.create(parent, name, kind);
       const config = await this.scanFiles();
-      const content = rootAnchorText(this.nextId(config.prefixFor(path)!), this.newUid());
+      const content = rootAnchorText(this.nextId(prefix ?? config.prefixFor(path)!), this.newUid());
       const created = await this.files.create(parent, name, kind, content);
       if (created !== null) await this.written(config, created, content);
       return created;
@@ -384,6 +440,7 @@ export class SectionIndex {
           const result = await this.files.saveFile(path, anchored.text, file.version);
           if (!result.ok) continue;
           changed.push(path);
+          this.recordMoves(anchored.moves);
           const stamp = await this.files.fileStamp(path);
           if (stamp !== undefined) this.documents.set(path, this.parse(path, anchored.text, stamp));
           this.apply(config);
@@ -412,7 +469,7 @@ export class SectionIndex {
       const anchored = this.anchor(config, path, file.text, false, [{ path, index }]);
       const result = await this.files.saveFile(path, anchored.text, baseVersion);
       if (!result.ok) return result;
-      await this.written(config, path, anchored.text);
+      await this.written(config, path, anchored.text, anchored.moves);
       return SectionIndex.result(result, anchored);
     });
   }
@@ -431,7 +488,7 @@ export class SectionIndex {
       const anchored = this.anchor(config, path, file.text, false, [], [path]);
       const result = await this.files.saveFile(path, anchored.text, baseVersion);
       if (!result.ok) return result;
-      await this.written(config, path, anchored.text);
+      await this.written(config, path, anchored.text, anchored.moves);
       return SectionIndex.result(result, anchored);
     });
   }

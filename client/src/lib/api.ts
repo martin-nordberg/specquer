@@ -5,6 +5,7 @@ import type {
   AnchorFolderResult,
   ApiErrorBody,
   ApiRouter,
+  CreateOptions,
   DeletePreview,
   FileContent,
   FolderSettings,
@@ -89,7 +90,7 @@ export interface Api {
   getTree(): Promise<Tree>;
   readFile(path: string): Promise<FileContent>;
   saveFile(path: string, text: string, baseVersion: string, options?: { keepalive?: boolean }): Promise<SaveOutcome>;
-  create(parent: string, name: string, kind: "file" | "folder"): Promise<CreateOutcome>;
+  create(parent: string, name: string, kind: "file" | "folder", options?: CreateOptions): Promise<CreateOutcome>;
   rename(path: string, newName: string): Promise<RenameOutcome>;
   deletePreview(path: string): Promise<DeletePreview>;
   deleteEntry(path: string): Promise<UiState>;
@@ -152,8 +153,8 @@ export const httpApi: Api = {
     const keepalive = options?.keepalive === true && text.length < KEEPALIVE_LIMIT;
     return saveOutcome(await client.api.file.$put({ query: { path }, json: { text, baseVersion } }, { init: { keepalive } }));
   },
-  async create(parent, name, kind) {
-    const res = await client.api.create.$post({ json: { parent, name, kind } });
+  async create(parent, name, kind, options = {}) {
+    const res = await client.api.create.$post({ json: { parent, name, kind, ...options } });
     if (res.status === 409) {
       const body = (await res.json()) as ApiErrorBody;
       return { kind: "exists", message: body.message };

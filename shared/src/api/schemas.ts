@@ -3,13 +3,16 @@ import { entryNameSchema, entryPathSchema, markdownPathSchema, workspacePathSche
 import { SECTION_ID_PATTERN } from "../sections/ids.ts";
 import {
   type FolderSetting,
+  type FolderType,
   type ModelConfig,
   type SettingSource,
   type SummariesConfig,
   type SummarySettingKey,
   apiKeyEnvSchema,
   folderSettingSchema,
+  folderTypeSchema,
   modelConfigSchema,
+  prefixSchema,
   summarySettingSchemas,
 } from "../settings/settings.ts";
 import { MAX_SUMMARY_TEXT } from "../summaries/rules.ts";
@@ -78,7 +81,8 @@ export interface SectionInfo {
 }
 
 /** Why a save gave a section a new number. */
-export type SectionRenumberReason = "copy" | "reused" | "unknown-prefix" | "duplicate" | "collision";
+/** `prefix-requested`: `<a id="XYZ-?">` over an existing anchor asked for a new ID in another prefix. */
+export type SectionRenumberReason = "copy" | "reused" | "unknown-prefix" | "duplicate" | "collision" | "prefix-requested";
 
 /** What a save changed beyond adding anchors, so the user can be told. */
 export type SectionNotice =
@@ -141,6 +145,10 @@ export const createSchema = z.object({
   /** The new entry's name (not a path); a file's must end with `.md`. */
   name: entryNameSchema,
   kind: z.enum(["file", "folder"]),
+  /** A new file's prefix, or a new folder's default prefix, when not the inherited one. */
+  prefix: prefixSchema.optional(),
+  /** A new folder's type, when not the inherited one. */
+  folderType: folderTypeSchema.optional(),
 });
 
 export const renameSchema = z.object({
@@ -299,17 +307,22 @@ export const folderQuerySchema = z.object({
   path: workspacePathSchema,
 });
 
-/** `GET /api/settings/folder`: a folder's entry in the prefix configuration. */
+/** A value a folder inherits, and the folder above that sets it (`""` for the root folder). */
+export interface InheritedValue<T> {
+  /** `null` when no folder above sets it. */
+  value: T | null;
+  from: string | null;
+}
+
+/** `GET /api/settings/folder`: a folder's own `.specquer-config.yaml` and what it inherits. */
 export interface FolderSettings {
   path: string;
-  /** The prefix configuration's version, sent back when saving; `""` while it doesn't exist. */
+  /** The folder's file's version, sent back when saving; `""` while it doesn't exist. */
   version: string;
-  /** The folder's own entry. */
+  /** The folder's own settings. */
   own: FolderSetting;
-  /** The nearest folder above with an entry (`""` for the root folder), or `null` when none has one. */
-  inherited: { from: string; prefix: string | null } | null;
-  /** The keys for single files inside the folder, which the dialog shows but doesn't edit. */
-  fileKeys: Array<{ path: string; prefix: string | null }>;
+  /** What the folder inherits from the folders above it. */
+  inherited: { folderType: InheritedValue<FolderType>; defaultPrefix: InheritedValue<string> };
   /** Set when the file isn't valid YAML: it can't be saved until it is fixed by hand. */
   error?: string;
 }

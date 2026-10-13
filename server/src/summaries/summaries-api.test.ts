@@ -227,7 +227,7 @@ describe("summarizing", () => {
   });
 });
 
-const PREFIXES = ".specquer/shared/section-prefixes.config.yaml";
+const DOCS_CONFIG = "docs/.specquer-config.yaml";
 const DOC = [
   '<a id="REQ-00001" data-uid="aaaaaaaaaaaa"></a>',
   "",
@@ -256,7 +256,7 @@ function previewRequest(path: string) {
 }
 
 describe("lookup by section ID", () => {
-  const files = { [SHARED]: CONFIG, [PREFIXES]: 'prefixes:\n  "docs/": REQ\n', "docs/a.md": DOC };
+  const files = { [SHARED]: CONFIG, [DOCS_CONFIG]: "folderType: BASELINE\ndefaultPrefix: REQ\n", "docs/a.md": DOC };
   const lookup = async (request: (path: string) => Promise<Response> | Response, id: string) => request(`/api/summaries/sections/${id}`);
 
   test("short sections and list items as written; none before the summary is made, then the slider's summary", async () => {

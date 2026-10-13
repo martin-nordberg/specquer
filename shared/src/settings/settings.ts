@@ -4,8 +4,7 @@ import { isPrefix } from "../sections/ids.ts";
 /**
  * The settings Specquer edits in its dialogs, shared so the client validates them as the server
  * does. The agent configuration (`agent.config.yaml`, shared and personal) holds `model:` and
- * `summaries:`; the prefix configuration (`section-prefixes.config.yaml`) holds each folder's
- * setting.
+ * `summaries:`; a folder's `.specquer-config.yaml` holds its type and default prefix.
  */
 
 export const NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1";
@@ -59,13 +58,28 @@ export type SettingSource = SettingsScope | "default";
 
 export const prefixSchema = z.string().refine(isPrefix, "A prefix is an upper-case letter followed by 1 to 4 upper-case letters or digits.");
 
+/** The file holding a folder's settings, in the folder itself. */
+export const FOLDER_CONFIG_FILE = ".specquer-config.yaml";
+
 /**
- * A folder's own entry in the prefix configuration: none (it inherits from the nearest folder
- * above that has one), not sectioned (`null` in the file), or sectioned with a prefix.
+ * A folder's type: baseline specs (the current or intended state of the whole system), change
+ * specs (the work for a task or feature), auxiliary specs (sectioned, not updated from change
+ * specs), or Markdown that Specquer doesn't section. The three sectioned types behave alike for now.
  */
-export const folderSettingSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("inherit") }),
-  z.object({ kind: z.literal("off") }),
-  z.object({ kind: z.literal("prefix"), prefix: prefixSchema }),
-]);
+export const FOLDER_TYPES = ["BASELINE", "CHANGE", "AUXILIARY", "NONSECTIONED"] as const;
+export const folderTypeSchema = z.enum(FOLDER_TYPES);
+export type FolderType = z.infer<typeof folderTypeSchema>;
+
+export function isSectionedType(type: FolderType | null | undefined): boolean {
+  return type !== null && type !== undefined && type !== "NONSECTIONED";
+}
+
+/**
+ * A folder's own settings, as its `.specquer-config.yaml` holds them: each key set, or inherited
+ * from the nearest folder above that sets it.
+ */
+export const folderSettingSchema = z.object({
+  folderType: z.union([z.literal("inherit"), folderTypeSchema]),
+  defaultPrefix: z.union([z.literal("inherit"), prefixSchema]),
+});
 export type FolderSetting = z.infer<typeof folderSettingSchema>;

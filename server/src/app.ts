@@ -34,7 +34,7 @@ export function createHandlers(files: FileService, uiState: UiStateStore, sectio
   // The settings files, written one at a time
   const settingsQueue = new WriteQueue();
   const agentSettings = new AgentSettingsFiles(files.root, settingsQueue);
-  const folderSettings = new FolderSettingsFile(files.root, settingsQueue);
+  const folderSettings = new FolderSettingsFile(files, settingsQueue);
   return {
     async getTree() {
       const tree = await files.getTree();
@@ -50,9 +50,15 @@ export function createHandlers(files: FileService, uiState: UiStateStore, sectio
       if (result.ok) summaries.filesChanged();
       return result;
     },
-    async create(parent, name, kind) {
-      const path = await sections.create(parent, name, kind);
+    async create(parent, name, kind, options = {}) {
+      const path = await sections.create(parent, name, kind, kind === "file" ? options.prefix : undefined);
       if (path === null) return { ok: false, reason: "exists" };
+      if (kind === "folder" && (options.folderType !== undefined || options.prefix !== undefined)) {
+        // A new folder's own file, only for values that differ from the inherited ones
+        const setting = { folderType: options.folderType ?? "inherit", defaultPrefix: options.prefix ?? "inherit" } as const;
+        const result = await folderSettings.write(path, setting, "");
+        if (result.ok) sections.configChanged();
+      }
       summaries.filesChanged();
       return { ok: true, path };
     },
@@ -106,9 +112,7 @@ export function createHandlers(files: FileService, uiState: UiStateStore, sectio
       sections.configChanged();
       await sections.scan();
       summaries.filesChanged();
-      const { own, inherited } = await folderSettings.read(path);
-      const sectioned = own.kind === "prefix" || (own.kind === "inherit" && (inherited?.prefix ?? null) !== null);
-      return { ...result, sectioned };
+      return { ...result, sectioned: FolderSettingsFile.isSectioned(await folderSettings.read(path)) };
     },
   };
 }

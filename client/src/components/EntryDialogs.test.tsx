@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, mock, test } from "bun:test";
-import type { DeletePreview, TreeNode } from "@specquer/shared/api";
+import type { DeletePreview, FolderSettings, TreeNode } from "@specquer/shared/api";
 import { CreateDialog, type CreateRequest, DeleteDialog, RenameDialog, nameWithExtension, splitExtension } from "./EntryDialogs";
 
 
@@ -121,6 +121,50 @@ describe("CreateDialog", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "New name" }), { target: { value: "notes" } });
     (screen.getByRole("button", { name: "Create" }) as HTMLButtonElement).click();
     await waitFor(() => expect(onCreate).toHaveBeenCalledWith(newFolder, "notes"));
+  });
+
+  const SECTIONED: FolderSettings = {
+    path: "docs",
+    version: "v1",
+    own: { folderType: "BASELINE", defaultPrefix: "REQ" },
+    inherited: { folderType: { value: null, from: null }, defaultPrefix: { value: null, from: null } },
+  };
+  const loadSettings = async () => SECTIONED;
+
+  test("a new file in a sectioned folder gets a prefix, sent only when changed", async () => {
+    const onCreate = mock(async () => null);
+    render(<CreateDialog request={newFile} onClose={() => {}} onCreate={onCreate} loadSettings={loadSettings} />);
+    const prefix = (await screen.findByRole("textbox", { name: "Prefix" })) as HTMLInputElement;
+    expect(prefix.value).toBe("REQ");
+    fireEvent.change(screen.getByRole("textbox", { name: "New name" }), { target: { value: "a" } });
+    (screen.getByRole("button", { name: "Create" }) as HTMLButtonElement).click();
+    await waitFor(() => expect(onCreate).toHaveBeenCalledWith(newFile, "a.md"));
+    fireEvent.change(prefix, { target: { value: "x" } });
+    expect(prefix.getAttribute("aria-invalid")).toBe("true");
+    expect((screen.getByRole("button", { name: "Create" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(prefix, { target: { value: "new" } });
+    (screen.getByRole("button", { name: "Create" }) as HTMLButtonElement).click();
+    await waitFor(() => expect(onCreate).toHaveBeenCalledWith(newFile, "a.md", { prefix: "NEW" }));
+  });
+
+  test("a new file in a folder that isn't sectioned has no prefix", async () => {
+    const plain: FolderSettings = { ...SECTIONED, own: { folderType: "NONSECTIONED", defaultPrefix: "inherit" } };
+    let loaded = false;
+    render(<CreateDialog request={newFile} onClose={() => {}} onCreate={async () => null} loadSettings={async () => ((loaded = true), plain)} />);
+    await waitFor(() => expect(loaded).toBe(true));
+    expect(screen.queryByRole("textbox", { name: "Prefix" })).toBeNull();
+  });
+
+  test("a new folder gets a type and a prefix, inherited unless changed", async () => {
+    const onCreate = mock(async () => null);
+    render(<CreateDialog request={newFolder} onClose={() => {}} onCreate={onCreate} loadSettings={loadSettings} />);
+    const inherited = await screen.findByRole("radio", { name: /^Inherited/ });
+    expect(inherited.closest("label")?.textContent).toContain("from docs: Baseline");
+    fireEvent.change(screen.getByRole("textbox", { name: "New name" }), { target: { value: "work" } });
+    fireEvent.click(screen.getByRole("radio", { name: /^Change/ }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Default prefix" }), { target: { value: "work" } });
+    (screen.getByRole("button", { name: "Create" }) as HTMLButtonElement).click();
+    await waitFor(() => expect(onCreate).toHaveBeenCalledWith(newFolder, "work", { folderType: "CHANGE", prefix: "WORK" }));
   });
 
   test("an empty or invalid name isn't sent", async () => {

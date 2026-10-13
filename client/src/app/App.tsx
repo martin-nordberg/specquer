@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import type { SummaryStatus, Tree, TreeFolder, TreeNode } from "@specquer/shared/api";
+import type { CreateOptions, SummaryStatus, Tree, TreeFolder, TreeNode } from "@specquer/shared/api";
 import { isSameOrInside, renamedPath } from "@specquer/shared/paths";
 import {
   type UiState,
@@ -154,9 +154,9 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
 
   /** Creates the entry, shows it in its expanded folder, and opens a new file. */
   const create = useCallback(
-    async ({ parent, kind }: CreateRequest, name: string): Promise<string | null> => {
+    async ({ parent, kind }: CreateRequest, name: string, options?: CreateOptions): Promise<string | null> => {
       try {
-        const result = await api.create(parent.path, name, kind);
+        const result = await api.create(parent.path, name, kind, options);
         if (result.kind === "exists") return result.message;
         if (parent.path !== "") uiStore.update((state) => setFolderExpanded(state, parent.path, true));
         await refreshTree();
@@ -426,7 +426,7 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
           right={right}
         />
       </main>
-      <CreateDialog request={creating} onClose={() => setCreating(null)} onCreate={create} />
+      <CreateDialog request={creating} onClose={() => setCreating(null)} onCreate={create} loadSettings={api.folderSettings} />
       <RenameDialog node={renaming} onClose={() => setRenaming(null)} onRename={rename} />
       <DeleteDialog node={deleting} onClose={() => setDeleting(null)} loadPreview={api.deletePreview} onDelete={remove} />
       <AnchorDialog folder={anchoring} onClose={() => setAnchoring(null)} loadChanges={anchorChanges} onRun={addAnchors} />

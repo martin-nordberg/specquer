@@ -7,7 +7,7 @@ const ORIGINAL = `<a id="SPEC-00001" data-uid="docaaaaaaaa1"></a>\n\n<a id="SPEC
 // tell the original from the copy
 test.use({
   files: {
-    ".specquer/shared/section-prefixes.config.yaml": 'prefixes:\n  "specs/": SPEC\n',
+    "specs/.specquer-config.yaml": "folderType: BASELINE\ndefaultPrefix: SPEC\n",
     "specs/spec.md": ORIGINAL,
     "specs/a-copy.md": ORIGINAL,
   },
@@ -25,5 +25,4 @@ test("a copied document is reported, and renumbering the copy keeps the original
   expect(await specquer.read("specs/spec.md")).toBe(ORIGINAL);
   const copied = await specquer.read("specs/a-copy.md");
   expect(copied).toMatch(/^<a id="SPEC-00003" data-uid="[a-z0-9]{12}"><\/a>\n\n<a id="SPEC-00004" data-uid="[a-z0-9]{12}"><\/a>\n# Spec/);
-  expect(await specquer.exists(".specquer/shared/documents.yaml")).toBe(false);
 });

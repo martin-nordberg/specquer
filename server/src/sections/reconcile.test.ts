@@ -239,6 +239,26 @@ describe("sections", () => {
     expect(r.data.prefixes.has("XYZ")).toBe(false);
   });
 
+  test("XYZ-? with a UID no other section holds keeps the UID and is renumbered", () => {
+    const before = data({ d1: ["REQ-00001", "d1"], s2: ["REQ-00002", "d1"], s3: ["REQ-00003", "d1"] });
+    const change = (uid: string) => ({ id: null, uid, requestedPrefix: "XYZ" });
+    const a = doc("a.md", "REQ-00001/d1", "REQ-00003/s3");
+    const r = reconcile(before, [{ ...a, sections: [...a.sections, change("s2")] }], KNOWN, uids());
+    expect(renumbered(r, "a.md")).toEqual({ 2: "prefix-requested" });
+    expect(Object.fromEntries(fix(r, "a.md").prefixChanges)).toEqual({ 2: "REQ-00002" });
+    expect(newUids(r, "a.md")).toEqual({});
+    // Present, so not retired until the caller records the move
+    expect(retired(r.data)).toEqual({});
+    // A UID another section holds: a new section with a new UID
+    const copy = reconcile(before, [{ ...a, sections: [...a.sections, change("s3")] }], KNOWN, uids());
+    expect(renumbered(copy, "a.md")).toEqual({});
+    expect(newUids(copy, "a.md")).toEqual({ 2: "new1" });
+    // The root section keeps the document ID
+    const root = reconcile(before, [{ ...a, sections: [change("d1"), ...a.sections.slice(1)] }], KNOWN, uids());
+    expect(renumbered(root, "a.md")).toEqual({ 0: "prefix-requested" });
+    expect(fix(root, "a.md").documentId).toBe("d1");
+  });
+
   test("a section moved to another document keeps its entry", () => {
     const before = data({ d1: ["REQ-00001", "d1"], d2: ["REQ-00002", "d2"], s3: ["REQ-00003", "d1"] });
     const r = reconcile(before, [doc("a.md", "REQ-00001/d1"), doc("b.md", "REQ-00002/d2", "REQ-00003/s3")], KNOWN, uids());

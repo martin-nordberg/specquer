@@ -17,9 +17,10 @@ This document describes what Specquer works with and how its screen is organized
 | Front matter | The YAML between the `---` lines at the top of a file. Free-form; there is no schema. |
 | Body | The Markdown after the front matter, structured by nested headings (`#`, `##`, `###` and so on). |
 | UI state | Per-user settings in `.specquer/user/uistate.yaml`: theme, pane width, expanded folders, recent files, the open file and per-file view settings. See [Data Architecture](data-architecture.md) §3. |
-| Section | A whole spec file (the root section), a top-level heading with its content, or an item of a sectioned list. Sectioned files are chosen by `.specquer/shared/section-prefixes.config.yaml`. See [Data Architecture](data-architecture.md) §2. |
+| Section | A whole spec file (the root section), a top-level heading with its content, or an item of a sectioned list. Sectioned files are chosen by the folders' types, in each folder's `.specquer-config.yaml`. See [Data Architecture](data-architecture.md) §2. |
 | Section anchor and ID | An invisible HTML anchor that marks a section with a permanent ID such as `REQ-00257`, used in links to the section, and its UID (`data-uid`), the section's identity. The root anchor's UID is the document ID. |
-| Shared data | The section configuration and data files in `.specquer/shared/`, committed to Git: per prefix, `sections.yaml` (live and retired sections, the root sections keyed by the document ID). |
+| Folder configuration | A folder's `.specquer-config.yaml`: its type (Baseline, Change, Auxiliary or Non-sectioned) and default prefix, each inherited by the folders in it unless they set their own. Edited in the folder settings dialog; not shown in the tree. |
+| Shared data | The section data files in `.specquer/shared/`, committed to Git: per prefix, `sections.yaml` (live and retired sections, the root sections keyed by the document ID). |
 | Agent guide | Optional section anchor rules for coding agents in the root folder's `AGENTS.md`, added on request by **Add section anchors** (in a folder's settings). |
 | Summary | An AI-generated summary of a heading section, or of the whole document, shown in the preview in place of the section's content by the summary slider. Made from the saved file by the model named in the agent configuration, and cached for 30 days. See [Data Architecture](data-architecture.md) §4. |
 | Agent configuration | `.specquer/shared/agent.config.yaml` (committed) names the model for agent features and the environment variable holding its key; an optional `.specquer/user/agent.config.yaml` overrides it for one user. Without it, Specquer makes no network calls. |
@@ -27,8 +28,7 @@ This document describes what Specquer works with and how its screen is organized
 
 ```
 root folder
-├── .specquer/shared/        section and agent configuration and data, committed
-│   ├── section-prefixes.config.yaml
+├── .specquer/shared/        agent configuration and section data, committed
 │   ├── agent.config.yaml    optional: the model for summaries
 │   └── REQ/sections.yaml
 ├── .specquer/user/          per-user state, ignored by Git
@@ -39,6 +39,7 @@ root folder
 │   ├── .gitignore           *
 │   └── summaries.db
 ├── docs/                    folder (shown: contains .md files)
+│   ├── .specquer-config.yaml  optional: the folder's type and default prefix
 │   ├── overview.md          spec file
 │   └── images/              not shown (no .md files)
 ├── AGENTS.md                optional: rules for coding agents

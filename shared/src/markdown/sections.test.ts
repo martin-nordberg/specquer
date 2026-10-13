@@ -12,6 +12,7 @@ import {
 } from "./sections.ts";
 
 const DOC = "tz4a98xxat96";
+const UID = "k1v2u0xwq8y7";
 
 /**
  * Gives every section without an ID the next of `ids` and every section without a UID the next
@@ -97,11 +98,47 @@ describe("findSections", () => {
     expect(summary(findSections("* a\n* b\n"))).toEqual(["root:-:"]);
   });
 
-  test("anchors with other IDs in a section's place are placeholders", () => {
-    const body = '<a id=""></a>\n\nText\n\n<a id="new"></a>\n# Heading\n\n* <a id="x"></a> item\n* other\n';
+  test("blank IDs and XYZ-? are placeholders; other IDs aren't section anchors", () => {
+    const body = '<a id=""></a>\n\nText\n\n<a id="NEW-?"></a>\n# Heading\n\n* <a id="x"></a> item\n* <a id=""></a> other\n';
     const sections = findSections(body);
     expect(summary(sections)).toEqual(["root:-:", "heading:-:Heading", "item:-:item", "item:-:other"]);
-    expect(sections.map((s) => s.anchor !== undefined)).toEqual([true, true, true, false]);
+    expect(sections.map((s) => s.anchor !== undefined)).toEqual([true, true, false, true]);
+    expect(sections[1]!.requestedPrefix).toBe("NEW");
+    expect(sections[0]!.requestedPrefix).toBeUndefined();
+    for (const id of ["intro", "xyz-?", "TODO", "XY-?X", "X-?", "TOOLONG-?"]) {
+      expect(findSections(`<a id="${id}"></a>\n\n# H\n`)[1]!.anchor).toBeUndefined();
+    }
+  });
+
+  test("XYZ-? keeps its UID; a blank placeholder's is ignored", () => {
+    const sections = findSections(`# A\n\n<a id="XYZ-?" data-uid="${UID}"></a>\n## B\n\n<a id="" data-uid="${UID}"></a>\n## C\n`);
+    expect(sections.map((s) => [s.id, s.uid, s.requestedPrefix ?? null])).toEqual([
+      [null, null, null],
+      [null, null, null],
+      [null, UID, "XYZ"],
+      [null, null, null],
+    ]);
+  });
+
+  test("other anchors before a heading take its section anchor at their paragraph's start", () => {
+    const body = `<a id="RQ-00001" data-uid="${DOC}"></a>\n\n<a id="intro"></a>\n# A\n\n<a id="x"></a> <a id="y"></a>\n\n## B\n`;
+    const sections = findSections(body, { isDocumentUid: (uid) => uid === DOC });
+    expect(sections.map((s) => s.form)).toEqual(["root", "paragraph", "paragraph"]);
+    const once = applyEdits(body, anchorEdits(body, sections, { ids: new Map([[1, "RQ-00002"], [2, "RQ-00003"]]), uids: new Map([[1, "u1"], [2, "u2"]]) }));
+    expect(once).toBe(
+      `<a id="RQ-00001" data-uid="${DOC}"></a>\n\n<a id="RQ-00002" data-uid="u1"></a><a id="intro"></a>\n# A\n\n<a id="RQ-00003" data-uid="u2"></a><a id="x"></a> <a id="y"></a>\n\n## B\n`,
+    );
+    // Read back unchanged
+    const again = findSections(once, { isDocumentUid: (uid) => uid === DOC });
+    expect(summary(again)).toEqual(["root:RQ-00001:", "heading:RQ-00002:A", "heading:RQ-00003:B"]);
+    expect(anchorEdits(once, again, { ids: new Map(), uids: new Map() })).toEqual([]);
+  });
+
+  test("other anchors at the start of a heading or a list item get the section anchor before them", () => {
+    const body = '## <a id="intro"></a> Title\n\n* <a id="x"></a> one\n* <a id=""></a> two\n';
+    const sections = findSections(body);
+    expect(sections.map((s) => s.form)).toEqual(["root", "atx", "item", "item"]);
+    expect(sections[2]!.anchor).toBeUndefined();
   });
 
   test("other anchors are left alone", () => {
@@ -191,9 +228,9 @@ describe("anchorEdits", () => {
   });
 
   test("renumbers and fills placeholders, keeping other attributes", () => {
-    const body = `<a id='RQ-00001' class="x" data-uid="${DOC}"></a>\n\n<a id=new></a>\n# A\n`;
+    const body = `<a id='RQ-00001' class="x" data-uid="${DOC}"></a>\n\n<a id=RQ-? class="y"></a>\n# A\n`;
     expect(anchor(body, ["RQ-00009"], DOC, { 0: "RQ-00005" })).toBe(
-      `<a id="RQ-00005" class="x" data-uid="${DOC}"></a>\n\n<a id="RQ-00009" data-uid="u1"></a>\n# A\n`,
+      `<a id="RQ-00005" class="x" data-uid="${DOC}"></a>\n\n<a id="RQ-00009" data-uid="u1" class="y"></a>\n# A\n`,
     );
   });
 

@@ -46,6 +46,8 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 3. Invalid names and names already used in the folder keep the dialog open with the reason, as for rename (§3.1, items 4 and 5).
 4. After creating the entry, the folder it was created in (unless it is the root) is expanded and the tree is reloaded, so the new entry shows.
 5. A new file is created empty, or with its root section anchor if it is sectioned, and opened in the file pane (saving the previously open file first, as for any file switch).
+6. In a sectioned folder, the **New file** dialog also has **Prefix**, starting from the folder's default prefix and checked as in §3.6; the root anchor's ID takes it. A prefix other than the default is the file's own: its new sections take it.
+7. The **New folder** dialog also has the folder type and default prefix fields of §3.6, both starting as inherited. A `.specquer-config.yaml` is written only for values that differ from the inherited ones.
 
 <a id="SPEC-00046" data-uid="b3odkybydlfb"></a>
 ### 3.3 Delete
@@ -73,10 +75,10 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 <a id=""></a>
 ### 3.6 Folder Settings
 
-1. A modal dialog, **Folder settings**, edits the folder's entry in `.specquer/shared/section-prefixes.config.yaml` (see [Data Architecture](data-architecture.md) §2.3).
-2. **Sectioned** has three choices: **Inherited** (no entry of its own; the dialog says what it follows, e.g. "from documentation: sectioned, prefix SPEC", or "not sectioned"), **Yes** (an entry with a prefix) and **No** (an entry saying it isn't sectioned, even inside a sectioned folder).
-3. **Prefix** shows for **Yes**, starting from the inherited prefix if any. It is typed in upper case and checked as the section ID prefix (an upper-case letter and 1 to 4 upper-case letters or digits); an invalid prefix is reported under the field. Several folders may share a prefix.
-4. The keys for single files inside the folder are listed, read only; they are edited in the YAML file.
+1. A modal dialog, **Folder settings**, edits the folder's `.specquer-config.yaml` (see [Data Architecture](data-architecture.md) §2.3).
+2. **Folder type** has five choices: **Inherited** (no type of its own; the dialog says where the type comes from and what it is, e.g. "from documentation: Baseline", or "non-sectioned" when no folder above sets one), **Baseline**, **Change**, **Auxiliary** and **Non-sectioned**, each with a one-line description.
+3. **Default prefix** shows for a sectioned type, starting from the folder's own prefix or else the inherited one, which the help text names. It is typed in upper case and checked as the section ID prefix (an upper-case letter and 1 to 4 upper-case letters or digits); an invalid prefix, or none for a sectioned type, is reported under the field. A prefix equal to the inherited one is saved as inherited. Several folders may share a prefix.
+4. Saving writes only the values that differ from the inherited ones; a file left with nothing is deleted. The type and prefix fields are shared with the new folder dialog.
 5. **Add section anchors…** opens **Add section anchors** (§3.4) for the folder, closing this dialog. It is enabled while the folder is sectioned with the saved settings.
 6. **Save** is enabled once the setting changed and is valid. When the save makes the folder sectioned, the dialog says so and offers **Add section anchors…** and **Close**; when it stops being sectioned, it says the anchors stay in the files and the sections keep their IDs if it is sectioned again.
 7. If the file changed on disk since the dialog read it, the save is refused, the dialog reloads the settings and says so. A file that isn't valid YAML is reported and can't be saved to until it is fixed by hand.

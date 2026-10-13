@@ -103,9 +103,6 @@ test("notices changes on disk, but not its own writes", async () => {
   const read = await files.read();
   expect(read.prefixes.get("SPEC")?.lastSequence).toBe(3);
   expect(await files.changed()).toBe(false);
-  // An old documents.yaml is neither watched nor written
-  await Bun.write(join(temp.root, ".specquer/shared/documents.yaml"), "documents:\n  d2: { path: b.md }\n");
-  expect(await files.changed()).toBe(false);
   // A vanished file is written again even with unchanged content
   await Bun.$`rm ${join(temp.root, ".specquer/shared/REQ/sections.yaml")}`.quiet();
   await files.read();

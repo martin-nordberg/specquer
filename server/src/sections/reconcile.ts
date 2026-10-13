@@ -23,6 +23,9 @@ import { type PrefixData, type SectionData, type SectionEntry, emptyPrefixData }
  *
  * Sections, in this order:
  * - An ID whose prefix isn't known is renumbered.
+ * - An `XYZ-?` placeholder with a UID no other section holds asks for a new ID in prefix `XYZ`
+ *   for the same section: it keeps its UID and is renumbered (`prefix-requested`). The caller
+ *   moves the UID's entry once the file is written. With a UID held elsewhere, it is a new section.
  * - A known UID with another ID (an edited ID): the recorded ID is put back, unless another
  *   section holds it.
  * - A retired ID with its retired UID is a restore; with no UID or another UID it is reused and
@@ -47,6 +50,8 @@ export interface ScannedSection {
   id: string | null;
   /** The anchor's UID, or `null` for none. */
   uid: string | null;
+  /** The prefix an `XYZ-?` placeholder asks for. */
+  requestedPrefix?: string;
 }
 
 export interface ScannedDocument {
@@ -71,6 +76,11 @@ export interface DocumentFix {
   uids: Map<number, string>;
   /** Sections whose UID is replaced because another section holds it. */
   uidReplaced: Set<number>;
+  /**
+   * Sections keeping their UID with a new ID in a requested prefix, by index, with the ID
+   * recorded for the UID (`null` if none).
+   */
+  prefixChanges: Map<number, string | null>;
 }
 
 export interface DuplicateOccurrence {
@@ -224,9 +234,17 @@ export function reconcile(
   const frozen: Occurrence[] = [];
   const present = new Set<string>();
   const highest = new Map<string, number>();
+  // How many sections hold each UID, to tell a prefix change from a copy
+  const uidCount = new Map<string, number>();
+  for (const doc of documents) {
+    for (const [index, section] of doc.sections.entries()) {
+      const uid = index === 0 ? assigned.get(doc)! : section.uid;
+      if (uid !== null) uidCount.set(uid, (uidCount.get(uid) ?? 0) + 1);
+    }
+  }
   for (const doc of documents) {
     const documentId = assigned.get(doc)!;
-    const fix: DocumentFix = { documentId, renumber: new Map(), restore: new Map(), uids: new Map(), uidReplaced: new Set() };
+    const fix: DocumentFix = { documentId, renumber: new Map(), restore: new Map(), uids: new Map(), uidReplaced: new Set(), prefixChanges: new Map() };
     fixes.set(doc.path, fix);
     doc.sections.forEach((section, index) => {
       const uid = index === 0 ? documentId : section.uid;
@@ -241,6 +259,11 @@ export function reconcile(
       }
       if (section.id === null || !known) {
         if (section.id !== null) fix.renumber.set(index, "unknown-prefix");
+        else if (section.requestedPrefix !== undefined && uid !== null && uidCount.get(uid) === 1) {
+          fix.renumber.set(index, "prefix-requested");
+          fix.prefixChanges.set(index, recordedByUid.get(uid)?.id ?? null);
+          return;
+        }
         if (index !== 0) fix.uids.set(index, newUid());
         return;
       }

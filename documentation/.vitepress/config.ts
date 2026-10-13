@@ -96,6 +96,14 @@ export default defineConfig({
                     items: [
                       {text: 'Requirements', link: '/work-items/step-007-no-documents-file/requirements'},
                     ]
+                  },
+                  {
+                    text: '008-Folder Types and Prefixes',
+                    collapsed: false,
+                    items: [
+                      {text: 'Requirements', link: '/work-items/step-008-refactor-settings/requirements'},
+                      {text: 'Implementation Plan', link: '/work-items/step-008-refactor-settings/implementation-plan'},
+                    ]
                   }
                 ]
               }

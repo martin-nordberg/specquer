@@ -11,6 +11,7 @@ import {
   parentPath,
   pathSegments,
 } from "@specquer/shared/paths";
+import { FOLDER_CONFIG_FILE } from "@specquer/shared/settings";
 import { gitInfo, gitMarkdownFiles, gitUncommitted, gitUntrackedFolders } from "./git.ts";
 
 /** Folders the tree never shows (besides the protected `.git` and `.specquer`). */
@@ -113,6 +114,22 @@ export class FileService {
     await this.existingFolder(path);
   }
 
+  /**
+   * The absolute path of a folder's configuration file, for reading and writing it: the folder
+   * must exist with its real path inside the root, and the file must not be a symbolic link.
+   */
+  async folderConfigFile(folder: string): Promise<string> {
+    const target = join(await this.existingFolder(folder), FOLDER_CONFIG_FILE);
+    try {
+      if ((await lstat(target)).isSymbolicLink()) {
+        throw new ApiError(403, "forbidden", `'${joinPath(folder, FOLDER_CONFIG_FILE)}' is a symbolic link.`);
+      }
+    } catch (err) {
+      if (!isNotFound(err)) throw err;
+    }
+    return target;
+  }
+
   async kindOf(path: string): Promise<"file" | "folder" | undefined> {
     if (!checkPath(path).ok) return undefined;
     try {
@@ -124,9 +141,11 @@ export class FileService {
   }
 
   async getTree(): Promise<Tree> {
-    const { files, walked } = await this.markdownFiles();
+    const { files, configs, walked } = await this.markdownFiles();
     const truncated = files.length > MAX_TREE_FILES || walked.entries > MAX_WALK_ENTRIES;
-    return { root: buildTree(files.slice(0, MAX_TREE_FILES), walked.emptyFolders), truncated };
+    // A folder holding only its configuration file still shows
+    const folders = [...walked.emptyFolders, ...configs.map(parentPath).filter((folder) => folder !== "")];
+    return { root: buildTree(files.slice(0, MAX_TREE_FILES), folders), truncated };
   }
 
   /** Every Markdown file the tree would show, sorted, without the tree's size limit. */
@@ -134,7 +153,16 @@ export class FileService {
     return (await this.markdownFiles()).files;
   }
 
-  private async markdownFiles(): Promise<{ files: string[]; walked: WalkResult }> {
+  /**
+   * Every Markdown file the tree would show and every folder configuration file
+   * (`.specquer-config.yaml`) in the folders it visits, sorted, without the tree's size limit.
+   */
+  async listFiles(): Promise<{ markdown: string[]; configs: string[] }> {
+    const { files, configs } = await this.markdownFiles();
+    return { markdown: files, configs };
+  }
+
+  private async markdownFiles(): Promise<{ files: string[]; configs: string[]; walked: WalkResult }> {
     const walked: WalkResult = { files: [], emptyFolders: [], entries: 0 };
     const gitFiles = await gitMarkdownFiles(this.root);
     if (gitFiles === null) await this.walk("", walked, true);
@@ -148,16 +176,20 @@ export class FileService {
       }
     }
     const files: string[] = [];
+    const configs: string[] = [];
     for (const path of walked.files) {
       const check = checkPath(path);
-      if (!check.ok || !isMarkdownFile(check.path)) continue;
+      if (!check.ok) continue;
+      const isConfig = baseName(check.path) === FOLDER_CONFIG_FILE;
+      if (!isConfig && !isMarkdownFile(check.path)) continue;
       if (pathSegments(check.path).some((segment) => SKIPPED_FOLDERS.has(segment))) continue;
       // Git lists tracked files that were deleted from disk
       if ((await this.kindOf(check.path)) !== "file") continue;
-      files.push(check.path);
+      (isConfig ? configs : files).push(check.path);
     }
     files.sort();
-    return { files, walked };
+    configs.sort();
+    return { files, configs, walked };
   }
 
   /**
@@ -177,8 +209,9 @@ export class FileService {
       if (++result.entries > MAX_WALK_ENTRIES || result.files.length > MAX_TREE_FILES) return true;
       const path = joinPath(folder, entry.name);
       if (!entry.isDirectory() || SKIPPED_FOLDERS.has(entry.name)) {
-        holdsFiles = true;
-        if (collectFiles && entry.isFile() && isMarkdownFile(path)) result.files.push(path);
+        // A folder holding only its configuration file counts as empty, so the tree shows it
+        if (entry.name !== FOLDER_CONFIG_FILE) holdsFiles = true;
+        if (collectFiles && entry.isFile() && (isMarkdownFile(path) || entry.name === FOLDER_CONFIG_FILE)) result.files.push(path);
       } else if (await this.walk(path, result, collectFiles)) holdsFiles = true;
     }
     if (!holdsFiles && folder !== "") result.emptyFolders.push(folder);

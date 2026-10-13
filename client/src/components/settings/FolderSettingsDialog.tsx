@@ -1,13 +1,10 @@
 import { useCallback, useEffect, useId, useState } from "react";
 import type { FolderSettings, TreeFolder } from "@specquer/shared/api";
-import { isPrefix } from "@specquer/shared/sections";
-import type { FolderSetting } from "@specquer/shared/settings";
+import { FOLDER_CONFIG_FILE } from "@specquer/shared/settings";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import type { Api } from "@/lib/api";
+import { FolderFields, type FolderFieldValues, effectiveSettings, fieldValues, isSectioned, settingFor } from "./FolderFields";
 
 export interface FolderSettingsDialogProps {
   /** The folder, or `null` when the dialog is closed. */
@@ -18,36 +15,18 @@ export interface FolderSettingsDialogProps {
   onAddAnchors: (folder: TreeFolder) => void;
 }
 
-const PREFIX_FILE = ".specquer/shared/section-prefixes.config.yaml";
-
-type Choice = FolderSetting["kind"];
-
-/** Whether a folder is sectioned with these settings. */
-function isSectioned(settings: FolderSettings): boolean {
-  if (settings.own.kind === "prefix") return true;
-  return settings.own.kind === "inherit" && settings.inherited !== null && settings.inherited.prefix !== null;
-}
-
 const folderName = (path: string) => (path === "" ? "the root folder" : path);
-
-/** What a folder without an entry of its own follows. */
-function inheritedText(settings: FolderSettings): string {
-  const inherited = settings.inherited;
-  if (inherited === null) return "not sectioned (no folder above it has an entry)";
-  const from = inherited.from === "" ? "the root folder" : inherited.from;
-  return inherited.prefix === null ? `from ${from}: not sectioned` : `from ${from}: sectioned, prefix ${inherited.prefix}`;
-}
+const configFile = (path: string) => (path === "" ? FOLDER_CONFIG_FILE : `${path}/${FOLDER_CONFIG_FILE}`);
 
 /**
- * A folder's settings: whether its Markdown files are sectioned (inherited from the folder above,
- * yes with a prefix, or no) and **Add section anchors**. Saving writes the folder's entry in the
- * prefix configuration.
+ * A folder's settings: its type (inherited from the folder above, or Baseline, Change, Auxiliary
+ * or Non-sectioned), its default prefix, and **Add section anchors**. Saving writes the folder's
+ * own `.specquer-config.yaml`, holding only the values that differ from the inherited ones.
  */
 export function FolderSettingsDialog({ folder, onClose, api, onAddAnchors }: FolderSettingsDialogProps) {
   const id = useId();
   const [settings, setSettings] = useState<FolderSettings | null>(null);
-  const [choice, setChoice] = useState<Choice>("inherit");
-  const [prefix, setPrefix] = useState("");
+  const [values, setValues] = useState<FolderFieldValues>({ folderType: "inherit", prefix: "" });
   const [message, setMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   /** After a save that changed whether the folder is sectioned. */
@@ -57,8 +36,7 @@ export function FolderSettingsDialog({ folder, onClose, api, onAddAnchors }: Fol
     async (path: string) => {
       const loaded = await api.folderSettings(path);
       setSettings(loaded);
-      setChoice(loaded.own.kind);
-      setPrefix(loaded.own.kind === "prefix" ? loaded.own.prefix : (loaded.inherited?.prefix ?? ""));
+      setValues(fieldValues(loaded));
     },
     [api],
   );
@@ -73,23 +51,21 @@ export function FolderSettingsDialog({ folder, onClose, api, onAddAnchors }: Fol
 
   if (folder === null) return <Dialog open={false} />;
 
-  const trimmed = prefix.trim();
-  const prefixError = choice === "prefix" && !isPrefix(trimmed) ? "An upper-case letter followed by 1 to 4 upper-case letters or digits, such as SPEC." : undefined;
-  const setting: FolderSetting = choice === "prefix" ? { kind: "prefix", prefix: trimmed } : { kind: choice };
-  const changed =
-    settings !== null && (settings.own.kind !== setting.kind || (setting.kind === "prefix" && settings.own.kind === "prefix" && settings.own.prefix !== setting.prefix));
+  const { setting, problem } = settings === null ? { setting: undefined, problem: undefined } : settingFor(values, settings.inherited);
+  const changed = settings !== null && setting !== undefined && (settings.own.folderType !== setting.folderType || settings.own.defaultPrefix !== setting.defaultPrefix);
+  const sectioned = settings !== null && isSectioned(effectiveSettings(settings));
 
   const save = async () => {
-    if (settings === null) return;
+    if (settings === null || setting === undefined) return;
     setSaving(true);
     setMessage(null);
     try {
       const outcome = await api.saveFolderSettings(folder.path, setting, settings.version);
       if (outcome.kind === "conflict") {
         await load(folder.path);
-        setMessage(`${PREFIX_FILE} changed on disk, so the settings were reloaded. Make your change again.`);
+        setMessage(`${configFile(folder.path)} changed on disk, so the settings were reloaded. Make your change again.`);
       } else if (outcome.kind === "invalid") setMessage(outcome.message);
-      else if (outcome.sectioned !== isSectioned(settings)) {
+      else if (outcome.sectioned !== sectioned) {
         await load(folder.path);
         setAfter(outcome.sectioned ? "sectioned" : "unsectioned");
       } else onClose();
@@ -112,7 +88,7 @@ export function FolderSettingsDialog({ folder, onClose, api, onAddAnchors }: Fol
           <DialogTitle>Folder settings</DialogTitle>
           <DialogDescription>
             Settings for <span className="font-mono">{folderName(folder.path)}</span> and the folders in it, saved in{" "}
-            <span className="font-mono">{PREFIX_FILE}</span>.
+            <span className="font-mono">{configFile(folder.path)}</span>.
           </DialogDescription>
         </DialogHeader>
         {after !== null ? (
@@ -134,59 +110,17 @@ export function FolderSettingsDialog({ folder, onClose, api, onAddAnchors }: Fol
                   {settings.error}. Fix the file by hand before saving.
                 </p>
               )}
-              <div className="grid gap-2">
-                <p id={`${id}-sectioned`} className="font-medium">
-                  Sectioned
-                </p>
-                <p className="text-xs text-muted-foreground">Specquer adds section anchors, which give sections permanent IDs, to the Markdown files of a sectioned folder.</p>
-                <RadioGroup aria-labelledby={`${id}-sectioned`} value={choice} onValueChange={(value) => setChoice(value as Choice)}>
-                  <Label htmlFor={`${id}-inherit`} className="font-normal">
-                    <RadioGroupItem id={`${id}-inherit`} value="inherit" /> Inherited: {inheritedText(settings)}
-                  </Label>
-                  <Label htmlFor={`${id}-prefix`} className="font-normal">
-                    <RadioGroupItem id={`${id}-prefix`} value="prefix" /> Yes
-                  </Label>
-                  <Label htmlFor={`${id}-off`} className="font-normal">
-                    <RadioGroupItem id={`${id}-off`} value="off" /> No
-                  </Label>
-                </RadioGroup>
-              </div>
-              {choice === "prefix" && (
-                <div className="grid gap-1.5">
-                  <Label htmlFor={`${id}-prefix-input`}>Prefix</Label>
-                  <Input
-                    id={`${id}-prefix-input`}
-                    className="w-32 font-mono"
-                    value={prefix}
-                    spellCheck={false}
-                    autoComplete="off"
-                    aria-invalid={prefixError !== undefined}
-                    aria-describedby={`${id}-prefix-help`}
-                    onChange={(event) => setPrefix(event.target.value.toUpperCase())}
-                  />
-                  <p id={`${id}-prefix-help`} className={prefixError === undefined ? "text-xs text-muted-foreground" : "text-xs text-error-text"}>
-                    {prefixError ?? "New sections in the folder get IDs with this prefix; existing sections keep theirs."}
-                  </p>
-                </div>
-              )}
-              {settings.fileKeys.length > 0 && (
-                <div className="grid gap-1">
-                  <p>Files inside with settings of their own (edited in the YAML file):</p>
-                  <ul aria-label="Files with their own settings" className="rounded-md border bg-muted px-3 py-1.5 font-mono text-xs">
-                    {settings.fileKeys.map((key) => (
-                      <li key={key.path}>
-                        {key.path}: {key.prefix ?? "not sectioned"}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+              <p className="text-xs text-muted-foreground">
+                Specquer adds section anchors, which give sections permanent IDs, to the Markdown files of a sectioned folder. New sections
+                take their parent section's prefix; a file's root section takes the folder's.
+              </p>
+              <FolderFields id={id} values={values} inherited={settings.inherited} {...(problem === undefined ? {} : { problem })} onChange={setValues} />
               <div className="flex items-center gap-2">
-                <Button type="button" variant="outline" size="sm" disabled={!isSectioned(settings)} onClick={addAnchors}>
+                <Button type="button" variant="outline" size="sm" disabled={!sectioned} onClick={addAnchors}>
                   Add section anchors…
                 </Button>
                 <span className="text-xs text-muted-foreground">
-                  {isSectioned(settings) ? "Add missing anchors to the folder's files." : "For sectioned folders."}
+                  {sectioned ? "Add missing anchors to the folder's files." : "For sectioned folders."}
                 </span>
               </div>
             </div>
@@ -218,7 +152,7 @@ export function FolderSettingsDialog({ folder, onClose, api, onAddAnchors }: Fol
               </Button>
               <Button
                 type="button"
-                disabled={!changed || prefixError !== undefined || saving || settings?.error !== undefined}
+                disabled={!changed || problem !== undefined || saving || settings?.error !== undefined}
                 onClick={() => void save()}
               >
                 Save

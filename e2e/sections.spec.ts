@@ -8,7 +8,7 @@ const filler = Array.from({ length: 60 }, (_, i) => `Paragraph ${i + 1} of fille
 
 test.use({
   files: {
-    ".specquer/shared/section-prefixes.config.yaml": 'prefixes:\n  "specs/": SPEC\n',
+    "specs/.specquer-config.yaml": "folderType: BASELINE\ndefaultPrefix: SPEC\n",
     "specs/plain.md": "# Plain\n\nIntro text.\n",
     "specs/anchored.md": `${anchor("SPEC-00001", DOC)}\n\n${anchor("SPEC-00002", "uidtwo000002")}\n# Anchored\n\n${filler}\n\n${anchor("SPEC-00003", "uidthree0003")}\n## Details\n\n* ${anchor("SPEC-00004", "uidfour00004")} A listed requirement\n`,
     "specs/links.md": "# Links\n\nGo to [the details](anchored.md#SPEC-00003).\n",

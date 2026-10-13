@@ -4,7 +4,7 @@ import { FAKE_MODEL_KEY_ENV, type FakeModel, startFakeModel } from "./fake-model
 import { test as base, contentEditor, expect, hideTab, launch, openFile, saveStatus, treeItem, typeAtEnd } from "./fixtures";
 
 const SHARED_AGENT = "# Shared agent settings\nsummaries:\n  concurrency: 2\n";
-const PREFIXES = 'prefixes:\n  "specs/": SPEC\n';
+const SPECS_CONFIG = "folderType: BASELINE\ndefaultPrefix: SPEC\n";
 const anchor = (id: string, uid: string) => `<a id="${id}" data-uid="${uid}"></a>`;
 const OLD = `${anchor("SPEC-00001", "docaaaaaaaa1")}\n\n${anchor("SPEC-00002", "secbbbbbbbb2")}\n# Old\n\nText.\n`;
 
@@ -18,7 +18,7 @@ const test = base.extend<{ model: FakeModel }>({
   files: async ({ model: _model }, use) => {
     await use({
       ".specquer/shared/agent.config.yaml": SHARED_AGENT,
-      ".specquer/shared/section-prefixes.config.yaml": PREFIXES,
+      "specs/.specquer-config.yaml": SPECS_CONFIG,
       "specs/a.md": `# A\n\n${Array(80).fill("text").join(" ")}\n`,
       "specs/old/old.md": OLD,
       "notes/n.md": "# Note\n",
@@ -79,12 +79,12 @@ test("a model error from the test is shown", async ({ page, model }) => {
 
 test("a folder switched off isn't anchored, and keeps its IDs when switched back", async ({ page, specquer }) => {
   await openFolderSettings(page, "specs", "old");
-  await expect(folderDialog(page)).toContainText("Inherited: from specs: sectioned, prefix SPEC");
-  await folderDialog(page).getByRole("radio", { name: "No" }).click();
+  await expect(folderDialog(page)).toContainText("Inherited: from specs: Baseline");
+  await folderDialog(page).getByRole("radio", { name: /^Non-sectioned/ }).click();
   await folderDialog(page).getByRole("button", { name: "Save" }).click();
   await expect(folderDialog(page).getByRole("status")).toContainText("The anchors stay in its files");
   await folderDialog(page).getByRole("button", { name: "Close" }).first().click();
-  expect(await specquer.read(".specquer/shared/section-prefixes.config.yaml")).toBe(`${PREFIXES}  "specs/old/": null\n`);
+  expect((await specquer.read("specs/old/.specquer-config.yaml")).endsWith("folderType: NONSECTIONED\n")).toBe(true);
 
   await openFile(page, "old", "old.md");
   await typeAtEnd(contentEditor(page), "\n## Added while off");
@@ -104,19 +104,19 @@ test("a folder switched off isn't anchored, and keeps its IDs when switched back
   const text = await specquer.read("specs/old/old.md");
   expect(text.startsWith(OLD)).toBe(true);
   expect(text).toMatch(/<a id="SPEC-0000[3-9]" data-uid="[a-z0-9]+"><\/a>\n## Added while off/);
-  expect(await specquer.read(".specquer/shared/section-prefixes.config.yaml")).toBe(PREFIXES);
+  expect(await specquer.exists("specs/old/.specquer-config.yaml")).toBe(false);
 });
 
-test("a new folder gets a prefix from the dialog", async ({ page, specquer }) => {
+test("a folder gets a type and a prefix from the dialog", async ({ page, specquer }) => {
   await openFolderSettings(page, "notes");
-  await expect(folderDialog(page)).toContainText("Inherited: not sectioned");
+  await expect(folderDialog(page)).toContainText("Inherited: non-sectioned");
   await expect(folderDialog(page).getByRole("button", { name: "Add section anchors…" })).toBeDisabled();
-  await folderDialog(page).getByRole("radio", { name: "Yes" }).click();
-  await folderDialog(page).getByRole("textbox", { name: "Prefix" }).fill("note");
+  await folderDialog(page).getByRole("radio", { name: /^Auxiliary/ }).click();
+  await folderDialog(page).getByRole("textbox", { name: "Default prefix" }).fill("note");
   await folderDialog(page).getByRole("button", { name: "Save" }).click();
   await folderDialog(page).getByRole("button", { name: "Add section anchors…" }).last().click();
   await page.getByRole("dialog", { name: "Add section anchors" }).getByRole("button", { name: "Add anchors" }).click();
   await expect(page.getByRole("dialog", { name: "Add section anchors" })).toBeHidden();
   expect(await specquer.read("notes/n.md")).toMatch(/^<a id="NOTE-00001" data-uid="[a-z0-9]+"><\/a>\n\n<a id="NOTE-00002"/);
-  expect(await specquer.read(".specquer/shared/section-prefixes.config.yaml")).toBe(`${PREFIXES}  "notes/": NOTE\n`);
+  expect(await specquer.read("notes/.specquer-config.yaml")).toMatch(/folderType: AUXILIARY\ndefaultPrefix: NOTE\n$/);
 });

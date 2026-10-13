@@ -18,6 +18,9 @@ test("section anchors and placeholders are faded; other anchors aren't", () => {
   expect(isSectionAnchor(anchor("REQ-00001"))).toBe(true);
   expect(isSectionAnchor(PLACEHOLDER)).toBe(true);
   expect(isSectionAnchor('<a id="intro"></a>')).toBe(false);
+  expect(isSectionAnchor('<a id="XYZ-?"></a>')).toBe(true);
+  expect(isSectionAnchor(anchor("XYZ-?"))).toBe(true);
+  expect(isSectionAnchor('<a id="xyz-?"></a>')).toBe(false);
   expect(isSectionAnchor('<a name="x"></a>')).toBe(false);
   const doc = `${anchor("REQ-00001")}\n# A\n\n* ${PLACEHOLDER} item\n\n<a id="intro"></a> text\n`;
   const view = new EditorView({ state: EditorState.create({ doc, extensions: [sectionEditing(async () => false)] }), parent: document.body });

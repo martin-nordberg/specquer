@@ -94,7 +94,7 @@ function pasteLookup(lookup: SectionLookup) {
 /** Whether an empty anchor (open and closing tag) is a section anchor or a placeholder. */
 export function isSectionAnchor(anchor: string): boolean {
   const openTag = anchor.slice(0, anchor.indexOf(">") + 1);
-  return anchorTagSectionId(openTag) !== undefined || /^<a\s+id=(?:""|'')\s*>$/i.test(openTag);
+  return anchorTagSectionId(openTag) !== undefined || /^<a\s+id=(?:""|''|"[A-Z][A-Z0-9]{1,4}-\?"|'[A-Z][A-Z0-9]{1,4}-\?')(?:\s+data-uid="[^"]*")?\s*>$/.test(openTag);
 }
 
 const fadedMark = Decoration.mark({ class: "cm-section-anchor" });

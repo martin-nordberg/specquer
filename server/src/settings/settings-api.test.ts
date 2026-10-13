@@ -15,14 +15,17 @@ afterEach(async () => {
 
 const SHARED = ".specquer/shared/agent.config.yaml";
 const PERSONAL = ".specquer/user/agent.config.yaml";
-const PREFIXES = ".specquer/shared/section-prefixes.config.yaml";
+const DOCS_CONFIG = "docs/.specquer-config.yaml";
+const ARCHIVE_CONFIG = "docs/archive/.specquer-config.yaml";
+const OFF = { folderType: "NONSECTIONED", defaultPrefix: "inherit" } as const;
+const INHERIT = { folderType: "inherit", defaultPrefix: "inherit" } as const;
 const CONFIG = "model:\n  provider: nvidia\n  name: test/model\n  apiKeyEnv: TEST_KEY\nsummaries:\n  concurrency: 2\n";
 const MODEL = { provider: "nvidia" as const, name: "test/model", baseUrl: NVIDIA_BASE_URL, apiKeyEnv: "TEST_KEY" };
 
 type Invoke = (prompt: string, signal: AbortSignal | undefined) => Promise<string>;
 
 async function setup(files: Record<string, string> = {}, invoke: Invoke = async () => "OK") {
-  const temp = await tempRoot({ [SHARED]: CONFIG, [PREFIXES]: 'prefixes:\n  "docs/": REQ\n', ...files });
+  const temp = await tempRoot({ [SHARED]: CONFIG, [DOCS_CONFIG]: "folderType: BASELINE\ndefaultPrefix: REQ\n", ...files });
   cleanups.push(temp.cleanup);
   const prompts: string[] = [];
   const model = {
@@ -171,25 +174,25 @@ describe("folder settings routes", () => {
     expect((await request("/api/settings/folder?path=missing")).status).toBe(404);
     expect((await request("/api/settings/folder?path=docs/a.md")).status).toBe(400);
     expect((await request("/api/settings/folder?path=../x")).status).toBe(400);
-    const put = await request("/api/settings/folder", { method: "PUT", body: { path: "missing", setting: { kind: "off" }, baseVersion: "" } });
+    const put = await request("/api/settings/folder", { method: "PUT", body: { path: "missing", setting: OFF, baseVersion: "" } });
     expect(put.status).toBe(404);
-    const badPrefix = await request("/api/settings/folder", { method: "PUT", body: { path: "docs", setting: { kind: "prefix", prefix: "lower" }, baseVersion: "" } });
+    const badPrefix = await request("/api/settings/folder", { method: "PUT", body: { path: "docs", setting: { folderType: "inherit", defaultPrefix: "lower" }, baseVersion: "" } });
     expect(badPrefix.status).toBe(400);
   });
 
   test("turning a folder off retires its sections; turning it back on restores every ID", async () => {
-    const { json, read } = await setup({ "docs/archive/old.md": ARCHIVED, "docs/a.md": "# A\n" });
+    const { json, read, root } = await setup({ "docs/archive/old.md": ARCHIVED, "docs/a.md": "# A\n" });
     const sectionsOf = async (path: string) => (await json<{ sections: SectionInfo[] }>(`/api/sections?path=${path}`)).body.sections.map((s) => s.id);
     expect(await sectionsOf("docs/archive/old.md")).toEqual(["REQ-00001", "REQ-00002"]);
 
     let settings = (await json<FolderSettings>("/api/settings/folder?path=docs/archive")).body;
-    expect(settings).toMatchObject({ own: { kind: "inherit" }, inherited: { from: "docs", prefix: "REQ" } });
+    expect(settings).toMatchObject({ own: INHERIT, inherited: { folderType: { value: "BASELINE", from: "docs" }, defaultPrefix: { value: "REQ", from: "docs" } } });
     let saved = await json<{ version: string; sectioned: boolean }>("/api/settings/folder", {
       method: "PUT",
-      body: { path: "docs/archive", setting: { kind: "off" }, baseVersion: settings.version },
+      body: { path: "docs/archive", setting: OFF, baseVersion: settings.version },
     });
     expect(saved.body.sectioned).toBe(false);
-    expect(await read(PREFIXES)).toContain('"docs/archive/": null');
+    expect(await read(ARCHIVE_CONFIG)).toEndWith("folderType: NONSECTIONED\n");
     expect(await sectionsOf("docs/archive/old.md")).toEqual([]);
     expect(await read("docs/archive/old.md")).toBe(ARCHIVED);
 
@@ -202,9 +205,9 @@ describe("folder settings routes", () => {
     expect(await read(".specquer/shared/REQ/sections.yaml")).toContain("retired:");
 
     settings = (await json<FolderSettings>("/api/settings/folder?path=docs/archive")).body;
-    saved = await json("/api/settings/folder", { method: "PUT", body: { path: "docs/archive", setting: { kind: "inherit" }, baseVersion: settings.version } });
+    saved = await json("/api/settings/folder", { method: "PUT", body: { path: "docs/archive", setting: INHERIT, baseVersion: settings.version } });
     expect(saved.body.sectioned).toBe(true);
-    expect(await read(PREFIXES)).toBe('prefixes:\n  "docs/": REQ\n');
+    expect(await Bun.file(join(root, ARCHIVE_CONFIG)).exists()).toBe(false);
     const restored = (await json<{ version: string }>("/api/file?path=docs/archive/old.md")).body;
     const result = await json<{ notices?: unknown[] }>("/api/file?path=docs/archive/old.md", {
       method: "PUT",
@@ -217,7 +220,7 @@ describe("folder settings routes", () => {
     expect(ids[2]).not.toBe("REQ-00001");
   });
 
-  test("settings routes write nothing but the three configuration files", async () => {
+  test("settings routes write nothing but the configuration files", async () => {
     const { json, root } = await setup({ "docs/a.md": "# A\n", "docs/sub/b.md": "# B\n" });
     const snapshot = async () => {
       const entries = await readdir(root, { recursive: true });
@@ -233,10 +236,10 @@ describe("folder settings routes", () => {
     await json("/api/settings/agent", { method: "PUT", body: { scope: "shared", baseVersion: agent.shared.version, summaries: { concurrency: 3 } } });
     await json("/api/settings/agent", { method: "PUT", body: { scope: "personal", baseVersion: agent.personal.version, summaries: { prefill: false } } });
     const folder = (await json<FolderSettings>("/api/settings/folder?path=docs/sub")).body;
-    await json("/api/settings/folder", { method: "PUT", body: { path: "docs/sub", setting: { kind: "prefix", prefix: "SUB" }, baseVersion: folder.version } });
+    await json("/api/settings/folder", { method: "PUT", body: { path: "docs/sub", setting: { folderType: "inherit", defaultPrefix: "SUB" }, baseVersion: folder.version } });
     await json("/api/settings/model-test", { method: "POST", body: MODEL });
     const after = await snapshot();
     const changed = [...new Set([...before.keys(), ...after.keys()])].filter((path) => before.get(path) !== after.get(path)).sort();
-    expect(changed).toEqual([".specquer/shared/agent.config.yaml", PREFIXES, ".specquer/user/.gitignore", PERSONAL].sort());
+    expect(changed).toEqual([".specquer/shared/agent.config.yaml", "docs/sub/.specquer-config.yaml", ".specquer/user/.gitignore", PERSONAL].sort());
   });
 });

@@ -22,8 +22,12 @@ import { isUid } from "../sections/uids.ts";
  * - List item: an anchor as the first inline node of the first paragraph of an item of a
  *   top-level list. A list is sectioned when at least one of its items has an anchor.
  *
- * An anchor whose `id` isn't in the section ID format (blank included) is a placeholder: the
- * section exists and gets an ID (and a new UID) when the anchors are next written.
+ * In a section anchor's place, an anchor with a blank `id` or `XYZ-?` (a prefix, a dash and a
+ * question mark) is a placeholder: the section exists and gets an ID when the anchors are next
+ * written, in the inherited prefix or in `XYZ`. A blank placeholder gets a new UID; `XYZ-?` keeps
+ * its `data-uid`, which is how a section's prefix is changed. Any other anchor (`<a id="intro">`)
+ * isn't a section anchor and is left alone; a paragraph of such anchors before a heading takes
+ * the heading's section anchor at its start.
  *
  * Anchors with a section ID anywhere else (in block quotes, nested lists, ordinary paragraphs)
  * are **stray**: they no longer mark a section, usually because text moved.
@@ -37,7 +41,7 @@ export interface Range {
 }
 
 export interface FoundAnchor extends Range {
-  /** The `id` attribute's value, which may not be a section ID (a placeholder). */
+  /** The `id` attribute's value, which may not be a section ID (a placeholder, or another anchor). */
   rawId: string;
   /** The whole `id="…"` attribute. */
   idAttribute: Range;
@@ -49,15 +53,20 @@ export interface FoundAnchor extends Range {
   openTagEnd: number;
 }
 
-/** How a missing anchor is written for a section. */
-export type AnchorForm = "root" | "atx" | "setext" | "item";
+/**
+ * How a missing anchor is written for a section; `paragraph`: at the start of the paragraph of
+ * other anchors before its heading.
+ */
+export type AnchorForm = "root" | "atx" | "setext" | "item" | "paragraph";
 
 export interface FoundSection {
   kind: SectionKind;
   /** The section ID, or `null` when the section has no anchor yet or a placeholder. */
   id: string | null;
-  /** The anchor's UID, or `null` when it has none, an invalid one, or the anchor is a placeholder. */
+  /** The anchor's UID, or `null` when it has none, an invalid one, or the anchor is a blank placeholder. */
   uid: string | null;
+  /** The prefix an `XYZ-?` placeholder asks for. */
+  requestedPrefix?: string;
   anchor?: FoundAnchor;
   /** The heading level (1 to 6) for heading sections. */
   depth?: number;
@@ -173,12 +182,55 @@ export function isAnchorCloseTag(html: string): boolean {
   return CLOSE_TAG.test(html.trim());
 }
 
-/** The anchor of a paragraph that holds nothing else (whitespace aside). */
-function soleAnchor(node: RootContent | undefined): FoundAnchor | undefined {
+const REQUESTED_PREFIX = /^([A-Z][A-Z0-9]{1,4})-\?$/;
+
+/**
+ * What a placeholder's `id` asks for: `""` for the inherited prefix (a blank `id`), the prefix of
+ * `XYZ-?`, or `undefined` when the `id` isn't a placeholder.
+ */
+export function placeholderPrefix(rawId: string): string | undefined {
+  if (rawId === "") return "";
+  return REQUESTED_PREFIX.exec(rawId)?.[1];
+}
+
+/** Whether an anchor's `id` makes it a section anchor: a section ID, or a placeholder. */
+export function isSectionAnchorId(rawId: string): boolean {
+  return isSectionId(rawId) || placeholderPrefix(rawId) !== undefined;
+}
+
+/** A section anchor (or placeholder) starting at `children[index]`, or `undefined`. */
+function sectionAnchorAt(children: PhrasingContent[], index: number): FoundAnchor | undefined {
+  const anchor = anchorAt(children, index);
+  return anchor !== undefined && isSectionAnchorId(anchor.rawId) ? anchor : undefined;
+}
+
+/**
+ * A paragraph made only of anchors (whitespace aside): its first section anchor, if any, and
+ * whether it holds only other anchors.
+ */
+function anchorParagraph(node: RootContent | undefined): { anchor?: FoundAnchor; othersOnly: boolean } | undefined {
   if (node?.type !== "paragraph") return undefined;
-  const rest = node.children.slice(2);
-  if (rest.some((child) => child.type !== "text" || child.value.trim() !== "")) return undefined;
-  return anchorAt(node.children, 0);
+  const anchors: FoundAnchor[] = [];
+  const children = node.children;
+  for (let index = 0; index < children.length; ) {
+    const child = children[index]!;
+    if (child.type === "text" && child.value.trim() === "") {
+      index++;
+      continue;
+    }
+    const anchor = anchorAt(children, index);
+    if (anchor === undefined) return undefined;
+    anchors.push(anchor);
+    index += 2;
+  }
+  if (anchors.length === 0) return undefined;
+  const anchor = anchors.find((found) => isSectionAnchorId(found.rawId));
+  return anchor === undefined ? { othersOnly: true } : { anchor, othersOnly: false };
+}
+
+/** The section anchor of a paragraph made only of anchors. */
+function paragraphAnchor(node: RootContent | undefined): FoundAnchor | undefined {
+  return anchorParagraph(node)?.anchor;
 }
 
 function plainText(node: Nodes): string {
@@ -208,19 +260,29 @@ function sectionId(anchor: FoundAnchor | undefined): string | null {
 }
 
 function sectionUid(anchor: FoundAnchor | undefined): string | null {
-  return sectionId(anchor) !== null && anchor!.uid !== undefined && isUid(anchor!.uid) ? anchor!.uid : null;
+  if (anchor === undefined || anchor.uid === undefined || !isUid(anchor.uid)) return null;
+  return sectionId(anchor) !== null || requestedPrefix(anchor) !== undefined ? anchor.uid : null;
+}
+
+function requestedPrefix(anchor: FoundAnchor | undefined): string | undefined {
+  const prefix = anchor === undefined || isSectionId(anchor.rawId) ? undefined : placeholderPrefix(anchor.rawId);
+  return prefix === "" ? undefined : prefix;
+}
+
+/** A found section's ID, UID and requested prefix, from its anchor. */
+function identity(anchor: FoundAnchor | undefined): Pick<FoundSection, "id" | "uid" | "requestedPrefix" | "anchor"> {
+  const prefix = requestedPrefix(anchor);
+  return { id: sectionId(anchor), uid: sectionUid(anchor), ...(prefix === undefined ? {} : { requestedPrefix: prefix }), anchor };
 }
 
 function itemSection(item: ListItem): FoundSection | undefined {
   const paragraph = item.children[0];
   if (paragraph?.type !== "paragraph" || paragraph.children.length === 0) return undefined;
-  const anchor = anchorAt(paragraph.children, 0);
+  const anchor = sectionAnchorAt(paragraph.children, 0);
   const words = plainText(paragraph as Paragraph).trim().split(/\s+/).filter((word) => word !== "");
   return {
     kind: "item",
-    id: sectionId(anchor),
-    uid: sectionUid(anchor),
-    anchor,
+    ...identity(anchor),
     title: words.slice(0, ITEM_TITLE_WORDS).join(" ") + (words.length > ITEM_TITLE_WORDS ? " …" : ""),
     insertAt: start(paragraph.children[0]!),
     form: "item",
@@ -296,7 +358,7 @@ function sectionsOf(body: string, tree: Root, options: AnalyzeOptions): FoundSec
   // The root anchor
   let rootAnchor: FoundAnchor | undefined;
   const first = blocks[0];
-  const firstAnchor = soleAnchor(first);
+  const firstAnchor = paragraphAnchor(first);
   if (first !== undefined && firstAnchor !== undefined) {
     const next = blocks[1];
     const headingOnNextLine = next?.type === "heading" && next.position!.start.line === first.position!.end.line + 1;
@@ -305,9 +367,7 @@ function sectionsOf(body: string, tree: Root, options: AnalyzeOptions): FoundSec
   }
   sections.push({
     kind: "root",
-    id: sectionId(rootAnchor),
-    uid: sectionUid(rootAnchor),
-    anchor: rootAnchor,
+    ...identity(rootAnchor),
     title: "",
     insertAt: 0,
     form: "root",
@@ -316,19 +376,19 @@ function sectionsOf(body: string, tree: Root, options: AnalyzeOptions): FoundSec
   blocks.forEach((block, index) => {
     if (block.type === "heading") {
       const previous = index > 0 ? blocks[index - 1] : undefined;
-      const before = previous === first && rootAnchor !== undefined ? undefined : soleAnchor(previous);
-      const inline = anchorAt(block.children, 0);
-      const anchor = before ?? inline;
+      const paragraph = previous === first && rootAnchor !== undefined ? undefined : anchorParagraph(previous);
+      const inline = sectionAnchorAt(block.children, 0);
+      const anchor = paragraph?.anchor ?? inline;
       const atx = isAtx(body, block);
+      // Other anchors before the heading take its section anchor at their paragraph's start
+      const othersBefore = anchor === undefined && paragraph?.othersOnly === true;
       sections.push({
         kind: "heading",
-        id: sectionId(anchor),
-        uid: sectionUid(anchor),
-        anchor,
+        ...identity(anchor),
         depth: block.depth,
         title: plainText(block).trim(),
-        insertAt: atx ? lineStart(body, start(block)) : start(block),
-        form: atx ? "atx" : "setext",
+        insertAt: othersBefore ? start(previous!) : atx ? lineStart(body, start(block)) : start(block),
+        form: othersBefore ? "paragraph" : atx ? "atx" : "setext",
       });
     } else if (block.type === "list") {
       const items = block.children.map(itemSection);
@@ -403,6 +463,8 @@ function insertion(body: string, section: FoundSection, id: string, uid: string)
     case "setext":
     case "item":
       return `${anchorTag(id, uid)} `;
+    case "paragraph":
+      return anchorTag(id, uid);
   }
 }
 

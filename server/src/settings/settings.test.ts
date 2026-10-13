@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { NVIDIA_BASE_URL } from "@specquer/shared/settings";
+import { FileService } from "../files.ts";
 import { tempRoot } from "../test-support.ts";
 import { AgentSettingsFiles } from "./agent-settings.ts";
 import { FolderSettingsFile } from "./folder-settings.ts";
@@ -14,7 +16,6 @@ afterEach(async () => {
 
 const SHARED = ".specquer/shared/agent.config.yaml";
 const PERSONAL = ".specquer/user/agent.config.yaml";
-const PREFIXES = ".specquer/shared/section-prefixes.config.yaml";
 
 const SHARED_TEXT = `# The model for agent features.
 model:
@@ -28,12 +29,15 @@ summaries:
 future: kept
 `;
 
-const PREFIX_TEXT = `# Prefixes
-prefixes:
-  "./documentation/": DOC # the docs
-  "documentation/notes/": NOTE
-  "documentation/notes/ideas.md": IDEA
+const DOCS_CONFIG = "documentation/.specquer-config.yaml";
+const DOCS_TEXT = `# The docs
+folderType: BASELINE # sectioned
+defaultPrefix: DOC
+other: kept
 `;
+
+/** The folders the folder settings tests use. */
+const FOLDERS = { [DOCS_CONFIG]: DOCS_TEXT, "documentation/notes/a.md": "", "documentation/specs/deep/a.md": "", "other/a.md": "" };
 
 async function setup(files: Record<string, string>) {
   const temp = await tempRoot(files);
@@ -42,7 +46,7 @@ async function setup(files: Record<string, string>) {
   const read = (path: string) => Bun.file(join(temp.root, path)).text();
   const exists = (path: string) => Bun.file(join(temp.root, path)).exists();
   const environment = { keySet: (name: string) => name === "NVIDIA_API_KEY", status: async () => ({ enabled: false }) };
-  return { root: temp.root, agent: new AgentSettingsFiles(temp.root, queue), folders: new FolderSettingsFile(temp.root, queue), read, exists, environment };
+  return { root: temp.root, agent: new AgentSettingsFiles(temp.root, queue), folders: new FolderSettingsFile(new FileService(temp.root), queue), read, exists, environment };
 }
 
 describe("agent settings", () => {
@@ -130,67 +134,66 @@ describe("agent settings", () => {
 });
 
 describe("folder settings", () => {
-  test("reads a folder's own entry, what it inherits and the file keys in it", async () => {
-    const { folders } = await setup({ [PREFIXES]: PREFIX_TEXT });
+  test("reads a folder's own settings and what it inherits, key by key", async () => {
+    const { folders } = await setup({ ...FOLDERS, "documentation/notes/.specquer-config.yaml": "folderType: AUXILIARY\n" });
     expect(await folders.read("documentation/notes")).toMatchObject({
-      own: { kind: "prefix", prefix: "NOTE" },
-      inherited: { from: "documentation", prefix: "DOC" },
-      fileKeys: [{ path: "documentation/notes/ideas.md", prefix: "IDEA" }],
+      own: { folderType: "AUXILIARY", defaultPrefix: "inherit" },
+      inherited: { folderType: { value: "BASELINE", from: "documentation" }, defaultPrefix: { value: "DOC", from: "documentation" } },
     });
-    expect(await folders.read("documentation/specs")).toMatchObject({ own: { kind: "inherit" }, inherited: { from: "documentation", prefix: "DOC" } });
-    expect(await folders.read("other")).toMatchObject({ own: { kind: "inherit" }, inherited: null, fileKeys: [] });
+    expect(await folders.read("documentation/specs/deep")).toMatchObject({
+      version: "",
+      own: { folderType: "inherit", defaultPrefix: "inherit" },
+      inherited: { folderType: { value: "BASELINE", from: "documentation" } },
+    });
+    expect(await folders.read("other")).toMatchObject({ inherited: { folderType: { value: null, from: null }, defaultPrefix: { value: null, from: null } } });
+    expect(await folders.read("")).toMatchObject({ inherited: { folderType: { value: null, from: null } } });
   });
 
-  test("edits a key in place, whatever its spelling, keeping comments", async () => {
-    const { folders, read } = await setup({ [PREFIXES]: PREFIX_TEXT });
+  test("edits the keys in place, keeping comments and other keys", async () => {
+    const { folders, read } = await setup(FOLDERS);
     const { version } = await folders.read("documentation");
-    expect((await folders.write("documentation", { kind: "prefix", prefix: "SPEC" }, version)).ok).toBe(true);
-    expect(await read(PREFIXES)).toBe(PREFIX_TEXT.replace(": DOC #", ": SPEC #"));
+    expect((await folders.write("documentation", { folderType: "CHANGE", defaultPrefix: "SPEC" }, version)).ok).toBe(true);
+    expect(await read(DOCS_CONFIG)).toBe(DOCS_TEXT.replace("BASELINE #", "CHANGE #").replace(": DOC", ": SPEC"));
   });
 
-  test("writes null for not sectioned, adds new keys at the end and removes them again", async () => {
-    const { folders, read } = await setup({ [PREFIXES]: PREFIX_TEXT });
-    let { version } = await folders.read("documentation/archive");
-    let result = await folders.write("documentation/archive", { kind: "off" }, version);
-    expect(result.ok).toBe(true);
-    expect(await read(PREFIXES)).toBe(`${PREFIX_TEXT}  "documentation/archive/": null\n`);
-    expect(await folders.read("documentation/archive")).toMatchObject({ own: { kind: "off" } });
-    expect(await folders.read("documentation/archive/deep")).toMatchObject({ inherited: { from: "documentation/archive", prefix: null } });
-    version = (await folders.read("documentation/archive")).version;
-    result = await folders.write("documentation/archive", { kind: "inherit" }, version);
-    expect(result.ok).toBe(true);
-    expect(await read(PREFIXES)).toBe(PREFIX_TEXT);
-    version = (await folders.read("documentation/notes")).version;
-    await folders.write("documentation/notes", { kind: "off" }, version);
-    expect(await read(PREFIXES)).toContain('"documentation/notes/": null\n');
-  });
-
-  test("the root folder's key is ./", async () => {
-    const { folders, read } = await setup({ [PREFIXES]: PREFIX_TEXT });
-    const { version } = await folders.read("");
-    await folders.write("", { kind: "prefix", prefix: "TOP" }, version);
-    expect(await read(PREFIXES)).toEndWith('  "./": TOP\n');
-    expect(await folders.read("")).toMatchObject({ own: { kind: "prefix", prefix: "TOP" }, inherited: null });
-  });
-
-  test("creates the file when there is none", async () => {
-    const { folders, read } = await setup({});
-    const settings = await folders.read("docs");
-    expect(settings).toMatchObject({ version: "", own: { kind: "inherit" }, inherited: null });
-    expect(await folders.write("docs", { kind: "prefix", prefix: "REQ" }, "")).toMatchObject({ ok: true });
-    const text = await read(PREFIXES);
-    expect(text).toStartWith("# Section prefixes");
-    expect(text).toContain('prefixes:\n  "docs/": REQ\n');
+  test("creates a folder's file when a value differs, and deletes it when nothing is left", async () => {
+    const { folders, read, exists } = await setup(FOLDERS);
+    const path = "documentation/notes/.specquer-config.yaml";
+    expect(await folders.write("documentation/notes", { folderType: "inherit", defaultPrefix: "inherit" }, "")).toEqual({ ok: true, version: "" });
+    expect(await exists(path)).toBe(false);
+    expect((await folders.write("documentation/notes", { folderType: "NONSECTIONED", defaultPrefix: "inherit" }, "")).ok).toBe(true);
+    const text = await read(path);
+    expect(text).toStartWith("# Specquer's settings");
+    expect(text).toEndWith("folderType: NONSECTIONED\n");
+    const { version } = await folders.read("documentation/notes");
+    expect(await folders.write("documentation/notes", { folderType: "inherit", defaultPrefix: "inherit" }, version)).toEqual({ ok: true, version: "" });
+    expect(await exists(path)).toBe(false);
+    // A file with other keys is kept
+    const docs = await folders.read("documentation");
+    await folders.write("documentation", { folderType: "inherit", defaultPrefix: "inherit" }, docs.version);
+    expect(await read(DOCS_CONFIG)).toBe("# The docs\nother: kept\n");
   });
 
   test("a stale version is a conflict, and a broken file is never rewritten", async () => {
-    const { folders, read, root } = await setup({ [PREFIXES]: PREFIX_TEXT });
-    const { version } = await folders.read("docs");
-    await Bun.write(join(root, PREFIXES), "prefixes: [\n");
-    expect(await folders.write("docs", { kind: "off" }, version)).toMatchObject({ ok: false, reason: "conflict" });
-    const broken = await folders.read("docs");
-    expect(broken.error).toContain(PREFIXES);
-    expect(await folders.write("docs", { kind: "off" }, broken.version)).toMatchObject({ ok: false, reason: "invalid" });
-    expect(await read(PREFIXES)).toBe("prefixes: [\n");
+    const { folders, read, root } = await setup(FOLDERS);
+    const { version } = await folders.read("documentation");
+    await Bun.write(join(root, DOCS_CONFIG), "folderType: [\n");
+    const setting = { folderType: "NONSECTIONED", defaultPrefix: "inherit" } as const;
+    expect(await folders.write("documentation", setting, version)).toMatchObject({ ok: false, reason: "conflict" });
+    const broken = await folders.read("documentation");
+    expect(broken.error).toContain(DOCS_CONFIG);
+    expect(await folders.write("documentation", setting, broken.version)).toMatchObject({ ok: false, reason: "invalid" });
+    expect(await read(DOCS_CONFIG)).toBe("folderType: [\n");
+  });
+
+  test("never reads or writes through a symbolic link, nor outside the root", async () => {
+    const { folders, root } = await setup(FOLDERS);
+    const outside = await tempRoot({ "x.yaml": "folderType: CHANGE\n" });
+    cleanups.push(outside.cleanup);
+    await symlink(join(outside.root, "x.yaml"), join(root, "other/.specquer-config.yaml"));
+    await expect(folders.read("other")).rejects.toThrow("symbolic link");
+    await symlink(outside.root, join(root, "linked"));
+    await expect(folders.write("linked", { folderType: "CHANGE", defaultPrefix: "inherit" }, "")).rejects.toThrow("outside the root");
+    expect(await Bun.file(join(outside.root, ".specquer-config.yaml")).exists()).toBe(false);
   });
 });

@@ -11,14 +11,16 @@ export function noticeText(notice: SectionNotice): string {
         case "reused":
           return `${notice.id} in “${notice.title}” belonged to a deleted section, so this section is now ${notice.newId}.`;
         case "unknown-prefix":
-          return `${notice.id} in “${notice.title}” has a prefix the configuration doesn't name and is now ${notice.newId}.`;
+          return `${notice.id} in “${notice.title}” has a prefix no folder or section uses and is now ${notice.newId}. To start a prefix, write XYZ-? as the anchor's id.`;
+        case "prefix-requested":
+          return notice.id.endsWith("-?") ? `“${notice.title}” is now ${notice.newId}.` : `${notice.id} in “${notice.title}” is now ${notice.newId}, as requested.`;
         case "duplicate":
         case "collision":
           return `${notice.id} in “${notice.title}” is now ${notice.newId}.`;
       }
       break;
     case "restored":
-      return `The ID of “${notice.title}” was changed to ${notice.id}; section IDs never change, so ${notice.newId} was put back.`;
+      return `The ID of “${notice.title}” was changed to ${notice.id}; section IDs never change, so ${notice.newId} was put back. To give it another prefix, write XYZ-? as its id.`;
     case "uid-replaced":
       return `${notice.id} in “${notice.title}” carried another section's UID and got its own.`;
     case "not-anchored":

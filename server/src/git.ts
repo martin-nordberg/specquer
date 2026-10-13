@@ -19,9 +19,12 @@ export async function gitInfo(root: string): Promise<GitInfo | null> {
   }
 }
 
-/** Markdown files Git doesn't ignore (tracked, or untracked and not ignored), relative to the root. */
+/**
+ * Markdown files and folder configuration files (`.specquer-config.yaml`) Git doesn't ignore
+ * (tracked, or untracked and not ignored), relative to the root.
+ */
 export async function gitMarkdownFiles(root: string): Promise<string[] | null> {
-  const result = await $`git -C ${root} ls-files -z --cached --others --exclude-standard -- ${":(icase)*.md"}`
+  const result = await $`git -C ${root} ls-files -z --cached --others --exclude-standard -- ${":(icase)*.md"} ${":(glob)**/.specquer-config.yaml"}`
     .quiet()
     .nothrow();
   if (result.exitCode !== 0) return null;

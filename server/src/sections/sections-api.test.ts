@@ -10,11 +10,14 @@ afterEach(async () => {
   cleanups = [];
 });
 
-const CONFIG = 'prefixes:\n  "docs/": REQ\n  "docs/specs/": SPEC\n';
+const CONFIG: Record<string, string> = {
+  "docs/.specquer-config.yaml": "folderType: BASELINE\ndefaultPrefix: REQ\n",
+  "docs/specs/.specquer-config.yaml": "defaultPrefix: SPEC\n",
+};
 
-async function setup(files: Record<string, string>, options: { git?: boolean; config?: string | null } = {}) {
+async function setup(files: Record<string, string>, options: { git?: boolean; config?: Record<string, string> | null } = {}) {
   const config = options.config === undefined ? CONFIG : options.config;
-  const temp = await tempRoot({ ...files, ...(config === null ? {} : { ".specquer/shared/section-prefixes.config.yaml": config }) }, options);
+  const temp = await tempRoot({ ...files, ...(config ?? {}) }, options);
   cleanups.push(temp.cleanup);
   const app = testApp(temp.root);
   // Bun.file().text() drops a byte-order mark
@@ -68,11 +71,10 @@ describe("saving", () => {
     expect(await exists(".specquer/shared/REQ/sections.yaml")).toBe(false);
   });
 
-  test("records sections in the data files, and no documents file", async () => {
-    const { save, read, exists } = await setup({ "docs/specs/s.md": "" });
+  test("records sections in the data files", async () => {
+    const { save, read } = await setup({ "docs/specs/s.md": "" });
     await save("docs/specs/s.md", "# Spec\n");
     const sections = await read(".specquer/shared/SPEC/sections.yaml");
-    expect(await exists(".specquer/shared/documents.yaml")).toBe(false);
     expect(sections).toContain("lastSequence: 2\n");
     expect(sections).toMatch(/^ {2}[a-z0-9]+: \{ id: SPEC-00002, documentId: [a-z0-9]+ \}$/m);
   });
@@ -147,7 +149,7 @@ describe("create, rename, delete", () => {
     expect(await read("other/new.md")).toBe("");
   });
 
-  test("renaming a folder updates the paths; moving out of the configuration drops the document", async () => {
+  test("renaming a folder updates the paths; its settings move with it", async () => {
     const { request, save, read } = await setup({ "docs/sub/a.md": "" });
     await save("docs/sub/a.md", "# A\n");
     await request("/api/rename", { method: "POST", body: { path: "docs/sub", newName: "renamed" } });
@@ -156,7 +158,8 @@ describe("create, rename, delete", () => {
     await request("/api/rename", { method: "POST", body: { path: "docs", newName: "elsewhere" } });
     const sections = await read(".specquer/shared/REQ/sections.yaml");
     expect(sections).toContain("lastSequence: 2\n");
-    expect(sections).toMatch(/retired:\n(.*\n)*.*id: REQ-00001 \}/);
+    expect(sections).toMatch(/id: REQ-00001, documentId/);
+    expect(sections).not.toContain("retired:");
   });
 
   test("deleting a folder drops its documents and sections", async () => {
@@ -168,6 +171,82 @@ describe("create, rename, delete", () => {
     expect(sections).not.toMatch(/id: REQ-00001, documentId/);
     expect(sections).toMatch(/retired:\n(.*\n)*.*id: REQ-00001 \}/);
     expect(sections).toMatch(/id: REQ-00003, documentId/);
+  });
+});
+
+describe("prefixes", () => {
+  const uidOf = (text: string, id: string) => new RegExp(`<a id="${id}" data-uid="([a-z0-9]+)"`).exec(text)?.[1];
+
+  test("new sections take their parent's prefix, and XYZ-? starts one", async () => {
+    const { save, read, exists } = await setup({ "docs/a.md": "" });
+    await save("docs/a.md", '# A\n\n<a id="NEW-?"></a>\n## B\n\n### C\n\n* <a id=""></a> item\n\n## D\n');
+    expect(ids(await read("docs/a.md"))).toEqual(["REQ-00001", "REQ-00002", "NEW-00001", "NEW-00002", "NEW-00003", "REQ-00003"]);
+    expect(await exists(".specquer/shared/NEW/sections.yaml")).toBe(true);
+    // Later sections under B still take NEW
+    await save("docs/a.md", `${(await read("docs/a.md")).replace("### C", "### C2\n\n### C")}`);
+    expect(ids(await read("docs/a.md"))).toContain("NEW-00004");
+  });
+
+  test("XYZ-? over an existing ID changes its prefix and keeps its UID; its subsections keep theirs", async () => {
+    const { save, read } = await setup({ "docs/a.md": "" });
+    await save("docs/a.md", "# A\n\n## B\n\n## C\n");
+    const text = await read("docs/a.md");
+    const uid = uidOf(text, "REQ-00002")!;
+    const result = await save("docs/a.md", text.replace('id="REQ-00002"', 'id="XYZ-?"'));
+    const changed = await read("docs/a.md");
+    expect(ids(changed)).toEqual(["REQ-00001", "XYZ-00001", "REQ-00003", "REQ-00004"]);
+    expect(uidOf(changed, "XYZ-00001")).toBe(uid);
+    expect(result.notices).toEqual([{ kind: "renumbered", reason: "prefix-requested", id: "REQ-00002", newId: "XYZ-00001", title: "A" }]);
+    const xyz = await read(".specquer/shared/XYZ/sections.yaml");
+    expect(xyz).toContain(`${uid}: { id: XYZ-00001`);
+    const req = await read(".specquer/shared/REQ/sections.yaml");
+    expect(req).not.toContain(uid);
+    expect(req).toMatch(/retired:\n\s+[a-z0-9]+: \{ id: REQ-00002 \}/);
+    // Saving again changes nothing; a new subsection of A now takes XYZ
+    expect((await save("docs/a.md", changed)).edits).toBeUndefined();
+    await save("docs/a.md", changed.replace("# A\n", "# A\n\n### A1\n"));
+    expect(ids(await read("docs/a.md"))).toEqual(["REQ-00001", "XYZ-00001", "XYZ-00002", "REQ-00003", "REQ-00004"]);
+    // The old ID typed again elsewhere is renumbered, never reused
+    await save("docs/a.md", `${await read("docs/a.md")}\n<a id="REQ-00002"></a>\n# Old\n`);
+    expect(ids(await read("docs/a.md")).at(-1)).toBe("REQ-00005");
+  });
+
+  test("the root anchor's prefix is the file's, also after a move; a copy keeps its own prefix", async () => {
+    const { save, read, write, request } = await setup({ "docs/a.md": "" });
+    await save("docs/a.md", '<a id="DOC-?"></a>\n\n# A\n');
+    const text = await read("docs/a.md");
+    expect(ids(text)).toEqual(["DOC-00001", "DOC-00002"]);
+    // A section copied within the file is renumbered in its own prefix
+    await save("docs/a.md", `${text}\n${text.slice(text.indexOf('<a id="DOC-00002"'))}`);
+    expect(ids(await read("docs/a.md"))).toEqual(["DOC-00001", "DOC-00002", "DOC-00003"]);
+    // Moved by hand into a folder with another default prefix: new sections still take DOC
+    await write("docs/specs/a.md", await read("docs/a.md"));
+    await request("/api/entry?path=docs%2Fa.md", { method: "DELETE" });
+    await save("docs/specs/a.md", `${await read("docs/specs/a.md")}\n## New\n`);
+    expect(ids(await read("docs/specs/a.md"))).toEqual(["DOC-00001", "DOC-00002", "DOC-00003", "DOC-00004"]);
+  });
+
+  test("a new file can be created with another prefix; a new folder with its own settings", async () => {
+    const { request, read, exists } = await setup({ "docs/x.md": "" });
+    await request("/api/create", { method: "POST", body: { parent: "docs", name: "new.md", kind: "file", prefix: "NEW" } });
+    expect(ids(await read("docs/new.md"))).toEqual(["NEW-00001"]);
+    await request("/api/create", { method: "POST", body: { parent: "docs", name: "work", kind: "folder", folderType: "CHANGE", prefix: "WORK" } });
+    expect(await read("docs/work/.specquer-config.yaml")).toContain("folderType: CHANGE\ndefaultPrefix: WORK\n");
+    await request("/api/create", { method: "POST", body: { parent: "docs/work", name: "w.md", kind: "file" } });
+    expect(ids(await read("docs/work/w.md"))).toEqual(["WORK-00001"]);
+    // Inherited values write no file
+    await request("/api/create", { method: "POST", body: { parent: "docs", name: "plain", kind: "folder" } });
+    expect(await exists("docs/plain/.specquer-config.yaml")).toBe(false);
+  });
+
+  test("NONSECTIONED switches off a folder inside a sectioned one; a file added by hand counts from the next scan", async () => {
+    const { save, read, write, request } = await setup({ "docs/old/a.md": "", "docs/old/.specquer-config.yaml": "folderType: NONSECTIONED\n" });
+    await save("docs/old/a.md", "# A\n");
+    expect(await read("docs/old/a.md")).toBe("# A\n");
+    await write("docs/old/.specquer-config.yaml", "folderType: AUXILIARY\n");
+    await request("/api/tree");
+    await save("docs/old/a.md", "# A\n");
+    expect(ids(await read("docs/old/a.md"))).toEqual(["REQ-00001", "REQ-00002"]);
   });
 });
 
@@ -190,11 +269,10 @@ describe("section queries and Add section anchors", () => {
   });
 
   test("dry run lists the files that would change; the run changes them", async () => {
-    const { request, read, exists } = await setup({ "docs/a.md": "# A\n", "docs/specs/s.md": "# S\n", "other/c.md": "# C\n" });
+    const { request, read } = await setup({ "docs/a.md": "# A\n", "docs/specs/s.md": "# S\n", "other/c.md": "# C\n" });
     const dry = await request("/api/sections/anchor", { method: "POST", body: { folder: "", dryRun: true } });
     expect(((await dry.json()) as { files: string[] }).files).toEqual(["docs/a.md", "docs/specs/s.md"]);
     expect(await read("docs/a.md")).toBe("# A\n");
-    expect(await exists(".specquer/shared/documents.yaml")).toBe(false);
     const run = await request("/api/sections/anchor", { method: "POST", body: { folder: "docs", dryRun: false } });
     expect(((await run.json()) as { files: string[] }).files).toEqual(["docs/a.md", "docs/specs/s.md"]);
     expect(ids(await read("docs/specs/s.md"))).toEqual(["SPEC-00001", "SPEC-00002"]);

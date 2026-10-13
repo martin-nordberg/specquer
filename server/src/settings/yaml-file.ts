@@ -1,4 +1,4 @@
-import { mkdir } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { SettingsSaveResult } from "@specquer/shared/api";
 import { type Document, isCollection, parseDocument } from "yaml";
@@ -53,6 +53,10 @@ export class YamlFile {
     private readonly prepare: (folder: string) => Promise<void> = async (folder) => {
       await mkdir(folder, { recursive: true });
     },
+    /** Delete the file when an edit leaves it with no keys, rather than write it empty. */
+    private readonly deleteWhenEmpty = false,
+    /** The file's name in messages, when `path` isn't its path in the root folder. */
+    private readonly label = path,
   ) {}
 
   private get absolute(): string {
@@ -69,7 +73,7 @@ export class YamlFile {
     }
     const doc = parseDocument(new TextDecoder().decode(bytes));
     const error = firstError(doc);
-    return { version: contentVersion(bytes), doc, exists: true, ...(error === undefined ? {} : { error: `${this.path}: ${error}` }) };
+    return { version: contentVersion(bytes), doc, exists: true, ...(error === undefined ? {} : { error: `${this.label}: ${error}` }) };
   }
 
   /**
@@ -89,6 +93,10 @@ export class YamlFile {
         // Nothing to write: a file isn't created only to hold nothing
         if (isEmpty(current.doc)) return { ok: true, version: "" };
         current.doc.commentBefore = this.header;
+      }
+      if (current.exists && this.deleteWhenEmpty && isEmpty(current.doc)) {
+        await rm(this.absolute, { force: true });
+        return { ok: true, version: "" };
       }
       const text = current.doc.toString();
       if (current.exists && text === before) return { ok: true, version: current.version };

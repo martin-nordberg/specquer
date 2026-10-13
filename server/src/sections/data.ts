@@ -3,7 +3,6 @@ import { join } from "node:path";
 import { isPrefix, isSectionId, isUid, parseSectionId } from "@specquer/shared/sections";
 import { isMap, isScalar, parseDocument } from "yaml";
 import { writeAtomically } from "../files.ts";
-import { SHARED_FOLDER } from "./config.ts";
 
 /**
  * The committed data files in `.specquer/shared/`, one per prefix:
@@ -13,8 +12,8 @@ import { SHARED_FOLDER } from "./config.ts";
  *   the document ID), and the retired sections: those no document holds any more, by UID, with
  *   the ID they had. A section restored later is told apart from its ID reused by its UID.
  *
- * No file records documents by path (Step 007): a document's ID is its root section's UID, which
- * the root section's entry records as its own `documentId`. An old `documents.yaml` is ignored.
+ * No file records documents by path: a document's ID is its root section's UID, which the root
+ * section's entry records as its own `documentId`.
  *
  * Every entry can be rebuilt from the documents, which carry the UIDs; the files are the last
  * known state, which tells an edited ID or a reused one from a new one.
@@ -25,6 +24,9 @@ import { SHARED_FOLDER } from "./config.ts";
  * empty. Nothing here ever stops the server. The files are read again when they change on disk
  * (a pull or a branch switch), see `DataFiles.changed`.
  */
+
+/** Specquer's committed data, in the root folder. */
+export const SHARED_FOLDER = join(".specquer", "shared");
 
 export interface SectionEntry {
   id: string;
