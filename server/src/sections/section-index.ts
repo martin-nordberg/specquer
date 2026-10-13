@@ -96,6 +96,11 @@ export class SectionIndex {
   /** Git's answers, by document ID and paths, so a scan asks once per set of copies. */
   private readonly gitOriginals = new Map<string, string | null>();
   private readonly documents = new Map<string, IndexedDocument>();
+  /** Folders below the root holding a `.specquer` folder of their own, from the last scan. */
+  private nested: string[] = [];
+  /** The nested folders already reported in the log. */
+  private readonly reportedNested = new Set<string>();
+  private readonly warn: (message: string) => void;
   private loaded = false;
   private queue: Promise<unknown> = Promise.resolve();
 
@@ -104,6 +109,7 @@ export class SectionIndex {
     private readonly newUid: () => string = init({ length: UID_LENGTH }),
     warn?: (message: string) => void,
   ) {
+    this.warn = warn ?? ((message) => console.warn(`specquer: ${message}`));
     this.configFiles = new FolderConfigs(files.root, async () => (await files.listFiles()).configs, warn);
     this.dataFiles = new DataFiles(files.root, warn);
   }
@@ -237,6 +243,12 @@ export class SectionIndex {
   private async scanFiles(): Promise<FolderConfig> {
     const listed = await this.files.listFiles();
     this.configFiles.setFiles(listed.configs);
+    this.nested = listed.nested;
+    for (const folder of this.nested) {
+      if (this.reportedNested.has(folder)) continue;
+      this.reportedNested.add(folder);
+      this.warn(`${folder}/.specquer/ belongs to another Specquer inside this one; its section data is ignored here`);
+    }
     const config = await this.load();
     const paths = listed.markdown.filter((path) => config.isSectioned(path));
     const wanted = new Set(paths);
@@ -494,14 +506,17 @@ export class SectionIndex {
   }
 
   /**
-   * The problems in a folder's sectioned files: whole files copied with no known original,
-   * duplicates and collisions waiting for the user, stray anchors, and files with merge conflict
-   * markers.
+   * The problems in a folder's sectioned files: nested Specquer folders, whole files copied with
+   * no known original, duplicates and collisions waiting for the user, stray anchors, and files
+   * with merge conflict markers.
    */
   problems(folder: string): Promise<SectionProblem[]> {
     return this.run(async () => {
       await this.scanFiles();
       const problems: SectionProblem[] = [];
+      for (const nested of this.nested) {
+        if (isSameOrInside(nested, folder)) problems.push({ kind: "nested-specquer", folder: nested });
+      }
       for (const copied of this.copiedDocuments) {
         if (copied.paths.some((path) => isSameOrInside(path, folder))) problems.push({ kind: "copied-document", paths: copied.paths });
       }

@@ -1,11 +1,11 @@
-<a id=""></a>
+<a id="WORK-00286" data-uid="xm45ra7pe57n"></a>
 
-<a id=""></a>
+<a id="WORK-00287" data-uid="qgz23uujjclu"></a>
 # Step 006 - Implementation Plan
 
 _Plan for the [Settings requirements](requirements.md). Drafted October 2026._
 
-<a id=""></a>
+<a id="WORK-00288" data-uid="s0v8ooyyu298"></a>
 ## 1. Summary
 
 Step 006 lets the user change settings in dialogs instead of in YAML files:
@@ -17,7 +17,7 @@ Step 006 lets the user change settings in dialogs instead of in YAML files:
 
 There are five phases (§5): the configuration formats and writers, the API, the two dialogs, then the documentation. Decisions taken while planning are in §6, marked _Proposed_; the work proceeds on them unless they are changed.
 
-<a id=""></a>
+<a id="WORK-00289" data-uid="ysteynx83q29"></a>
 ## 2. Precedence
 
 Step 006 takes precedence over the specifications and earlier steps where they conflict:
@@ -31,7 +31,7 @@ Step 006 takes precedence over the specifications and earlier steps where they c
 | Folder context menu | **Add section anchors…** | **Settings…**, which leads to **Add section anchors** |
 | Model calls | Summaries only | Summaries and the model test |
 
-<a id=""></a>
+<a id="WORK-00290" data-uid="al7gy7c5njgr"></a>
 ## 3. Starting Point
 
 - **Agent configuration** (`agent/src/config.ts`): `modelConfigSchema` and `summariesConfigSchema` (Zod), `parseAgentConfig` (drops invalid values with a warning) and `mergeAgentConfig` (personal `summaries:` key by key, personal `model:` as a whole). The schemas live in `agent`, which the client must not depend on.
@@ -42,10 +42,10 @@ Step 006 takes precedence over the specifications and earlier steps where they c
 - **Client** (`client/src/app/App.tsx`): `ThemeToggle` in the header; `FileTree`'s `onAddAnchors` opens `AnchorDialog` (dry run, then run, with the `AGENTS.md` checkbox). The shadcn components in `client/src/components/ui` have no tabs, radio group, switch or label yet; `radix-ui` has them all.
 - **End-to-end** (`e2e/fake-model.ts`): a fake OpenAI-compatible server answering `POST /v1/chat/completions`.
 
-<a id=""></a>
+<a id="WORK-00291" data-uid="wb31mlg864cs"></a>
 ## 4. Proposed Design
 
-<a id=""></a>
+<a id="WORK-00292" data-uid="gt5uk5ckq7hh"></a>
 ### 4.1 Shared Settings Schemas (`shared/src/settings/`)
 
 A new subpath export, `@specquer/shared/settings`:
@@ -54,7 +54,7 @@ A new subpath export, `@specquer/shared/settings`:
 - `folderSettingSchema`: `{ kind: "inherit" } | { kind: "off" } | { kind: "prefix", prefix }`, with the prefix checked by `isPrefix` from `/sections`.
 - The request and response schemas of §4.4, in `shared/src/api/schemas.ts` as now, built from these.
 
-<a id=""></a>
+<a id="WORK-00293" data-uid="wj3yqjac9xqr"></a>
 ### 4.2 `null` in the Prefix Configuration (`server/src/sections/config.ts`)
 
 - `parsePrefixConfig` accepts `null` (and an empty value, which YAML reads as `null`) as "not sectioned". Rules become `{ key, prefix: string | null }`.
@@ -62,7 +62,7 @@ A new subpath export, `@specquer/shared/settings`:
 - `prefixes()` leaves `null` out, so it never counts as a known prefix.
 - `PrefixConfig` gains `entryFor(folder)` (the folder's own entry, if any), `inheritedFor(folder)` (the nearest ancestor's key and value, or none) and `fileKeysIn(folder)`, for the dialog.
 
-<a id=""></a>
+<a id="WORK-00294" data-uid="pm5ezpnpubvi"></a>
 ### 4.3 Configuration Writers (`server/src/settings/`)
 
 A new folder, with one module per file kind and a small common part:
@@ -72,7 +72,7 @@ A new folder, with one module per file kind and a small common part:
 - **Prefix configuration** (`prefix-config-writer.ts`): `readFolderSettings(folder)` returns the folder's own entry, the inherited one, the file keys inside it and the file's version. `writeFolderSetting(folder, setting, baseVersion)` finds the pair whose key normalizes to the folder (whatever its spelling, such as `./documentation/`), then replaces its value, writes `null`, or deletes the pair. A new key is added at the end of `prefixes:`, spelled as the folder path with its trailing `/`; the root folder's key is `./` (D8). A missing `prefixes:` mapping, or a missing file, is created.
 - **Freshness**: after a write, the writer tells `AgentConfigFiles` and `PrefixConfigFile` to forget their stamps (D5), so the next read sees the new content even if the modification time didn't change.
 
-<a id=""></a>
+<a id="WORK-00295" data-uid="ta6dx5501b2w"></a>
 ### 4.4 Settings API (`shared/src/api/`, `server/src/app.ts`)
 
 All routes are under `/api/settings`, behind the session token, Host and Origin checks like every API route, and validated with `@hono/zod-validator`.
@@ -90,7 +90,7 @@ All routes are under `/api/settings`, behind the session token, Host and Origin 
 - After a folder setting is saved, the handler starts a section scan and `summaries.filesChanged()`, as `getTree` does, so sections are retired or restored at once. `sectioned` says whether the folder is sectioned now, for the dialog's offer to add anchors.
 - After agent settings are saved, the client asks for the summary status again (the preview enables or disables the slider from it).
 
-<a id=""></a>
+<a id="WORK-00296" data-uid="cok3eip7d40h"></a>
 ### 4.5 Model Test (`agent/src/model.ts`, `server/src/settings/model-test.ts`)
 
 - `createChatModel` takes optional overrides for `timeout` and `maxRetries`. `testModel(config, env, signal)` builds the model with a 30-second timeout and no retries, and invokes it with a fixed prompt ("Reply with the word OK.") holding nothing from the specs. It returns the time taken, or a problem (D7):
@@ -108,7 +108,7 @@ All routes are under `/api/settings`, behind the session token, Host and Origin 
 - One test runs at a time: a new test aborts the one running. The test doesn't go through the summary queue or the cache.
 - The server uses `SummaryServiceOptions.createModel` here too, so tests inject the fake model.
 
-<a id=""></a>
+<a id="WORK-00297" data-uid="cermptjgsdi9"></a>
 ### 4.6 System Settings Dialog (`client/src/components/settings/`)
 
 - **Components**: `tabs`, `radio-group`, `switch` and `label` copied from shadcn into `client/src/components/ui`, on `radix-ui`.
@@ -119,7 +119,7 @@ All routes are under `/api/settings`, behind the session token, Host and Origin 
 - **Summarization tab**: concurrency, token budget, prefill. Switching prefill on shows the pre-filling warning inline; saving it on in **Shared** asks for confirmation in a second dialog that says it applies to everyone who pulls the change.
 - **Saving**: the edits are grouped by file and sent as one `PUT` per file, the second with the version the first returned if both go to one file. A `conflict` reloads the values and says the file changed; an `invalid` shows the YAML error and the file's path. Values are checked with the shared schemas as they are typed; **Save** stays disabled while any is invalid. Warnings from the files (values ignored as invalid) are listed at the top of the tab.
 
-<a id=""></a>
+<a id="WORK-00298" data-uid="by6l1mp5w23r"></a>
 ### 4.7 Folder Settings Dialog (`client/src/components/settings/FolderSettingsDialog.tsx`)
 
 - **Menu**: `FileTree` replaces `onAddAnchors` with `onFolderSettings` (**Settings…**, gear icon) in the folder menu and the root folder's empty-space menu. **Section problems…** stays.
@@ -128,7 +128,7 @@ All routes are under `/api/settings`, behind the session token, Host and Origin 
 - **After saving**: when the folder became sectioned, the dialog stays open on a short note offering **Add section anchors…** and **Close**. When it stopped being sectioned, the note says the anchors stay in the files and the sections come back with their IDs if it is sectioned again.
 - **Conflicts and errors** as in §4.6.
 
-<a id=""></a>
+<a id="WORK-00299" data-uid="mt1qb6ght4eb"></a>
 ### 4.8 Security
 
 - The settings API writes only `.specquer/shared/agent.config.yaml`, `.specquer/user/agent.config.yaml` and `.specquer/shared/section-prefixes.config.yaml`, at fixed paths; requests never carry a file path for these, only a folder path for the prefix key, confined like every path.
@@ -137,12 +137,12 @@ All routes are under `/api/settings`, behind the session token, Host and Origin 
 - The model test sends the key named by `apiKeyEnv` to the URL entered, as saving that configuration would, with a fixed prompt and no spec text.
 - Saving `prefill: true` to the shared file needs a second confirmation.
 
-<a id=""></a>
+<a id="WORK-00300" data-uid="fi034qhje0dw"></a>
 ## 5. Phases
 
 Each phase lists its tasks and what "done" means. Tests are written within each phase.
 
-<a id=""></a>
+<a id="WORK-00301" data-uid="gtzf8vrl4jpt"></a>
 ### Phase 1 - Formats and Writers
 
 - `shared/src/settings/` with the schemas moved from `agent`; `null` entries in `PrefixConfig`; `server/src/settings/` with the writers and the stamp reset.
@@ -152,14 +152,14 @@ Each phase lists its tasks and what "done" means. Tests are written within each 
   - Sections: turning a folder off retires its sections and writes no Markdown file; turning it back on restores every ID unchanged, with no renumbering.
 - *Done when* `bun test` and `bun run typecheck` pass.
 
-<a id=""></a>
+<a id="WORK-00302" data-uid="yfcse2tdki9y"></a>
 ### Phase 2 - Settings API and Model Test
 
 - The routes and schemas of §4.4, the handlers in `server/src/app.ts`, `testModel` and the overrides in `createChatModel`, the scan and `filesChanged` after a folder save.
 - Tests: each route with valid and invalid input; a folder path outside the root, or a file, is refused; the env route never returns a value; a saved model change shows in `/summaries/status` at once; the model test with a fake model (success, each failure of §4.5, abort, the key redacted from a message); a second test aborts the first.
 - *Done when* the API tests pass and no route writes outside the three files (checked by a test that snapshots the root before and after).
 
-<a id=""></a>
+<a id="WORK-00303" data-uid="x7dtx8bioou2"></a>
 ### Phase 3 - System Settings Dialog
 
 - The shadcn components, `SettingsButton`, `SettingsDialog` and its tabs, the status refresh after saving.
@@ -167,7 +167,7 @@ Each phase lists its tasks and what "done" means. Tests are written within each 
 - End-to-end: change the model name to the fake model's through the dialog in **Personal**, see the slider work without a restart and the shared file untouched; **Test** against the fake model server.
 - *Done when* the component and end-to-end tests pass on Chrome and WebKit.
 
-<a id=""></a>
+<a id="WORK-00304" data-uid="t1sl49cubsx0"></a>
 ### Phase 4 - Folder Settings Dialog
 
 - **Settings…** in both menus, `FolderSettingsDialog`, the hand-off to `AnchorDialog`, the notes after saving; `onAddAnchors` removed from `FileTree`.
@@ -175,7 +175,7 @@ Each phase lists its tasks and what "done" means. Tests are written within each 
 - End-to-end: in a temporary repository, set a subfolder to **No**, create a file there and see no anchor added; set it back to **Inherited** and see the earlier sections keep their IDs; give a new folder a prefix and add anchors from the dialog.
 - *Done when* the component and end-to-end tests pass on Chrome and WebKit, and the existing **Add section anchors** tests pass through the new path.
 
-<a id=""></a>
+<a id="WORK-00305" data-uid="x4b4bjmtln8e"></a>
 ### Phase 5 - Documentation
 
 - Link the requirements and this plan in the VitePress sidebar ("006-Settings").
@@ -187,7 +187,7 @@ Each phase lists its tasks and what "done" means. Tests are written within each 
 - `CLAUDE.md`: the `settings/` folder, the `/settings` subpath export, and the schemas' move from `agent` to `shared`.
 - A Step 006 implementation status section at the end of this plan.
 
-<a id=""></a>
+<a id="WORK-00306" data-uid="wk5vvgh8glf5"></a>
 ## 6. Decision Points
 
 Taken while planning; each is _Proposed_ and the work proceeds on it unless changed.
@@ -203,7 +203,7 @@ Taken while planning; each is _Proposed_ and the work proceeds on it unless chan
 - **D9. The env check.** _Proposed:_ a route that answers only whether a variable with a valid name is set, so the dialog can say "found / not set" as the name is typed.
 - **D10. Invalid values in the files.** _Proposed:_ shown as warnings and left in the file unless the user saves that setting, which replaces them.
 
-<a id=""></a>
+<a id="WORK-00307" data-uid="rdanatyrs2g8"></a>
 ## 7. Risks
 
 | Risk | Impact | Mitigation |
@@ -215,7 +215,7 @@ Taken while planning; each is _Proposed_ and the work proceeds on it unless chan
 | The model test sends the key to a mistyped URL | The key reaches another host | The same as saving that URL; only http(s) URLs pass the schema; the dialog shows the URL next to **Test** |
 | A file changes on disk while the dialog is open | A pull is overwritten | Versions; a conflict reloads the values |
 
-<a id=""></a>
+<a id="WORK-00308" data-uid="kxs7vfpsfsby"></a>
 ## 8. Implementation Status
 
 Phases 1 to 5 were carried out in October 2026. What differs from the plan, or was learned doing it:

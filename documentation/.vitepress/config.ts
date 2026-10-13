@@ -111,6 +111,7 @@ export default defineConfig({
                     items: [
                       {text: 'Requirements', link: '/work-items/step-009-single-instance/requirements'},
                       {text: 'Implementation Plan', link: '/work-items/step-009-single-instance/implementation-plan'},
+                      {text: 'Nested Specquer Folders', link: '/work-items/step-009-single-instance/nested-specquer'},
                     ]
                   }
                 ]

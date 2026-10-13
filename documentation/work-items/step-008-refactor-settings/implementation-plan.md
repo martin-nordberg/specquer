@@ -1,11 +1,11 @@
-<a id=""></a>
+<a id="WORK-00339" data-uid="sba0uruiypfq"></a>
 
-<a id=""></a>
+<a id="WORK-00340" data-uid="f34r93puv2il"></a>
 # Step 008 - Implementation Plan
 
 _Plan for the [Folder Types and Prefixes requirements](requirements.md). Drafted October 2026._
 
-<a id=""></a>
+<a id="WORK-00341" data-uid="oyljzjt5m9ux"></a>
 ## 1. Summary
 
 Step 008 replaces `.specquer/shared/section-prefixes.config.yaml` with a `.specquer-config.yaml` in each folder that needs one. That file holds the folder's `folderType` and `defaultPrefix`. Prefixes then come from the sections themselves:
@@ -24,7 +24,7 @@ There are five phases (§5):
 
 Decisions taken while planning are in §6, marked _Proposed_; the work proceeds on them unless they are changed.
 
-<a id=""></a>
+<a id="WORK-00342" data-uid="dvmbxc023y2p"></a>
 ## 2. Precedence
 
 The requirements' Precedence table applies. This plan adds:
@@ -36,7 +36,7 @@ The requirements' Precedence table applies. This plan adds:
 | `POST /api/create` | `{ parent, name, kind }` | Also `prefix` for a file, `folderType` and `prefix` for a folder (§4.6) |
 | What the server writes | `.md` files and files under `.specquer/` | Also `.specquer-config.yaml` in folders inside the root, and deleting it (§4.7) |
 
-<a id=""></a>
+<a id="WORK-00343" data-uid="vc78liksjeo0"></a>
 ## 3. Starting Point
 
 - **Prefix configuration** (`server/src/sections/config.ts`):
@@ -68,10 +68,10 @@ The requirements' Precedence table applies. This plan adds:
   - `section-prefixes.config.yaml`: `config.ts`, `folder-settings.ts`, `FolderSettingsDialog.tsx`, `shared/src/settings/settings.ts`, the server tests, three end-to-end specs and five specifications.
   - `documents.yaml`: `data.ts`, `data.test.ts`, `sections-api.test.ts`, Data Architecture and Server Requirements.
 
-<a id=""></a>
+<a id="WORK-00344" data-uid="pv9v3yz4ysw7"></a>
 ## 4. Proposed Design
 
-<a id=""></a>
+<a id="WORK-00345" data-uid="v13e0v8ej3bp"></a>
 ### 4.1 Folder Configuration (`server/src/sections/folder-config.ts`, replacing `config.ts`)
 
 - **Shared schemas** (`shared/src/settings/settings.ts`):
@@ -91,7 +91,7 @@ The requirements' Precedence table applies. This plan adds:
   - `invalidate(folder?)` follows Specquer's own writes.
 - `SHARED_FOLDER` moves to `data.ts`, its only other user. `config.ts`, `PrefixConfig` and `normalizeKey` go.
 
-<a id=""></a>
+<a id="WORK-00346" data-uid="fzx3vs4a0q4p"></a>
 ### 4.2 Finding the Files (`server/src/files.ts`, `server/src/git.ts`)
 
 - The listing collects the configuration files along with the Markdown files:
@@ -101,7 +101,7 @@ The requirements' Precedence table applies. This plan adds:
 - The same Git-ignore rules and `SKIPPED_FOLDERS` apply, so `.git` and `node_modules` are never searched (R7.1).
 - The tree's response is unchanged; only Markdown files are shown (R7.2).
 
-<a id=""></a>
+<a id="WORK-00347" data-uid="ejhgmj76sbms"></a>
 ### 4.3 Recognizing Anchors (`shared/src/markdown/sections.ts`)
 
 - **Placeholders** (R3.1, R3.2):
@@ -120,7 +120,7 @@ The requirements' Precedence table applies. This plan adds:
   - It rewrites `XYZ-?` to the new ID, keeping the `data-uid` when the plan keeps the UID.
 - **Clients**: `isSectionAnchor` and the WYSIWYG editor's paste handling recognize `XYZ-?` as a placeholder, so it fades and a pasted copy is still turned into `<a id="">`.
 
-<a id=""></a>
+<a id="WORK-00348" data-uid="un11sjpntp6t"></a>
 ### 4.4 Choosing Prefixes (`server/src/sections/reconcile.ts`, `section-index.ts`)
 
 - **Prefixes in `anchor()`**:
@@ -137,7 +137,7 @@ The requirements' Precedence table applies. This plan adds:
 - **Notice**: `renumbered` with `reason: "prefix-requested"` ("SPEC-00012 is now XYZ-00004"), which the client's notice text gains.
 - **`create`**: `create(parent, name, kind, options)` takes `prefix` for a file, defaulting to the folder's, and writes the root anchor with it. For a folder it takes `folderType` and `prefix` and writes the folder's file through §4.5's writer when they differ from the inherited values (R6.2).
 
-<a id=""></a>
+<a id="WORK-00349" data-uid="xxx6mzvba3wk"></a>
 ### 4.5 Settings API (`server/src/settings/folder-settings.ts`, `shared/src/api/`)
 
 - **`FolderSettings`** (`GET /api/settings/folder`) becomes:
@@ -155,7 +155,7 @@ The requirements' Precedence table applies. This plan adds:
 - After a write, `app.ts` calls `sections.configChanged()` as now.
 - The `PUT` route answers `"conflict"` as now when the folder's file changed (R6.4). Folders have separate versions, so they never conflict with each other.
 
-<a id=""></a>
+<a id="WORK-00350" data-uid="kku4pyjmjxwo"></a>
 ### 4.6 Dialogs (`client/src/components/`)
 
 - **`FolderSettingsDialog`**:
@@ -169,7 +169,7 @@ The requirements' Precedence table applies. This plan adds:
   - **Sending:** the fields are sent with `create` only when changed.
 - **Shared:** the type and prefix fields move into a component used by both dialogs (`settings/FolderFields.tsx`).
 
-<a id=""></a>
+<a id="WORK-00351" data-uid="a3bp3sdxbj3j"></a>
 ### 4.7 Security (`server/src/files.ts`)
 
 - A write helper, `writeFolderConfig(folder, text)` and `removeFolderConfig(folder)`, confines writes as R7.4 requires:
@@ -180,10 +180,10 @@ The requirements' Precedence table applies. This plan adds:
 - `YamlFile` for folder files goes through it, not through raw paths.
 - Security §5's list of files the server writes gains these files.
 
-<a id=""></a>
+<a id="WORK-00352" data-uid="ql1tfydbxfn1"></a>
 ## 5. Phases
 
-<a id=""></a>
+<a id="WORK-00353" data-uid="p7tvx2ypaveu"></a>
 ### Phase 1 - Folder Configuration
 
 - The shared schemas; `folder-config.ts`; the listing of §4.2; the index on `FolderConfigs`. For now, the old file isn't read.
@@ -198,7 +198,7 @@ The requirements' Precedence table applies. This plan adds:
   - Git-ignored folders and `node_modules` are not searched.
 - *Done when* `bun test` passes with every existing section test running on folder files.
 
-<a id=""></a>
+<a id="WORK-00354" data-uid="osycyljtqh1u"></a>
 ### Phase 2 - Recognizing Anchors
 
 - §4.3 in `sections.ts`, `isSectionAnchor` and paste handling.
@@ -210,7 +210,7 @@ The requirements' Precedence table applies. This plan adds:
   - the existing recognition tests keep their outcomes.
 - *Done when* `bun test` passes.
 
-<a id=""></a>
+<a id="WORK-00355" data-uid="aj4dmmeu5jkr"></a>
 ### Phase 3 - Choosing Prefixes
 
 - `sectionPrefixes`, allocation by section, the prefix-change rule in `reconcile`, the notice, and `create` with a prefix.
@@ -227,7 +227,7 @@ The requirements' Precedence table applies. This plan adds:
   - a new file is created with a chosen prefix.
 - *Done when* `bun test` passes.
 
-<a id=""></a>
+<a id="WORK-00356" data-uid="v6qejqtrthsp"></a>
 ### Phase 4 - Settings API and Dialogs
 
 - §4.5 to §4.7.
@@ -248,7 +248,7 @@ The requirements' Precedence table applies. This plan adds:
   - type `<a id="XYZ-?">` over a heading's ID in the text editor, save, and see the new ID with the UID kept.
 - *Done when* the component and end-to-end tests pass on Chrome and WebKit.
 
-<a id=""></a>
+<a id="WORK-00357" data-uid="wk2n0ykst26n"></a>
 ### Phase 5 - Migration and Documentation
 
 - **This repository:**
@@ -263,7 +263,7 @@ The requirements' Precedence table applies. This plan adds:
 - The docs sidebar gains Step 008, and an Implementation Status section is added here.
 - *Done when* `bun run typecheck`, `bun test`, `bun run test:e2e` and `docs:build` pass, and `grep` finds neither old file name outside `documentation/work-items/`.
 
-<a id=""></a>
+<a id="WORK-00358" data-uid="mlv2eqw20w1o"></a>
 ## 6. Decision Points
 
 _Proposed_; the work proceeds on them unless they are changed.
@@ -275,7 +275,7 @@ _Proposed_; the work proceeds on them unless they are changed.
 - **D5. Route names stay.** `GET`/`PUT /api/settings/folder` and `POST /api/create` keep their paths; only their bodies change. The client and server change in the same commit, so nothing else depends on the old shapes.
 - **D6. One shared fields component.** The folder settings and new folder dialogs show the same type and prefix choices with the same validation.
 
-<a id=""></a>
+<a id="WORK-00359" data-uid="bpjojopgzede"></a>
 ## 7. Risks
 
 | Risk | Impact | Mitigation |
@@ -287,7 +287,7 @@ _Proposed_; the work proceeds on them unless they are changed.
 | Writes outside `.specquer/` | A new write path for security | §4.7's confinement, with a symbolic-link test |
 | Rewriting the fixtures | Large test diffs | One fixture helper, in place of each test's config text |
 
-<a id=""></a>
+<a id="WORK-00360" data-uid="vjsqau0zz4z7"></a>
 ## 8. Implementation Status
 
 Phases 1 to 5 were carried out in October 2026. What differs from the plan, or was learned doing it:

@@ -20,7 +20,7 @@ Step 008 makes three changes:
 
 The folder settings dialog and the new folder and new file dialogs follow (R6). Specquer's own documentation is migrated in the step's commit (R8).
 
-<a id=""></a>
+<a id="WORK-00361" data-uid="sjo1fwvrgbp0"></a>
 ## 2. Precedence
 
 Step 008 takes precedence over the specifications and earlier steps where they conflict:
@@ -149,7 +149,7 @@ Step 008 takes precedence over the specifications and earlier steps where they c
 5. **Leftover mentions:** the code and the baseline specifications drop every mention of `section-prefixes.config.yaml`, and the leftover mentions of `documents.yaml` too (`server/src/sections/data.ts`, its tests and the specifications). Only the earlier steps' work items keep them.
 6. **Unchanged:** sections, IDs, UIDs and `sections.yaml`.
 
-<a id=""></a>
+<a id="WORK-00362" data-uid="ai2qk6ralt5p"></a>
 ### R9. Unchanged
 
 - Section IDs and UIDs, `sections.yaml` and the reconciliation rules other than those in R3 and R4.
@@ -194,7 +194,7 @@ _Proposed_; the work proceeds on them unless they are changed:
 - **D2. Unknown prefixes go to the parent's prefix** (R4.6), not their own. With `XYZ-?` as the way to start a prefix, an ID with an unknown prefix most likely came from another repository.
 - **D3. `xyz-?` is not upper-cased.** The format is exact, like a section ID, and anything else is left as written. A lower-case request is visibly not converted, which is easy to spot and fix.
 
-<a id=""></a>
+<a id="WORK-00363" data-uid="t2slxlx5kyr4"></a>
 ## 6. Risks
 
 | Risk | Impact | Mitigation |

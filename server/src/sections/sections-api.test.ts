@@ -411,6 +411,25 @@ describe("UIDs and conflicts", () => {
     expect(result.notices).toEqual([{ kind: "renumbered", reason: "reused", id: "REQ-00003", newId: "REQ-00004", title: "Typed" }]);
   });
 
+  test("a .specquer folder below the root is reported as a nested Specquer folder, with Git and without", async () => {
+    for (const git of [true, false]) {
+      const { request } = await setup(
+        {
+          "docs/a.md": "# A\n",
+          ".specquer/shared/REQ/sections.yaml": "lastSequence: 0\nsections: {}\n",
+          "docs/inner/.specquer/shared/REQ/sections.yaml": "lastSequence: 3\nsections: {}\n",
+        },
+        { git },
+      );
+      const all = (await (await request("/api/sections/problems")).json()) as { problems: SectionProblem[] };
+      expect(all.problems).toEqual([{ kind: "nested-specquer", folder: "docs/inner" }]);
+      const inside = (await (await request("/api/sections/problems?folder=docs/inner")).json()) as { problems: SectionProblem[] };
+      expect(inside.problems).toEqual([{ kind: "nested-specquer", folder: "docs/inner" }]);
+      const elsewhere = (await (await request("/api/sections/problems?folder=docs/other")).json()) as { problems: SectionProblem[] };
+      expect(elsewhere.problems).toEqual([]);
+    }
+  });
+
   test("a file with conflict markers is saved as sent and reported", async () => {
     const { save, read, request } = await setup({ "docs/a.md": "" });
     const text = "# A\n<<<<<<< HEAD\n# Ours\n=======\n# Theirs\n>>>>>>> other\n";

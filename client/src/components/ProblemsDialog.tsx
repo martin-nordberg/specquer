@@ -19,7 +19,7 @@ export interface ProblemsDialogProps {
 const linkClass = "rounded-sm font-mono text-xs underline outline-none focus-visible:ring-2 focus-visible:ring-ring/50";
 
 /**
- * **Section problems**: whole files copied with no known original, duplicate and colliding
+ * **Section problems**: nested Specquer folders, whole files copied with no known original, duplicate and colliding
  * section IDs waiting for the user, stray anchors, and files with merge conflict markers, in a
  * folder's sectioned files.
  */
@@ -58,6 +58,13 @@ export function ProblemsDialog({ folder, onClose, loadProblems, onOpen, onRenumb
 
   const describe = (problem: SectionProblem) => {
     switch (problem.kind) {
+      case "nested-specquer":
+        return (
+          <p>
+            <span className="font-mono text-xs">{problem.folder}/.specquer/</span> belongs to another Specquer inside this one. Its section
+            data is ignored here, and Specquer won't start in {problem.folder}. Check its section IDs, then delete it.
+          </p>
+        );
       case "copied-document":
         return (
           <>

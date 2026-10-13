@@ -1,3 +1,5 @@
+import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
 import { expect, launch, launchAgain, test } from "./fixtures";
 
 test("the launch URL signs in and drops the token from the address bar", async ({ page, specquer }) => {
@@ -44,4 +46,20 @@ test("a second launch on the same root hands over to the running Specquer", asyn
   expect(stdout.match(/Open (http:\/\/\S+)/)?.[1]).toBe(specquer.url);
   // The running instance keeps working
   await launch(page, specquer);
+});
+
+test("a launch in a subfolder moves up to the Specquer root, which is already served", async ({ specquer }) => {
+  const { code, stdout } = await launchAgain(join(specquer.root, "docs"));
+  expect(code).toBe(3);
+  expect(stdout).toContain(`Specquer is already serving ${specquer.root}`);
+  expect(stdout.match(/Open (http:\/\/\S+)/)?.[1]).toBe(specquer.url);
+});
+
+test("a launch in a nested Specquer folder is refused with exit code 4", async ({ specquer }) => {
+  await mkdir(join(specquer.root, "docs", ".specquer"));
+  const { code, stdout, stderr } = await launchAgain(join(specquer.root, "docs"));
+  expect(code).toBe(4);
+  expect(stdout).not.toContain("Open ");
+  expect(stderr).toContain(join(specquer.root, "docs", ".specquer"));
+  expect(stderr).toContain(join(specquer.root, ".specquer"));
 });

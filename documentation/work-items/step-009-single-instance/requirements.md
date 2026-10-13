@@ -1,11 +1,11 @@
-<a id=""></a>
+<a id="WORK-00258" data-uid="prpnoboohxvr"></a>
 
-<a id=""></a>
+<a id="WORK-00259" data-uid="mnoggx7ezyeq"></a>
 # Step 009 - One Specquer per Root Folder
 
 _Requirements for refusing a second Specquer on a root folder that one already serves, and handing the user over to the running one. Drafted October 2026._
 
-<a id=""></a>
+<a id="WORK-00260" data-uid="jaady8mn6u33"></a>
 ## 1. Summary
 
 Specquer can run in several folders at once: without `--port`, a second instance falls back to a free port. Nothing stops two instances on the **same** root folder, and they would then interfere:
@@ -16,7 +16,7 @@ Specquer can run in several folders at once: without `--port`, a second instance
 
 Step 009 makes a root folder hold at most one Specquer. A second launch on the same root starts no server. Instead it hands the user over to the running instance: it prints that instance's URL and opens it in the browser, as a single-instance desktop application would.
 
-<a id=""></a>
+<a id="WORK-00261" data-uid="iqvipi7duimp"></a>
 ## 2. Precedence
 
 Step 009 takes precedence over the specifications and earlier steps where they conflict:
@@ -27,10 +27,10 @@ Step 009 takes precedence over the specifications and earlier steps where they c
 | `.specquer/user/` | `uistate.yaml`, the personal `agent.config.yaml` | Also `instance.lock` and `instance.json` (R1, R2) |
 | Where the session token is kept | Only in the server's memory and the launch URL | Also in `.specquer/user/instance.json`, readable only by the user (R2) |
 
-<a id=""></a>
+<a id="WORK-00262" data-uid="pbgjn7bt7q6h"></a>
 ## 3. Requirements
 
-<a id=""></a>
+<a id="WORK-00263" data-uid="rft4x6hbx8ij"></a>
 ### R1. The Instance Lock
 
 1. Before it serves anything, reads the section data or writes any file other than the lock, Specquer takes an exclusive lock on `.specquer/user/instance.lock` under the root folder. It creates `.specquer/user/` (with its `.gitignore`) if needed.
@@ -40,7 +40,7 @@ Step 009 takes precedence over the specifications and earlier steps where they c
 5. Under `bun --hot` (development), re-running the server module keeps the lock the process already holds and doesn't try to take it again.
 6. **The lock can't be taken for a reason other than another instance** (a read-only folder, missing permissions): Specquer prints a warning naming the file and the reason, and starts without the lock. It doesn't refuse to start, so read-only use of a folder keeps working (D3).
 
-<a id=""></a>
+<a id="WORK-00264" data-uid="gaeyq633m8vi"></a>
 ### R2. The Instance File
 
 1. Once it holds the lock, Specquer deletes any `.specquer/user/instance.json` left by an earlier run. Once it listens, it writes a new one, atomically: `{ pid, port, url, root, startedAt }`, where `url` is the launch URL with the session token.
@@ -48,7 +48,7 @@ Step 009 takes precedence over the specifications and earlier steps where they c
 3. On a clean shutdown (SIGINT, SIGTERM, the process exiting normally) Specquer deletes the file if it still holds its own `pid`. After a crash the file stays, and the next instance replaces it (R2.1).
 4. Under `bun --hot`, the file keeps the URL from the process's first run, since the token and the port don't change.
 
-<a id=""></a>
+<a id="WORK-00265" data-uid="lewd7dg0r1a2"></a>
 ### R3. A Second Launch
 
 1. When the lock is held by another process, the launch starts no server, reads no section data and writes nothing.
@@ -65,14 +65,14 @@ Step 009 takes precedence over the specifications and earlier steps where they c
 5. It exits with code 3 in both cases (D1). Code 2 stays for command-line errors.
 6. `--port` doesn't change this: a second launch with `--port` hands over to the running instance whatever its port, and says that `--port` was ignored (D2).
 
-<a id=""></a>
+<a id="WORK-00266" data-uid="yjn2pdcbgr0i"></a>
 ### R4. Tests
 
 1. Unit tests: taking the lock, a second attempt failing while it is held by another process, the lock being free again after that process is killed (`SIGKILL`), the instance file's contents and mode, and deleting a stale file.
 2. End-to-end test: a second launch on a running fixture's root exits with code 3, prints the first instance's URL, and leaves the running instance working.
 3. `createApp` and the unit tests that build an app don't take the lock, so tests can create several apps on one root in one process.
 
-<a id=""></a>
+<a id="WORK-00267" data-uid="xs4p37r0oew6"></a>
 ## 4. Specifications to Update
 
 - **[Server Requirements](/specifications/server-requirements):** §1 (exit code 3), §2 (the lock, the instance file, the hand-over).
@@ -82,14 +82,14 @@ Step 009 takes precedence over the specifications and earlier steps where they c
 - **`CLAUDE.md`:** the "Run it" command's behavior with a running instance.
 - **[Specification Gaps](/notes/specification-gaps):** the item on two Specquers on one root.
 
-<a id=""></a>
+<a id="WORK-00268" data-uid="d7w8xy2ev64r"></a>
 ## 5. Decision Points
 
 Decided while proposing the step:
 
 - **Hand over rather than fail.** A second launch is almost always the user forgetting that one is running, so it opens the running instance.
 - **An operating-system lock, not a PID file.** A PID file goes stale after a crash, and process IDs are reused. The lock is released by the operating system (R1.2).
-- **Nested roots are out of scope.** An instance on the repository and another on `documentation/` lock different folders. The inner one keeps its own `.specquer/` and its own section IDs, which is a separate problem, recorded in the [Specification Gaps](/notes/specification-gaps).
+- **Nested roots are out of scope here.** An instance on the repository and another on `documentation/` lock different folders. The inner one keeps its own `.specquer/` and its own section IDs, which is a separate problem, handled by the continuation, [Nested Specquer Repositories](nested-specquer.md).
 
 _Proposed_; the work proceeds on them unless they are changed:
 
@@ -97,7 +97,7 @@ _Proposed_; the work proceeds on them unless they are changed:
 - **D2. `--port` is ignored with a warning** when another instance runs, rather than starting a second one on that port or failing.
 - **D3. Start without the lock when it can't be created** (R1.6), with a warning. Refusing to start would block read-only use of a folder for a case that rarely matters there.
 
-<a id=""></a>
+<a id="WORK-00269" data-uid="dd7f27g58286"></a>
 ## 6. Risks
 
 | Risk | Impact | Mitigation |

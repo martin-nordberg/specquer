@@ -110,7 +110,9 @@ export type SectionProblem =
   /** A sectioned file with merge conflict markers, left alone until they are resolved. */
   | { kind: "conflict-markers"; path: string }
   /** Files holding one document ID (a whole file copied) with no known original, left alone until the user renumbers the copy. */
-  | { kind: "copied-document"; paths: string[] };
+  | { kind: "copied-document"; paths: string[] }
+  /** A folder below the root with a `.specquer` folder of its own, whose section data is ignored. */
+  | { kind: "nested-specquer"; folder: string };
 
 export interface SectionSearchResult extends SectionInfo {
   /** The document's workspace path. */

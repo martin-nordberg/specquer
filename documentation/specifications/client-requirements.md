@@ -69,10 +69,10 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 ### 3.5 Section Problems
 
 1. The open file is saved first.
-2. A modal dialog lists the problems in the folder's sectioned files: whole files copied when Specquer can't tell the original from the copy, IDs used by copies of one section in several documents, IDs used by different sections (two branches issued one number), stray anchors (with their line), and files with merge conflict markers.
+2. A modal dialog lists the problems in the folder's sectioned files: folders below the root with a `.specquer/` of their own (another Specquer's data, ignored here, to check and delete), whole files copied when Specquer can't tell the original from the copy, IDs used by copies of one section in several documents, IDs used by different sections (two branches issued one number), stray anchors (with their line), and files with merge conflict markers.
 3. Each occurrence opens its file, at the section. Each occurrence of a duplicate or colliding ID that doesn't keep the ID has **Renumber**, which gives it a new number; each file of a copied document has **Renumber this copy**, which renumbers all its sections (the open file is saved first and reloaded after). The list then reloads.
 
-<a id=""></a>
+<a id="SPEC-00108" data-uid="szimo5b2q5wk"></a>
 ### 3.6 Folder Settings
 
 1. A modal dialog, **Folder settings**, edits the folder's `.specquer-config.yaml` (see [Data Architecture](data-architecture.md) §2.3).
@@ -181,7 +181,7 @@ The logo is a section sign (§), for specifications, drawn as two S-shaped strok
 | App icon | A page with a folded corner and a § in the navigation color, with a pencil whose tip touches the §'s lower curve | Left of "Specquer" in the header, 24 pixels, with empty alternative text since the name follows it |
 | Docs favicon | The favicon's §, light on a dark gray tile, or dark on a very light gray tile when the browser is in dark mode | The documentation site's browser tab (`documentation/public/favicon.svg`); a unit test checks the file matches `logo.ts` |
 
-<a id=""></a>
+<a id="SPEC-00109" data-uid="akfpygc8p5eb"></a>
 ## 10. Settings
 
 1. The **Settings** gear button opens a modal dialog, **Settings**, with the agent configuration's settings (see [Data Architecture](data-architecture.md) §4.2) in tabs: **Model** and **Summarization**.

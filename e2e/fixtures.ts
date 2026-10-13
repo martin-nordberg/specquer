@@ -74,15 +74,15 @@ async function startSpecquer(files: Record<string, string>): Promise<Specquer & 
 }
 
 /** Launches Specquer again on `root`, as `startSpecquer` does, and waits for it to exit. */
-export async function launchAgain(root: string): Promise<{ code: number; stdout: string }> {
+export async function launchAgain(root: string): Promise<{ code: number; stdout: string; stderr: string }> {
   const child = Bun.spawn(["bun", "src/index.ts", root, "--no-open"], {
     cwd: join(repository, "server"),
     env: { ...process.env, NODE_ENV: "production" },
     stdout: "pipe",
     stderr: "pipe",
   });
-  const [code, stdout] = await Promise.all([child.exited, new Response(child.stdout).text()]);
-  return { code, stdout };
+  const [code, stdout, stderr] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()]);
+  return { code, stdout, stderr };
 }
 
 export const test = base.extend<{ specquer: Specquer; files: Record<string, string> }>({

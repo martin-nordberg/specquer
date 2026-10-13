@@ -2,7 +2,7 @@
 
 Provide a way for the user to change the system settings and the per-folder settings interactively, instead of editing the YAML files by hand.
 
-<a id=""></a>
+<a id="WORK-00309" data-uid="v38x4p2dvkns"></a>
 # Scope
 
 * In scope: the settings in the agent configuration (`agent.config.yaml`, shared and personal) and each folder's entry in the prefix configuration (`section-prefixes.config.yaml`).
@@ -22,7 +22,7 @@ Provide a way for the user to change the system settings and the per-folder sett
 * The model status the server already reports (enabled, or the problem that disables summaries) is shown on the Model tab.
 * A **Test** button on the Model tab makes one small call to the model with the values as entered, saved or not, to check the name, URL and key together. The prompt is a fixed short text that holds nothing from the specs. The result says whether the call succeeded, with the model's response time, or shows the provider's error (an unknown model, a rejected key, an unreachable URL). The call times out after 30 seconds, isn't cached, and can be cancelled. It is the only model call other than summaries; it sends the key named by `apiKeyEnv` to the URL entered, as saving those values would.
 
-<a id=""></a>
+<a id="WORK-00310" data-uid="bx481k0nwlfu"></a>
 ## Shared and personal settings
 
 * Each tab has a switch between **Shared** (`.specquer/shared/agent.config.yaml`, committed, applies to everyone using the repository) and **Personal** (`.specquer/user/agent.config.yaml`, this user only, overrides the shared file). It starts on **Personal**.
@@ -57,14 +57,14 @@ Provide a way for the user to change the system settings and the per-folder sett
 * **Prefix** for new sections in the folder: required for **Yes**, hidden otherwise. Its format is the section ID prefix (`[A-Z][A-Z0-9]{1,4}`). Several folders may share a prefix; they then share its sequence of numbers.
 * **Add section anchors…**: an action in the dialog (not a setting). It opens the existing **Add section anchors** dialog for the folder (recursively), with its dry run listing the files that will change and its `AGENTS.md` checkbox. After a save that switches a folder from **No** or not-sectioned **Inherited** to sectioned, the settings dialog offers it.
 
-<a id=""></a>
+<a id="WORK-00311" data-uid="f6qz85rklvyc"></a>
 ## Effects on existing sections
 
 * Changing a folder's prefix only affects sections created afterwards. Existing sections keep their IDs; the old prefix stays known through its `sections.yaml`, so a folder can mix prefixes, as a moved file does today.
 * Making a folder not sectioned leaves the anchors in its files unchanged. Its documents and sections are removed from the data files and their sections are retired (Data Architecture §2.5, rule 4).
 * Making it sectioned again restores them: a section with its retired ID and UID moves back from `retired`, with its ID unchanged. No ID is renumbered.
 
-<a id=""></a>
+<a id="WORK-00312" data-uid="dh3kkztwqc1y"></a>
 ## Prefix configuration changes
 
 * The prefix configuration needs a way to say "not sectioned" for a folder inside a sectioned folder. It is the value `null` (`"documentation/work-items/archive/": null`). A `null` entry is matched by the longest-key rule like any other, and a file it matches is not sectioned.
@@ -79,14 +79,14 @@ Provide a way for the user to change the system settings and the per-folder sett
 * **Section problems…** stays in the context menu.
 * **Save** and **Cancel** buttons, with invalid values reported next to the field as in the system settings.
 
-<a id=""></a>
+<a id="WORK-00313" data-uid="a8l9os805b6h"></a>
 # Writing the configuration files
 
 * The server gets an API to read and write the two agent configuration files and the folder entries of the prefix configuration. The API accepts only these settings, validated with the Zod schemas; it never takes a file path or arbitrary YAML.
 * Files are edited with the `yaml` package's document API, so comments, key order and keys Specquer doesn't know are kept. They are written atomically, and only when their content changes. A personal file that doesn't exist yet is created.
 * Each read returns a version (as file saves do). Saving with an old version, because the file changed on disk while the dialog was open (a pull, or an edit by hand), answers with a conflict. The dialog then reloads the values and says that the file changed.
 
-<a id=""></a>
+<a id="WORK-00314" data-uid="yt7l4eryp6qo"></a>
 # Specifications to update
 
 * Client requirements: the settings dialog and its gear button; the folder context menu (**Settings…** instead of **Add section anchors…**); **Add section anchors** reached from the folder settings.

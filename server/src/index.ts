@@ -4,6 +4,7 @@ import { createApp } from "./app.ts";
 import { CliError, USAGE, parseCli, resolveRoot } from "./cli.ts";
 import { acquireInstanceLock, handOver, removeInstanceInfo, writeInstanceInfo } from "./instance.ts";
 import { openBrowser } from "./launch.ts";
+import { NESTED_SPECQUER_EXIT, findSpecquerRoot } from "./root.ts";
 import { LOOPBACK_HOST, generateToken } from "./security.ts";
 
 /** Without `--port`, Specquer tries this port and falls back to a free one (decision D12). */
@@ -33,6 +34,21 @@ try {
   if (!(err instanceof CliError)) throw err;
   console.error(`specquer: ${err.message}\n${USAGE}`);
   process.exit(2);
+}
+
+// The Specquer folder this launch belongs to: the given folder, or the one above it holding
+// .specquer/; nested .specquer/ folders are refused before anything is locked or written
+const found = await findSpecquerRoot(root);
+if (found.kind === "nested") {
+  console.error(
+    `specquer: ${root} is inside a nested Specquer folder:\n${found.folders.map((folder) => `  ${folder}`).join("\n")}\n` +
+      "Specquer can't run in a nested Specquer folder. Remove the inner .specquer/ (check its section IDs first), or launch elsewhere.",
+  );
+  process.exit(NESTED_SPECQUER_EXIT);
+}
+if (found.kind === "parent") {
+  if (processState.specquerLock === undefined) console.error(`Specquer found .specquer/ in ${found.root}; serving that folder instead of ${root}.`);
+  root = found.root;
 }
 
 // One Specquer per root folder (Step 009): a second launch hands over to the running instance

@@ -71,6 +71,7 @@ describe("ProblemsDialog", () => {
       },
       { kind: "stray", path: "docs/c.md", id: "REQ-00008", line: 4 },
       { kind: "conflict-markers", path: "docs/d.md" },
+      { kind: "nested-specquer", folder: "docs/inner" },
     ];
     const loadProblems = mock(async () => problems);
     const onRenumber = mock(async () => {
@@ -85,6 +86,7 @@ describe("ProblemsDialog", () => {
     expect(list.textContent).toContain("keeps the ID");
     expect(list.textContent).toContain("line 4: the anchor REQ-00008 isn't in a section's place");
     expect(list.textContent).toContain("docs/d.md holds merge conflict markers");
+    expect(list.textContent).toContain("docs/inner/.specquer/ belongs to another Specquer inside this one");
     fireEvent.click(screen.getByRole("button", { name: "Renumber" }));
     await waitFor(() => expect(onRenumber).toHaveBeenCalledWith("docs/b.md", "REQ-00005", "two"));
     await screen.findByText("No problems found.");

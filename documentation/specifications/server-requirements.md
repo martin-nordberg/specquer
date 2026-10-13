@@ -12,7 +12,7 @@ Requirements for the back end (`server/`). They come from [Step 001](/work-items
 specquer [root] [--port <n>] [--no-open]
 ```
 
-1. **`root`** (optional): the folder to work in, absolute or relative to the working directory; it defaults to the working directory. Specquer resolves it to its real path at startup and exits with an error (exit code 2) if it doesn't exist or isn't a folder. Exit code 3 means another Specquer already serves the root folder (§2).
+1. **`root`** (optional): the folder to work in, absolute or relative to the working directory; it defaults to the working directory. Specquer resolves it to its real path at startup and exits with an error (exit code 2) if it doesn't exist or isn't a folder. Exit code 3 means another Specquer already serves the root folder, and exit code 4 that the folder is inside a nested Specquer folder (§2).
 2. **`--port <n>`**: listen on this port, and fail if it is taken. Without it, Specquer tries port 4870 and falls back to a free port, so it can run in several folders at once.
 3. **`--no-open`**: don't open a browser. For a future desktop shell or a coding agent, which read the URL from the output instead.
 4. Arguments are parsed with `parseArgs` from `node:util`. Unknown options or more than one root are errors.
@@ -20,13 +20,14 @@ specquer [root] [--port <n>] [--no-open]
 <a id="SPEC-00076" data-uid="h9hdfvo6dcom"></a>
 ## 2. Launch
 
-1. **One Specquer per root folder** ([Step 009](/work-items/step-009-single-instance/requirements)). Before it serves anything or reads the section data, Specquer takes an exclusive lock on `.specquer/user/instance.lock`: an open `BEGIN EXCLUSIVE` transaction on an SQLite database, held for the life of the process and released by the operating system however the process ends. If another process holds it, the launch starts no server and writes nothing: it prints `Specquer is already serving <root>` and `Open <url>` with the running instance's URL, opens that URL unless `--no-open` is given, and exits with code 3. `--port` is then ignored, with a warning. If the running instance hasn't written its URL yet, the launch says Specquer is already running and opens nothing. If the lock can't be created for another reason (a read-only folder), Specquer warns and starts without it.
-2. **The instance file.** Holding the lock, Specquer deletes any `.specquer/user/instance.json` left by a crash, and once listening writes `{ pid, port, url, root, startedAt }` there, atomically and readable by its owner only. A clean exit (including SIGINT and SIGTERM) deletes it.
-3. The server listens on `127.0.0.1` only.
-4. Once listening, it prints the root folder and the launch URL, `http://127.0.0.1:<port>/?token=<token>`.
-5. Unless `--no-open` is given, it opens the launch URL in the default browser: `open` on macOS, `xdg-open` on Linux, `cmd /c start "" <url>` on Windows. Failure to open a browser is reported but not fatal.
-6. Under `bun --hot` (development) the token and the instance lock are kept, the instance file is written once, and the browser is opened at most once per process.
-7. The development command (`bun run dev`) serves the repository itself on port 3000.
+1. **Finding the root** ([Step 009, nested Specquer folders](/work-items/step-009-single-instance/nested-specquer)). Specquer looks for a `.specquer` folder in the given folder and in each folder above it, up to the top of the Git work tree it is in (outside Git, up to the root of the file system). With none, or only one in the given folder, the given folder is the root. With one in a folder above, that folder becomes the root, with a warning naming both. With two or more, Specquer prints them, says it can't run in a nested Specquer folder, and exits with code 4 before locking or writing anything.
+2. **One Specquer per root folder** ([Step 009](/work-items/step-009-single-instance/requirements)), the root found in item 1. Before it serves anything or reads the section data, Specquer takes an exclusive lock on `.specquer/user/instance.lock`: an open `BEGIN EXCLUSIVE` transaction on an SQLite database, held for the life of the process and released by the operating system however the process ends. If another process holds it, the launch starts no server and writes nothing: it prints `Specquer is already serving <root>` and `Open <url>` with the running instance's URL, opens that URL unless `--no-open` is given, and exits with code 3. `--port` is then ignored, with a warning. If the running instance hasn't written its URL yet, the launch says Specquer is already running and opens nothing. If the lock can't be created for another reason (a read-only folder), Specquer warns and starts without it.
+3. **The instance file.** Holding the lock, Specquer deletes any `.specquer/user/instance.json` left by a crash, and once listening writes `{ pid, port, url, root, startedAt }` there, atomically and readable by its owner only. A clean exit (including SIGINT and SIGTERM) deletes it.
+4. The server listens on `127.0.0.1` only.
+5. Once listening, it prints the root folder and the launch URL, `http://127.0.0.1:<port>/?token=<token>`.
+6. Unless `--no-open` is given, it opens the launch URL in the default browser: `open` on macOS, `xdg-open` on Linux, `cmd /c start "" <url>` on Windows. Failure to open a browser is reported but not fatal.
+7. Under `bun --hot` (development) the token and the instance lock are kept, the instance file is written once, and the browser is opened at most once per process.
+8. The development command (`bun run dev`) serves the repository itself on port 3000.
 
 <a id="SPEC-00077" data-uid="i1pnvwdznkri"></a>
 ## 3. File Tree
@@ -86,7 +87,7 @@ The model is specified in [Data Architecture](data-architecture.md) §3.
 | `GET /api/sections?path=` | The sections of one document, for badges: ID, UID (from the anchor; `null` for a section renumbered on the next save), kind, title, heading level, and the problem when its ID is also used elsewhere (the other occurrences, and whether this one keeps the ID). |
 | `GET /api/sections/search?q=&limit=&path=` | Sections whose ID or title starts with (or else contains) `q`, across documents or in the document at `path`, for link completion; at most `limit` (default 50, at most 200). |
 | `POST /api/sections/anchor` | Body `{ folder, dryRun, addAgentGuide }`. **Add section anchors**: returns the sectioned files under the folder whose anchors would change, and unless `dryRun` changes them. With `addAgentGuide` (and not `dryRun`) it also appends the section anchor rules for coding agents to the root folder's `AGENTS.md`, creating it if needed. The response says whether `AGENTS.md` holds the rules (`agentGuide`). |
-| `GET /api/sections/problems?folder=` | The problems in a folder's sectioned files: copied documents (`{ kind: "copied-document", paths }`, files holding one document ID with no known original), duplicate and colliding IDs waiting for the user, stray anchors, and files with merge conflict markers. |
+| `GET /api/sections/problems?folder=` | The problems in a folder's sectioned files: nested Specquer folders (`{ kind: "nested-specquer", folder }`, a folder below the root with a `.specquer` folder of its own, whose section data is ignored), copied documents (`{ kind: "copied-document", paths }`, files holding one document ID with no known original), duplicate and colliding IDs waiting for the user, stray anchors, and files with merge conflict markers. |
 | `POST /api/sections/renumber` | Body `{ path, id, uid, baseVersion }`. Gives one occurrence of a duplicate or colliding ID a new number, rewriting the file as a save would. `409` if the file is no longer at `baseVersion`. Returns the new version, the `edits` (relative to the body on disk) and `notices`. |
 | `POST /api/sections/renumber-document` | Body `{ path, baseVersion }`. Renumbers every section of a file of a copied document, its root section included, as a copy is renumbered; the other file keeps the document ID. `409` and the response as for `renumber`. |
 
@@ -125,7 +126,7 @@ The model, recognition rules, data files and conflict rules are specified in [Da
 
 The rules for summaries are specified in [Data Architecture](data-architecture.md) §4.
 
-<a id=""></a>
+<a id="SPEC-00112" data-uid="yzticufqp04t"></a>
 ## 9. Settings
 
 | Route | Behavior |

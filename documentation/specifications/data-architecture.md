@@ -242,7 +242,7 @@ It also remembers, for this session only, where it last saw each document ID hel
 | Create | A new sectioned file starts with its root anchor (a new number, in the prefix chosen in the dialog or else the folder's, and a new document ID) and a blank line. A new folder gets a `.specquer-config.yaml` when the dialog's type or prefix differ from the inherited ones |
 | Rename, delete | After the file-system change, paths in the index and in `lastSeen` follow the rename (everything under a renamed folder); a scan then drops what is gone or no longer matches, and the data files are written |
 | Renumber | At the user's request, gives one occurrence of a duplicate or collision (named by path, ID and UID) a new ID, rewriting the file as a save would, if it is still at the version the user saw. The edits are relative to the body on disk. For a copied document, renumbers every section of the file the user names as the copy, its root section included |
-| Problems | For a folder: copied documents (their paths), duplicates and collisions waiting for the user (every occurrence's path, UID and title, and which keeps the ID), stray anchors (path, ID and line), and frozen files |
+| Problems | For a folder: nested Specquer folders (folders inside it with a `.specquer` folder of their own, found by the tree listing: Git's listing of `.specquer/` files, or the walk; each is also reported once in the log), copied documents (their paths), duplicates and collisions waiting for the user (every occurrence's path, UID and title, and which keeps the ID), stray anchors (path, ID and line), and frozen files |
 | Add section anchors | Scans, then for each sectioned file under the folder whose anchors would change: rewrites it as a save would. A dry run only lists the files. A file changed on disk during the run is read again, never overwritten blindly; frozen files are left alone. On request it also appends the section anchor rules for coding agents to the root folder's `AGENTS.md` (once, between marker comments) |
 | Sections of a document, search | For badge tooltips, problems and link completion: ID, UID (`null` for a section renumbered on the next save), kind, title, heading level, and the problem when the ID is also used elsewhere. Titles: the heading text, the first eight words of a list item, the file name for the root section |
 
@@ -405,7 +405,7 @@ CREATE TABLE summaries (
 4. A result that isn't `current` (another model's or an older prompt's) is shown, labeled "older model", and the store asks again with `accept: "current"` once the requests the preview needs have gone. The new summary replaces it in place; if that request fails, the older summary stays, with the error and **Retry**.
 5. After a save the saved text changes, so the sections whose text changed are requested again; the others are already in memory.
 
-<a id=""></a>
+<a id="SPEC-00110" data-uid="gvsjci5zgk4e"></a>
 ### 4.6. Lookup by Section
 
 `GET /api/summaries/sections/:id` answers with a section's summary from the cache only, never calling a model (Step 005 decision D5), for link previews and reports to come. `SectionIndex.find` gives the section's document, its body and the section; the lookup (`server/src/summaries/lookup.ts`) takes the outline section whose heading holds the anchor (the whole document for a root section), and its target (§4.1), so the summary the slider made is the one found:
@@ -415,7 +415,7 @@ CREATE TABLE summaries (
 - `{ kind: "none" }`: nothing cached yet
 - `404` for an unknown ID, `400` for anything that isn't a section ID
 
-<a id=""></a>
+<a id="SPEC-00111" data-uid="znuayrzpqa42"></a>
 ### 4.7. Pre-filling
 
 With `summaries.prefill: true`, a model and its key, the server summarizes every target of every Markdown file in the background (`server/src/summaries/prefill.ts`), so the slider finds its summaries made.

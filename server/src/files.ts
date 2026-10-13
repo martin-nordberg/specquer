@@ -33,6 +33,15 @@ interface WalkResult {
   files: string[];
   emptyFolders: string[];
   entries: number;
+  /** Folders below the root holding a `.specquer` folder of their own. */
+  nested: Set<string>;
+}
+
+/** The folder holding a `.specquer` segment of a path relative to the root, if it isn't the root. */
+function nestedSpecquerFolder(path: string): string | undefined {
+  const segments = path.split("/");
+  const index = segments.indexOf(".specquer");
+  return index > 0 ? segments.slice(0, index).join("/") : undefined;
 }
 
 function isNotFound(err: unknown): boolean {
@@ -155,15 +164,16 @@ export class FileService {
 
   /**
    * Every Markdown file the tree would show and every folder configuration file
-   * (`.specquer-config.yaml`) in the folders it visits, sorted, without the tree's size limit.
+   * (`.specquer-config.yaml`) in the folders it visits, sorted, without the tree's size limit, and
+   * the folders below the root that hold a `.specquer` folder of their own (`nested`, sorted).
    */
-  async listFiles(): Promise<{ markdown: string[]; configs: string[] }> {
-    const { files, configs } = await this.markdownFiles();
-    return { markdown: files, configs };
+  async listFiles(): Promise<{ markdown: string[]; configs: string[]; nested: string[] }> {
+    const { files, configs, walked } = await this.markdownFiles();
+    return { markdown: files, configs, nested: [...walked.nested].sort() };
   }
 
   private async markdownFiles(): Promise<{ files: string[]; configs: string[]; walked: WalkResult }> {
-    const walked: WalkResult = { files: [], emptyFolders: [], entries: 0 };
+    const walked: WalkResult = { files: [], emptyFolders: [], entries: 0, nested: new Set() };
     const gitFiles = await gitMarkdownFiles(this.root);
     if (gitFiles === null) await this.walk("", walked, true);
     else {
@@ -178,6 +188,8 @@ export class FileService {
     const files: string[] = [];
     const configs: string[] = [];
     for (const path of walked.files) {
+      const nested = nestedSpecquerFolder(path);
+      if (nested !== undefined) walked.nested.add(nested);
       const check = checkPath(path);
       if (!check.ok) continue;
       const isConfig = baseName(check.path) === FOLDER_CONFIG_FILE;
@@ -208,6 +220,7 @@ export class FileService {
     for (const entry of entries) {
       if (++result.entries > MAX_WALK_ENTRIES || result.files.length > MAX_TREE_FILES) return true;
       const path = joinPath(folder, entry.name);
+      if (entry.isDirectory() && entry.name === ".specquer" && folder !== "") result.nested.add(folder);
       if (!entry.isDirectory() || SKIPPED_FOLDERS.has(entry.name)) {
         // A folder holding only its configuration file counts as empty, so the tree shows it
         if (entry.name !== FOLDER_CONFIG_FILE) holdsFiles = true;

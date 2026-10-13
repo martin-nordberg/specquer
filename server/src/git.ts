@@ -19,12 +19,25 @@ export async function gitInfo(root: string): Promise<GitInfo | null> {
   }
 }
 
+/** The top level of the Git work tree holding `folder` (an absolute path), or `null` outside one. */
+export async function gitTopLevel(folder: string): Promise<string | null> {
+  try {
+    const result = await $`git -C ${folder} rev-parse --show-toplevel`.quiet().nothrow();
+    if (result.exitCode !== 0) return null;
+    return result.stdout.toString().trim() || null;
+  } catch {
+    // Git isn't installed
+    return null;
+  }
+}
+
 /**
  * Markdown files and folder configuration files (`.specquer-config.yaml`) Git doesn't ignore
- * (tracked, or untracked and not ignored), relative to the root.
+ * (tracked, or untracked and not ignored), relative to the root, and the files of `.specquer`
+ * folders, which reveal nested Specquer folders (their `shared/` data is committed).
  */
 export async function gitMarkdownFiles(root: string): Promise<string[] | null> {
-  const result = await $`git -C ${root} ls-files -z --cached --others --exclude-standard -- ${":(icase)*.md"} ${":(glob)**/.specquer-config.yaml"}`
+  const result = await $`git -C ${root} ls-files -z --cached --others --exclude-standard -- ${":(icase)*.md"} ${":(glob)**/.specquer-config.yaml"} ${":(glob)**/.specquer/**"}`
     .quiet()
     .nothrow();
   if (result.exitCode !== 0) return null;

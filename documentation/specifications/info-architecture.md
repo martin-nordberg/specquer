@@ -10,7 +10,7 @@ This document describes what Specquer works with and how its screen is organized
 
 | Concept | Description |
 | ------- | ----------- |
-| Root folder | The folder Specquer was launched in (or given on the command line). Everything Specquer shows lies inside it. Usually a Git repository or part of one. |
+| Root folder | The folder Specquer was launched in (or given on the command line), or the folder above it that holds `.specquer/` (within the same Git repository). Everything Specquer shows lies inside it. Specquer doesn't run inside a nested Specquer folder, and reports a `.specquer/` below the root as a section problem. Usually a Git repository or part of one. |
 | Workspace path | A path relative to the root, with `/` as the separator, such as `docs/specs/login.md`. The root itself is the empty path. All paths in the API and in the UI state are workspace paths. |
 | Folder | A folder under the root that contains Markdown files, directly or further down, or that is empty. Other folders without Markdown files, `.git`, `.specquer`, `node_modules` and anything Git ignores are not shown. |
 | Spec file | A Markdown (`.md`) file: optional YAML front matter followed by a GitHub Flavored Markdown body. Raw HTML may appear, for example traceability anchors. MDX is not supported. |

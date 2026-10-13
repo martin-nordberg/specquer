@@ -1,11 +1,11 @@
-<a id=""></a>
+<a id="WORK-00243" data-uid="hgbpzst1d84r"></a>
 
-<a id=""></a>
+<a id="WORK-00244" data-uid="ll4vrg8a9pdg"></a>
 # Step 009 - Implementation Plan
 
 _Plan for the [One Specquer per Root Folder requirements](requirements.md). Drafted October 2026._
 
-<a id=""></a>
+<a id="WORK-00245" data-uid="k9lj8v7dbls4"></a>
 ## 1. Summary
 
 At startup Specquer holds an exclusive SQLite lock on `.specquer/user/instance.lock` for the life of the process, and writes its URL to `.specquer/user/instance.json`. A second launch on the same root finds the lock taken, prints the running instance's URL, opens it, and exits with code 3.
@@ -17,7 +17,7 @@ There are four phases (§5):
 3. the end-to-end test;
 4. documentation.
 
-<a id=""></a>
+<a id="WORK-00246" data-uid="abmqugbw3j6l"></a>
 ## 2. Precedence
 
 The requirements' Precedence table applies. This plan adds:
@@ -27,7 +27,7 @@ The requirements' Precedence table applies. This plan adds:
 | Startup order in `server/src/index.ts` | Parse the command line, resolve the root, create the app, listen | Parse, resolve, **take the lock**, create the app, listen, **write the instance file** (§4.2) |
 | Signal handling | None; the process ends on SIGINT and SIGTERM | Handlers that delete the instance file, then exit (§4.2) |
 
-<a id=""></a>
+<a id="WORK-00247" data-uid="v6h70lik76jq"></a>
 ## 3. Starting Point
 
 - **Startup** (`server/src/index.ts`):
@@ -42,10 +42,10 @@ The requirements' Precedence table applies. This plan adds:
 - **SQLite:** `bun:sqlite` is already used for the summary cache and embedded in the executable.
 - **End-to-end fixtures** (`e2e/fixtures.ts`): `startSpecquer` spawns `bun src/index.ts <root> --no-open` and reads the URL from the `Open <url>` line.
 
-<a id=""></a>
+<a id="WORK-00248" data-uid="kvcdeyz1paqy"></a>
 ## 4. Proposed Design
 
-<a id=""></a>
+<a id="WORK-00249" data-uid="pp5oj4md74z9"></a>
 ### 4.1 The Instance Module (`server/src/instance.ts`)
 
 - **`acquireInstanceLock(root)`** returns one of:
@@ -65,7 +65,7 @@ The requirements' Precedence table applies. This plan adds:
   - `removeInstanceInfo(root, pid)`: deletes the file only if it holds `pid`.
 - **Why SQLite:** Bun has no file-lock API, and `flock` through `bun:ffi` wouldn't work on Windows. SQLite uses `fcntl` locks on macOS and Linux and `LockFileEx` on Windows, and `bun:sqlite` is already in the executable.
 
-<a id=""></a>
+<a id="WORK-00250" data-uid="sxmawbgw0x2n"></a>
 ### 4.2 Startup (`server/src/index.ts`)
 
 1. After resolving the root, and before `createApp`: if `processState.specquerLock` is set (a `bun --hot` re-run), keep it. Otherwise call `acquireInstanceLock(root)`:
@@ -80,16 +80,16 @@ The requirements' Precedence table applies. This plan adds:
 3. After `serve()` and the `Open` line, write the instance file, once per process (`processState.specquerInfoWritten`).
 4. Register handlers for `SIGINT` and `SIGTERM` (once per process) that call `removeInstanceInfo(root, process.pid)` and exit. Also call it from `process.on("exit")` for a normal exit. The lock needs no handler, since the operating system releases it.
 
-<a id=""></a>
+<a id="WORK-00251" data-uid="zw1pijey1sdf"></a>
 ### 4.3 What Doesn't Change
 
 - `createApp`, the routes, the section index and the summary service don't know about the lock, so unit and component tests are unaffected (R4.3).
 - The token, the cookie and the launch URL stay as they are; the instance file stores the same URL.
 
-<a id=""></a>
+<a id="WORK-00252" data-uid="zlgzb8tfrdwv"></a>
 ## 5. Phases
 
-<a id=""></a>
+<a id="WORK-00253" data-uid="kfyvkqe0mcby"></a>
 ### Phase 1: The Instance Module
 
 - `server/src/instance.ts` as in §4.1, and `handOver`.
@@ -101,26 +101,26 @@ The requirements' Precedence table applies. This plan adds:
   - writing, reading and removing the instance file, its mode on POSIX, an invalid file read as `undefined`, and `removeInstanceInfo` leaving another process's file alone;
   - `handOver`'s output and exit code with and without `info`, and with `--port`, through injected `print`, `open` and `exit` functions.
 
-<a id=""></a>
+<a id="WORK-00254" data-uid="oqe7sgy28op7"></a>
 ### Phase 2: Startup
 
 - `server/src/index.ts` as in §4.2.
 - Check by hand under `bun run dev`: editing a server file re-runs the module without losing the lock or rewriting the instance file. Ctrl+C removes `instance.json`. A second `bun server/src/index.ts .. --no-open` prints the dev server's URL and exits with code 3.
 
-<a id=""></a>
+<a id="WORK-00255" data-uid="iee63oadxuh4"></a>
 ### Phase 3: End-to-End Test
 
 - `e2e/fixtures.ts`: `launchAgain(root)` spawns the same command as `startSpecquer` and resolves to `{ code, stdout }`.
 - `e2e/launch.spec.ts`: on a running fixture, `launchAgain` exits with 3, its `Open` line is the fixture's URL, and the fixture's page still loads and saves afterwards.
 
-<a id=""></a>
+<a id="WORK-00256" data-uid="s4iqm9pamrf8"></a>
 ### Phase 4: Documentation
 
 - The specifications listed in the requirements (§4).
 - `CLAUDE.md`: in "Run it", a second launch on the same root opens the running instance and exits with code 3.
 - The [Specification Gaps](/notes/specification-gaps) note: the two-instances item points to Step 009.
 
-<a id=""></a>
+<a id="WORK-00257" data-uid="ue1w07p4xmh0"></a>
 ## 6. Decisions
 
 _Proposed_; the work proceeds on them unless they are changed:
