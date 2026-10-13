@@ -118,6 +118,7 @@ export default defineConfig({
                         {text: 'Traceability Links', link: '/notes/traceability-links'},
                         {text: 'Agent-Delegated Summaries', link: '/notes/agent-delegated-summaries'},
                         {text: 'LangChain or AI SDK', link: '/notes/langchain-vs-ai-sdk'},
+                        {text: 'Specification Gaps', link: '/notes/specification-gaps'},
                     ]
                 },
             ],

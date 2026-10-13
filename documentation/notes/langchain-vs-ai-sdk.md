@@ -1,7 +1,7 @@
 <a id="NOTE-00053" data-uid="s7yo3smsj4ce"></a>
 
 <a id="NOTE-00054" data-uid="iti1vz739hsj"></a>
-# LangChain.js or the Vercel AI SDK 
+# LangChain.js or the Vercel AI SDK
 
 _Notes from October 2026._
 
