@@ -500,3 +500,19 @@ _Proposed_; the work proceeds on them unless they are changed:
 | Index size on large repositories | A slow first index | The first full index starts at startup in the background; later updates are per file; 10,000 files is the tree's limit anyway |
 | No FTS5 in the macOS system SQLite | Chat unavailable on macOS | Checked first in Phase 2; a clear message if missing; `Database.setCustomSQLite` as the fallback |
 | Re-rendering Markdown while streaming | Jank on long answers | Throttled at 150 ms; answers are short compared with specs |
+
+<a id=""></a>
+## 8. Implementation Status
+
+Implemented October 2026, one commit per phase. Differences from the plan:
+
+- **The open file's ranking** (§4.2, D5): its matches come first, at most half the units, rather than a scaled bm25 score, which couldn't outrank a strong title match elsewhere.
+- **Cited files that no longer exist** (§4.10): checked when an answer is shown only for citations without a section ID (their file must be in the tree). A citation with an ID is looked up when it is clicked, falling back to the stored path; it isn't marked in advance.
+- **The settings API's `chat:` block** was done in Phase 4, with the server, and the dialog's tab in Phase 5. `AgentSettingsUpdate` is now the schema's input type, so callers may leave blocks out.
+- **Chat answers share the model's settings with summaries**, including its 1,024-token output limit (`createChatModel`). Long answers are cut there; a separate limit for chat can follow if needed.
+
+Still to check:
+
+- **FTS5 on macOS** (Phase 2): checked under Bun 1.4.2 on Linux and in a compiled executable on Linux. On macOS Bun uses the system's SQLite; until it is checked there, the chat answers with a `search_unavailable` error if FTS5 is missing.
+- **A real model:** the tests use fake models; the prompt has not yet been tried against `google/gemma-4-31b-it`.
+

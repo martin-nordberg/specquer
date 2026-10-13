@@ -17,6 +17,8 @@ interactive editing and prompted AI agent editing.
   - AI-generated summarization by section
   - A slider mechanism to summarize at a lower or higher level in the hierarchy
   - Caching and pre-generation of summaries
+* Document-focused chat - interactive Q&A about the specifications in a repository, with answers
+  citing the sections they come from
 
 ## Planned
 
@@ -26,7 +28,6 @@ interactive editing and prompted AI agent editing.
   - "Auxiliary" - specifications that are notes, reference materials, ideas, etc. not tied
                   to the whole system nor to specific tasks
   - "Nonsectioned" - specifications not managed by Specquer
-* Document-focused chat - interactive Q&A about the specifications in a repository
 * Sidecar mechanism for tracking review comments
 * Section properties like implementation status, review history, etc.
 * Diff view for work in progress with added functionality for moved sections

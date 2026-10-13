@@ -3,7 +3,7 @@
 <a id="SPEC-00074" data-uid="unvuw5mk0cjh"></a>
 # Specquer Server Requirements
 
-Requirements for the back end (`server/`). They come from [Step 001](/work-items/step-001-doc-editing/requirements) and its [implementation plan](/work-items/step-001-doc-editing/implementation-plan), [Step 002](/work-items/step-002-sections/requirements) (sections), [Step 003](/work-items/step-003-section-uids/implementation-plan) (section UIDs and conflicts), [Step 004](/work-items/step-004-hierarchical-summarization/requirements) (summaries), [Step 005](/work-items/step-005-summarization-changes/implementation-plan) (the lookup, pre-filling and the cache), [Step 006](/work-items/step-006-settings/requirements) (settings), [Step 007](/work-items/step-007-no-documents-file/requirements) (no `documents.yaml`) [Step 008](/work-items/step-008-refactor-settings/requirements) (folder types and prefixes) and [Step 009](/work-items/step-009-single-instance/requirements) (one Specquer per root folder). Security is specified separately in [Security](security.md).
+Requirements for the back end (`server/`). They come from [Step 001](/work-items/step-001-doc-editing/requirements) and its [implementation plan](/work-items/step-001-doc-editing/implementation-plan), [Step 002](/work-items/step-002-sections/requirements) (sections), [Step 003](/work-items/step-003-section-uids/implementation-plan) (section UIDs and conflicts), [Step 004](/work-items/step-004-hierarchical-summarization/requirements) (summaries), [Step 005](/work-items/step-005-summarization-changes/implementation-plan) (the lookup, pre-filling and the cache), [Step 006](/work-items/step-006-settings/requirements) (settings), [Step 007](/work-items/step-007-no-documents-file/requirements) (no `documents.yaml`) [Step 008](/work-items/step-008-refactor-settings/requirements) (folder types and prefixes) and [Step 009](/work-items/step-009-single-instance/requirements) (one Specquer per root folder) and [Step 010](/work-items/step-010-document-chat/requirements) (document chat). Security is specified separately in [Security](security.md).
 
 <a id="SPEC-00075" data-uid="sb2taf3fhmvs"></a>
 ## 1. Command Line
@@ -151,3 +151,19 @@ The rules for summaries are specified in [Data Architecture](data-architecture.m
 | `GET /` | The client page (see [Security](security.md) §3 for the token exchange and §7 for its headers). |
 | `GET /_specquer/preview-worker.js` | The bundled preview Web Worker ([Technical Architecture](technical-architecture.md) §7.3). |
 | Bundled client assets | Served by `Bun.serve()`'s routes. |
+
+<a id=""></a>
+## 11. Chat
+
+| Route | Behavior |
+| ----- | -------- |
+| `POST /api/chat` | Body `{ question, openFile? }` (1 to 8,000 characters, not blank; `openFile` a Markdown path). Answers with server-sent events, each a JSON event named by its `type`: `status` (`searching`, then `thinking`), `citations` (the numbered sources: `n`, `path`, `outlinePath`, `sectionId` if any, `title`), `token` (a piece of the answer), then `done` (`model`, `elapsedMs`, `at`) or `error` (`code`, `message`). A comment (`: keep-alive`) goes out every 15 seconds while the stream is quiet. Without a model or key it answers `503 not_configured` before streaming; an invalid body `400`. Closing the request stops the answer. |
+| `GET /api/chat/history` | `{ turns }`: the conversation, oldest first. |
+| `DELETE /api/chat/history` | Clears it; returns the turns cleared, for Undo. |
+| `PUT /api/chat/history` | Body `{ turns }`: puts cleared turns back in front of any added since; returns the conversation. |
+
+1. **Search.** Every Markdown file the tree lists (the same rules, so files Git ignores are never searched or sent) is split into heading units and indexed in `.specquer/cache/search.db` (SQLite FTS5). The index is built in the background at startup and updated shortly after saves, creates, renames, deletes and tree loads, and before each question; only files whose modification time or size changed are read again. Building it sends nothing anywhere. A damaged database is moved aside and rebuilt; a build without FTS5 answers questions with a `search_unavailable` error.
+2. **A question** searches with its words (stop words dropped, each term quoted, so FTS5's syntax can't act) and the previous question's, ranks with bm25 (headings weighted above text), puts the open file's matches first (at most half of them) and its first section always, and keeps `chat.units` units within `chat.contextTokens`, cutting a longer one. A unit's section ID is kept only if the section index holds that ID in that file now.
+3. **The model call** goes through the queue the summaries use, at interactive priority, counted against `summaries.concurrency`; it is never shared or cached, and stops when the request does. The prompt has the earlier turns (the last `chat.historyTurns` within `chat.historyTokens`) and the sources, each escaped inside its `<source>` tag.
+4. **Errors** after the stream starts are events: `rate_limited` for the provider's rate limit, `provider_error` with the provider's message otherwise.
+5. **History.** A finished answer, or one stopped with some text (marked `stopped`), is appended to `.specquer/user/chat-history.yaml` (the `yaml` package, atomically, one write at a time, at most 200 turns); a failed one isn't. A file that isn't valid YAML is moved aside (`chat-history.yaml.damaged-<time>`); invalid turns are dropped one by one.

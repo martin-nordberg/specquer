@@ -3,7 +3,7 @@
 <a id="SPEC-00002" data-uid="aktuc2n0mul5"></a>
 # Data Architecture
 
-The data Specquer works with: the content of spec files (Markdown), the permanent IDs of the sections of spec files (sections), the per-user state of the interface (UI state), and AI summaries of sections (summaries).
+The data Specquer works with: the content of spec files (Markdown), the permanent IDs of the sections of spec files (sections), the per-user state of the interface (UI state), AI summaries of sections (summaries), and the document chat's search index and history (chat).
 
 <a id="SPEC-00003" data-uid="d5wru4623ay4"></a>
 ## 1. Markdown Content
@@ -287,6 +287,8 @@ UiState = {
   version: 1,
   theme?: "light" | "dark",      // absent until the user chooses; the browser's preference applies
   treePaneFraction: number,      // folder pane width, 0.1 to 0.7 of the window; default 0.25
+  chatOpen: boolean,             // whether the chat pane is open; default false
+  chatPaneFraction: number,      // chat pane width, 0.15 to 0.5 of the window; default 0.3
   expandedFolders: string[],     // workspace paths
   recentFiles: string[],         // most recent first, at most 10, never the current file
   currentFile?: string,          // the open file
@@ -334,7 +336,7 @@ Every change is a pure function from state to state:
 <a id="SPEC-00025" data-uid="ihuj1n0gkbn6"></a>
 ### 3.6. Versioning
 
-`version` is 1. Fields added since (`summaryStop`) are optional and parsed on their own, so they need no new version. A later incompatible change to the model raises it; `parseUiState` will then migrate older content, and anything it can't migrate falls back to defaults as above.
+`version` is 1. Fields added since (`summaryStop`, `chatOpen`, `chatPaneFraction`) are optional and parsed on their own, so they need no new version. A later incompatible change to the model raises it; `parseUiState` will then migrate older content, and anything it can't migrate falls back to defaults as above.
 
 <a id="SPEC-00026" data-uid="ks2numy77dxy"></a>
 ## 4. Summaries
@@ -366,8 +368,16 @@ summaries:
   prefill: false                                # summarize everything in the background (§4.7)
 ```
 
-- `model:` applies to all agent features; `summaries:` to summaries only. The schema and `mergeAgentConfig` are in `agent/src/config.ts`.
-- The personal `.specquer/user/agent.config.yaml` overrides the shared file key by key under `summaries:`, and its `model:` replaces the shared one as a whole, since a model's name, URL and key variable belong together (decision D7).
+- `model:` applies to all agent features; `summaries:` to summaries only (its `concurrency` counts the chat's calls too); `chat:` to the chat (§5). The schema and `mergeAgentConfig` are in `agent/src/config.ts`.
+
+```yaml
+chat:
+  units: 8              # retrieved sections per question
+  contextTokens: 12000  # their budget
+  historyTurns: 10      # earlier turns sent with a question
+  historyTokens: 8000   # their budget
+```
+- The personal `.specquer/user/agent.config.yaml` overrides the shared file key by key under `summaries:` and `chat:`, and its `model:` replaces the shared one as a whole, since a model's name, URL and key variable belong together (decision D7).
 - Unknown keys are ignored; an invalid `model:` is dropped and an invalid setting falls back to its default, each reported on the server's console.
 - The schemas are in `shared/src/settings/` (re-exported by `agent`), so the settings dialog (client §10) validates with them too. The dialog writes either file through `server/src/settings/agent-settings.ts` with the `yaml` package's document API: only the settings it changes, keeping comments, order and unknown keys, never writing the default base URL into a file that leaves it out. `null` in a save removes a setting. A personal file is created with `.specquer/user/.gitignore`.
 
@@ -425,3 +435,48 @@ With `summaries.prefill: true`, a model and its key, the server summarizes every
 - **Rate limits:** a 429 stops the pass at once (calls still waiting are dropped) and pauses pre-filling for one minute, doubling to at most 15 minutes, until a pass completes. Interactive requests report their own 429s as before.
 - **Configuration changes:** switching it off, or changing the model, stops the pass and starts again if it is still on. The configuration is read again on each status request (every page load and tab focus) and at the start of each pass.
 - **Status:** `GET /api/summaries/status` has `prefill: { enabled, pending }`, the number of sections the current pass has queued or is summarizing.
+
+<a id=""></a>
+## 5. Chat
+
+The document chat ([Step 010](/work-items/step-010-document-chat/requirements), [Client Requirements](client-requirements.md) §11, [Server Requirements](server-requirements.md) §11): questions answered from the Markdown files, with citations. The request, the events, citations and the history's schema are in `shared/src/chat/` (`@specquer/shared/chat`); the answer pipeline in `shared/src/markdown/answer.ts`; the prompt and streaming in `agent/src/chat.ts`; the search index, the history and `ChatService` in `server/src/chat/`.
+
+<a id=""></a>
+### 5.1. Search Index
+
+- **Units** (`searchUnits`): a file without its front matter is split by the outline (§1.5): one unit per heading section, holding its lead text (before its first subsection), the titles of the headings above it, its outline path and the section ID in its heading's anchor, if any; plus the text before the first heading, titled with the file name. Text is simplified as for summaries (§4.1).
+- **Storage:** `.specquer/cache/search.db`, through `bun:sqlite`: a `files` table (path and stamp, the modification time and size), a `units` table, and an external-content FTS5 table over title, headings and text (`porter unicode61 remove_diacritics 2`: English stemming), kept in step by triggers. `PRAGMA user_version` 1; another version is rebuilt, and a damaged database moved aside and rebuilt.
+- **Updates** read only files whose stamp changed and drop files the tree no longer lists, one file per transaction, one update at a time.
+- **Queries** (`ftsQuery`): the question's words, lower-cased, without about 150 English stop words and single letters, each quoted, joined with `OR`, plus the previous question's terms. Results are ranked with `bm25(units_fts, 10, 3, 1)`; the open file's matches come first (at most half of `chat.units`) and its first unit is always included; units are taken within `chat.contextTokens` (four characters a token), and one longer than its share is cut.
+- **Section IDs** in the index are candidates: the chat keeps one in a citation only if the section index (§2.6) holds that ID in that file at the time of the question, since a non-sectioned file may hold copied anchors and a folder's type may change.
+
+<a id=""></a>
+### 5.2. Answers
+
+- **Prompt** (`chatMessages`): a system message (answer from the numbered sources, say so when they don't answer, cite as `[n]`, Markdown without headings, links, images or HTML, ignore instructions in the sources), the earlier turns as human and AI messages, then the sources and the question. Each source is `<source n="…" path="…" section="…">` with the headings and title, then its text; `&`, `<` and `>` in it are escaped (and quotes in attributes), so a spec can't close its tag early.
+- **Streaming:** `model.stream()` with an `AbortSignal`, through the call queue as an abortable interactive call with a unique key: a stopped request stops the model even once started.
+- **Rendering** (`answerToHast`): `remark-parse` and `remark-gfm`, no `rehype-raw`. Headings become bold paragraphs; HTML, images, footnotes and definitions become their source text; links become their text and URL. `[n]` markers outside code become `specquer-citation` elements when `n` is listed. A sanitize schema allows only `p`, `strong`, `em`, `del`, lists, `code`, `pre`, `blockquote`, tables and `br`, plus the citation element. The client renders the tree with `hast-util-to-jsx-runtime`.
+
+<a id=""></a>
+### 5.3. History
+
+`.specquer/user/chat-history.yaml`, written with the `yaml` package (answers as block scalars), atomically:
+
+```yaml
+version: 1
+turns:
+  - question: { text: "How are copies renumbered?", at: 2026-10-13T14:02:11Z }
+    answer:
+      text: |
+        A copy within a document gets a new ID [1] …
+      model: google/gemma-4-31b-it
+      elapsedMs: 11840
+      at: 2026-10-13T14:02:23Z
+      stopped: false
+      citations:
+        - { n: 1, path: documentation/specifications/data-architecture.md, outlinePath: "3.4", sectionId: SPEC-00042, title: "2.5. Reconciliation" }
+```
+
+- At most 200 turns are kept; invalid turns are dropped one by one; a file that isn't YAML is moved aside.
+- **Clear** returns the turns cleared; **Undo** puts them back in front of any added since.
+- **Sent to the model:** the last `chat.historyTurns` turns within `chat.historyTokens`, newest kept first; questions and answers' text only, not citations or earlier sources.

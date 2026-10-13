@@ -25,6 +25,9 @@ This document describes what Specquer works with and how its screen is organized
 | Summary | An AI-generated summary of a heading section, or of the whole document, shown in the preview in place of the section's content by the summary slider. Made from the saved file by the model named in the agent configuration, and cached until unused for 60 days. See [Data Architecture](data-architecture.md) §4. |
 | Agent configuration | `.specquer/shared/agent.config.yaml` (committed) names the model for agent features and the environment variable holding its key; an optional `.specquer/user/agent.config.yaml` overrides it for one user. Without it, Specquer makes no network calls. |
 | Summary cache | `.specquer/cache/summaries.db`, per user and ignored by Git. |
+| Chat | Questions about the specs answered by the model, in the chat pane, grounded in every Markdown file the tree shows and citing the sections used ([Step 010](/work-items/step-010-document-chat/requirements)). |
+| Chat history | `.specquer/user/chat-history.yaml`: the conversation, per user, ignored by Git, at most 200 questions with their answers. |
+| Search index | `.specquer/cache/search.db`: the full-text index (SQLite FTS5) the chat searches; per user, ignored by Git, rebuilt from the files. |
 
 ```
 root folder
@@ -34,11 +37,13 @@ root folder
 ├── .specquer/user/          per-user state, ignored by Git
 │   ├── .gitignore           *
 │   ├── agent.config.yaml    optional: a personal model
+│   ├── chat-history.yaml    the chat's conversation
 │   ├── instance.lock        held by the running Specquer
 │   ├── instance.json        the running Specquer's URL
 │   └── uistate.yaml
 ├── .specquer/cache/         per-user cache, ignored by Git
 │   ├── .gitignore           *
+│   ├── search.db            the chat's full-text index
 │   └── summaries.db
 ├── docs/                    folder (shown: contains .md files)
 │   ├── .specquer-config.yaml  optional: the folder's type and default prefix
@@ -51,32 +56,33 @@ root folder
 <a id="SPEC-00035" data-uid="ih7efd3xle7k"></a>
 ## 2. Screen Layout
 
-Specquer has one view: a header and two panes side by side.
+Specquer has one view: a header and two or three panes side by side. The chat pane on the right is opened and closed with the **Chat** button in the header.
 
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│ [icon] Specquer                                             [theme]  │ header (navigation color)
-├──────────────┬───────────────────────────────────────────────────────┤
-│ ▾ docs       │ docs › specs › login.md ▾     Saved  [Text|Split|…]   │ file path, status, view type
-│   ▸ specs    ├───────────────────────────────────────────────────────┤
-│   overview.md│ title: Login                                          │ front matter (YAML)
-│ README.md    ├═══════════════════════════════════════════════════════┤ drag bar
-│              │ # Login                                               │
-│              │                                                       │ Markdown content
-│              │ ## Requirements                                       │ (text, split, preview
-│              │ ...                                                   │  or WYSIWYG)
-└──────────────┴───────────────────────────────────────────────────────┘
-       ▲ drag bar between the panes
+┌───────────────────────────────────────────────────────────────────────────────┐
+│ [icon] Specquer                                       [chat] [theme] [gear]   │ header (navigation color)
+├────────────┬──────────────────────────────────┬───────────────────────────────┤
+│ ▾ docs     │ docs › login.md ▾  Saved [Text…] │ Chat                   Clear  │ file path, status, view type
+│   ▸ specs  ├──────────────────────────────────┤        How do logins lock?    │
+│ README.md  │ title: Login                     │ ┌ ✦ AI response · gemma ────┐ │ front matter (YAML)
+│            ├══════════════════════════════════┤ │ After five failures [1].  │ │ drag bar
+│            │ # Login                          │ └───────────────────────────┘ │
+│            │                                  │                               │ Markdown content
+│            │ ## Requirements                  │ ┌───────────────────────────┐ │ (text, split, preview
+│            │ ...                              │ │ Ask about the specs       │ │  or WYSIWYG)
+└────────────┴──────────────────────────────────┴───────────────────────────────┘
+       ▲ drag bars between the panes; the chat pane on the right is optional
 ```
 
 | Region | Contents |
 | ------ | -------- |
-| Header | App icon and application name; light/dark switch and the settings gear button |
+| Header | App icon and application name; the chat toggle, the light/dark switch and the settings gear button |
 | Left pane | Folder tree; context menu on each folder (New file, New folder, Settings, Section problems, Rename, Delete), each file (Rename, Delete) and the empty space below the last entry (New file, New folder, Settings, Section problems for the root) |
 | Right pane, row 1 | File path breadcrumb (a drop-down of recent files once there are any), save status, view-type switch |
 | Right pane, row 2 | Front matter editor with a drag bar below it |
 | Right pane, row 3 | Markdown content in one of four views |
-| Dialogs | New file, new folder, rename, delete, folder settings, add section anchors, section problems, settings (model and summarization), and the conflict dialog when a file changed on disk |
+| Chat pane (optional) | **Clear**, the conversation (questions on the right, AI answers on the left with their citations), and the question input with **Send** or **Stop** |
+| Dialogs | New file, new folder, rename, delete, folder settings, add section anchors, section problems, settings (model, summarization and chat), and the conflict dialog when a file changed on disk |
 
 <a id="SPEC-00036" data-uid="x9pynsmcyb9v"></a>
 ## 3. Navigation

@@ -77,7 +77,8 @@ The shared package holds everything both sides need. It must run unchanged in th
 | Sections | `@specquer/shared/sections` | Section ID and UID formats; the section anchor rules for coding agents |
 | UI state | `@specquer/shared/uistate` | Zod schema, defaults and pure update functions; see [Data Architecture](data-architecture.md) §3 |
 | Summaries | `@specquer/shared/summaries` | Text simplification, the length rule and `summaryTargets`, the sections the slider summarizes, so the server's cache keys match the client's requests; see [Data Architecture](data-architecture.md) §4.1 |
-| Settings | `@specquer/shared/settings` | Zod schemas of the agent configuration (`model:`, `summaries:`, re-exported by `agent`), the folder types and a folder's settings (`folderType`, `defaultPrefix`), so the settings dialogs validate as the server does |
+| Chat | `@specquer/shared/chat` | The chat request, the stream's events, citations and the history's schema; see [Data Architecture](data-architecture.md) §5 |
+| Settings | `@specquer/shared/settings` | Zod schemas of the agent configuration (`model:`, `summaries:`, `chat:`, re-exported by `agent`), the folder types and a folder's settings (`folderType`, `defaultPrefix`), so the settings dialogs validate as the server does |
 
 | Aspect | Decision |
 | ------ | -------- |
@@ -103,6 +104,8 @@ The router's type is what the client's typed Hono client uses, so the client get
 | One instance per root | `server/src/instance.ts`: an exclusive lock on `.specquer/user/instance.lock` through `bun:sqlite` (an open `BEGIN EXCLUSIVE` transaction; Bun has no file-lock API, and SQLite locks the file on macOS, Linux and Windows), and the running instance's URL in `instance.json`; see [Server Requirements](server-requirements.md) §2 |
 | Sections | `SectionIndex` (`server/src/sections/`): an in-memory index of the sectioned files and the data files in `.specquer/shared/`, which the `yaml` package reads and writes (it keeps key order and writes one flow mapping per line); document IDs and section UIDs are 12-character CUID2s (`@paralleldrive/cuid2`'s `init({ length: 12 })`) carried in the anchors' `data-uid`; the data files are read again when they change on disk; see [Data Architecture](data-architecture.md) §2 |
 | Security | Session token, Host and Origin checks, Content-Security-Policy; see [Security](security.md) |
+| Model runtime | `server/src/model-runtime.ts`: the agent configuration, the model it names and the call queue, shared by summaries and the chat, so `summaries.concurrency` limits both |
+| Chat | `server/src/chat/`: the search index (`search.db`, SQLite FTS5 through `bun:sqlite`), the history (`.specquer/user/chat-history.yaml`) and `ChatService`, whose answers stream as server-sent events; see [Data Architecture](data-architecture.md) §5 |
 | AI features | Delegated to `agent`. The summary service (`server/src/summaries/`) reads the agent configuration, keeps summaries in a SQLite cache (`bun:sqlite`, `.specquer/cache/summaries.db`), queues model calls with two priorities, looks summaries up by section ID, and pre-fills the cache in the background when switched on; see [Data Architecture](data-architecture.md) §4 |
 | Settings | `server/src/settings/`: the agent configuration files and the folders' `.specquer-config.yaml` files (folder type and default prefix), read and written for the settings dialogs with the `yaml` package's document API (keeping comments), with versions against overwriting changes made on disk; after a write the readers are told to read the file again |
 | Outbound network | Only to the configured model provider, and only when summaries are configured or the user tests a model; see [Security](security.md) §9 |
@@ -116,6 +119,7 @@ The router's type is what the client's typed Hono client uses, so the client get
 
 - `Bun.serve()`'s `routes` serve only the bundled client: the HTML page at an internal path and its scripts and stylesheets. Bun's HTML routes can't add headers, so the page itself is not served from `/`.
 - Everything else goes to Hono through `fetch: app.fetch`. Hono's `/` handler checks the session, fetches the page from the internal path, and returns it with the Content-Security-Policy. Hono also serves the preview worker script (§7.3) and the API.
+- One route streams: `POST /api/chat` answers with server-sent events. Its handler returns an async iterable of events and the shared router writes them with Hono's `streamSSE`, with a keep-alive comment every 15 seconds, so handlers stay free of Hono. The typed client types the request but not the events, so the client reads the stream itself (`readEvents`) and checks each event with its Zod schema.
 
 The command line, the file-system rules and the API are specified in [Server Requirements](server-requirements.md).
 
@@ -132,7 +136,7 @@ The command line, the file-system rules and the API are specified in [Server Req
 | Tool schemas | Zod, used to define the input of LangChain tools and structured output |
 | Model provider | `@langchain/openai`'s `ChatOpenAI`, pointed at NVIDIA's OpenAI-compatible API (`https://integrate.api.nvidia.com/v1`); the model is configured in `.specquer/shared/agent.config.yaml` |
 | Used by | `server`, which exposes agent features through API routes |
-| Features | Summaries of sections (Step 004): `config.ts` (parsing and merging the configuration; its schemas are in `shared`), `model.ts` (the chat model for a configuration, and `testModel`, the settings dialog's one-call check with its failures in the user's terms), `summarize.ts` (the prompt, plain-text output, and the fallback for long sections) |
+| Features | Summaries of sections (Step 004): `config.ts` (parsing and merging the configuration; its schemas are in `shared`), `model.ts` (the chat model for a configuration, and `testModel`, the settings dialog's one-call check with its failures in the user's terms), `summarize.ts` (the prompt, plain-text output, and the fallback for long sections). Document chat (Step 010): `chat.ts` (the prompt with escaped sources, and the answer streamed with LangChain's `stream()`) |
 
 <a id="SPEC-00095" data-uid="bfd2gvoja5mj"></a>
 ### 6.1 Package Rationale
@@ -185,6 +189,7 @@ The client sends saved text only. The server reads files for summaries only to p
 | Text editing | CodeMirror 6, with a small wrapper of its own (`@codemirror/lang-markdown`, `@codemirror/lang-yaml`; `@codemirror/autocomplete` for section link completion, `@codemirror/merge`'s `diff` for applying outside changes minimally) |
 | WYSIWYG editing | Milkdown (`@milkdown/kit`, CommonMark and GFM presets), with a node view that shows section anchors as badges |
 | Markdown preview | The `shared` pipeline (unified, remark-parse, remark-gfm, remark-frontmatter, remark-rehype, rehype-raw, rehype-sanitize), run in a Web Worker and rendered with `hast-util-to-jsx-runtime` |
+| Chat | The chat pane in `client/src/components/chat/` (`ChatPane`, `AnswerBox`, `QuestionBubble`, `ChatToggle`), the three panes in `PaneLayout`, and `ChatStore` (`client/src/app/chat-store.ts`); answers rendered from the shared answer pipeline in `AiBox`, the box summaries use too |
 | Summaries | The summary slider (the shadcn Slider on Radix UI) above the preview; the rendered tree filtered by stop (`summarizeTree` from `shared`), with summaries from `SummaryStore` (`client/src/app/summaries.ts`) rendered as plain text |
 | Settings | The settings dialogs in `client/src/components/settings/`: the system settings (shadcn Tabs, RadioGroup and Switch), with the form apart from React in `settings-form.ts`, and the folder settings |
 | API client | Hono typed client (`hc`), typed from the router in `shared` |
@@ -274,5 +279,5 @@ In production the back end serves the client from assets embedded in the executa
 
 - The root `bunfig.toml` preloads happy-dom for all tests, then puts back Bun's own `fetch`, `Request`, `Response` and timers, which the server tests use. It also keeps `e2e/` out of `bun test`, since `bun test` would otherwise pick up Playwright's `*.spec.ts` files.
 - `test:e2e` runs `bun --bun x playwright test`. Without `--bun`, Playwright silently runs on Node when Node is installed. Running Playwright on Bun isn't officially supported; the fallback is the `playwright` library inside `bun test`.
-- Tests never call a real model: `agent` uses LangChain's `FakeListChatModel`, the server tests a stub model, and `e2e/summaries.spec.ts` a fake OpenAI-compatible server (`e2e/fake-model.ts`) that `agent.config.yaml` points at. The Specquer started for end-to-end tests gets a test key in `SPECQUER_E2E_MODEL_KEY`.
+- Tests never call a real model: `agent` uses LangChain's `FakeListChatModel`, the server tests a stub model, and `e2e/summaries.spec.ts` and `e2e/chat.spec.ts` a fake OpenAI-compatible server (`e2e/fake-model.ts`, which also streams) that `agent.config.yaml` points at. The Specquer started for end-to-end tests gets a test key in `SPECQUER_E2E_MODEL_KEY`.
 - Each end-to-end test starts its own Specquer, in production mode, on a temporary Git repository. Chrome is the installed browser (`channel: "chrome"`); WebKit, the engine of a future desktop shell on macOS and Linux, needs `bunx playwright install webkit` once.

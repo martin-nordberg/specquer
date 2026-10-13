@@ -5,7 +5,7 @@
 
 Specquer is a local web server that can read, write, rename and delete files under its root folder. Anything that can talk to it can do the same, so the server is protected against other websites in the user's browser, other machines on the network and malicious content in the Markdown files themselves.
 
-The rules below are implemented in `server/src/security.ts`, `server/src/files.ts`, `server/src/instance.ts`, `server/src/summaries/`, `server/src/settings/` and the shared preview pipeline, and are covered by unit tests (`server/src/security.test.ts`, `server/src/files.test.ts`, `server/src/settings/settings.test.ts`, `server/src/settings/settings-api.test.ts`, `server/src/instance.test.ts`, `shared/src/markdown/preview.test.ts`) and end-to-end tests (`e2e/launch.spec.ts`, `e2e/views.spec.ts`, `e2e/settings.spec.ts`).
+The rules below are implemented in `server/src/security.ts`, `server/src/files.ts`, `server/src/instance.ts`, `server/src/summaries/`, `server/src/chat/`, `server/src/settings/` and the shared preview pipeline, and are covered by unit tests (`server/src/security.test.ts`, `server/src/files.test.ts`, `server/src/settings/settings.test.ts`, `server/src/settings/settings-api.test.ts`, `server/src/instance.test.ts`, `shared/src/markdown/preview.test.ts`, `shared/src/markdown/answer.test.ts`, `agent/src/chat.test.ts`) and end-to-end tests (`e2e/launch.spec.ts`, `e2e/views.spec.ts`, `e2e/settings.spec.ts`).
 
 <a id="SPEC-00064" data-uid="iqgf4njjhp4m"></a>
 ## 1. Threats
@@ -19,7 +19,7 @@ The rules below are implemented in `server/src/security.ts`, `server/src/files.t
 | Cross-site scripting through Markdown | A spec contains `<img src=x onerror="fetch('/api/entry?path=docs', {method: 'DELETE'})">` | Sanitizing (§6), Content-Security-Policy (§7) |
 | Lost work | Autosave overwrites a file a coding agent just changed; deleting a folder removes files the tree doesn't show | Version check on save; delete preview (§8) |
 | Specs sent to a third party | Summaries send section text to a model provider | Opt-in configuration, saved text only, keys only in the environment (§9) |
-| Prompt injection | A spec tells the model to answer with a link or HTML | Summaries rendered as plain text, labeled as AI-generated (§9) |
+| Prompt injection | A spec tells the model to answer with a link or HTML, or to ignore its instructions | Summaries rendered as plain text; chat answers as limited Markdown whose only links are checked citations; sources escaped in the prompt; all labeled as AI-generated (§9) |
 
 <a id="SPEC-00065" data-uid="q5dau5z14uck"></a>
 ## 2. Network
@@ -105,7 +105,7 @@ frame-ancestors 'none'
 <a id="SPEC-00072" data-uid="ipvsb7onaku1"></a>
 ## 9. Summaries and the Model Provider
 
-Summaries (Step 004, Step 005) and the model test (Step 006) are the server's only outbound network calls.
+Summaries (Step 004, Step 005), the model test (Step 006) and the chat (Step 010) are the server's only outbound network calls.
 
 - **Opt-in.** Until a model is configured in `.specquer/shared/agent.config.yaml` (or the personal `.specquer/user/agent.config.yaml`) and its key is set, no request leaves the machine: the slider is disabled and `POST /api/summaries` answers `503`. Specquer then works fully offline.
 - **What is sent.** The provider receives the text of each section summarized, the document's path and the titles of the headings above the section. Only saved text is sent, never unsaved edits. For the slider, the text comes from the authenticated client: `POST /api/summaries` takes it in its request (with the session token, Host and Origin checks of every API route) and doesn't read files.
@@ -115,4 +115,7 @@ Summaries (Step 004, Step 005) and the model test (Step 006) are the server's on
 - **Keys.** The configuration never holds an API key, since the shared file is committed. It names the environment variable that holds the key (`apiKeyEnv: NVIDIA_API_KEY`); the server reads it from its own environment. The settings dialog never asks for, shows or stores a key: it edits the variable's name, and `GET /api/settings/env` answers only whether a variable is set, never its value. The model test's messages never repeat the key. Bun also loads a `.env` file from the server's working directory, which the root `.gitignore` excludes.
 - **Free tiers.** The first supported provider is NVIDIA's API catalog (build.nvidia.com), a trial service for evaluation and prototyping under the NVIDIA API Trial Terms of Service, with each model under its own license. As of October 2026 its rate limit is about 40 requests a minute per account, varying by model and load, and production use isn't allowed. Read the current terms, including what they say about storing the text sent, before sending specs that aren't public.
 - **Untrusted output.** A spec can contain text that steers the model, so a summary may hold Markdown, links or HTML. The server strips Markdown markers and HTML tags, and the client renders summaries as plain text paragraphs, never as HTML. Each summary is labeled "AI summary" with the model's name and is one click from the full text. Summaries found by the lookup are plain text too.
+- **The chat.** A question sends the provider the question, the earlier turns (within the configured limits) and the retrieved sections (their text, path, headings and section ID), never unsaved edits: sending a question saves the open file first. The search index is built locally (SQLite FTS5) and sends nothing; only files the tree shows are indexed. Without a model and its key the chat answers `503` and sends nothing.
+- **Chat answers are untrusted output.** In the prompt each source is wrapped in a `<source>` tag with `&`, `<` and `>` escaped (and quotes in attributes), so a spec can't close its tag and speak outside it, and the model is told the sources are material, not instructions. The answer is rendered as limited Markdown through its own pipeline, without `rehype-raw`: raw HTML, images and links the model writes are shown as text, and the only links are `[n]` citations whose number the server listed for that answer, pointing at files the tree shows. Answers are rendered with React, never `innerHTML`, and labeled "AI response" with the model's name.
+- **The chat history** (`.specquer/user/chat-history.yaml`) holds the questions and answers, so excerpts of the specs; it is per user and ignored by Git. The search index (`.specquer/cache/search.db`) holds the specs' text; `.specquer/cache/` is ignored by Git too.
 - **The cache.** Summaries are stored in `.specquer/cache/summaries.db` (SQLite), in the root folder, until unused for 60 days. `.specquer/cache/` gets a `.gitignore` containing `*` when Specquer creates it, so summaries aren't committed or shared. The browser never calls a model, so the Content-Security-Policy (§7) doesn't change.
