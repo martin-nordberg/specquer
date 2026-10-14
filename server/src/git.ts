@@ -1,3 +1,4 @@
+import { userInfo } from "node:os";
 import { $ } from "bun";
 
 /** Git queries used by the file service. All return `null` when the folder isn't in a Git work tree. */
@@ -32,12 +33,35 @@ export async function gitTopLevel(folder: string): Promise<string | null> {
 }
 
 /**
+ * The name recorded for the user (Step 012, R2.4): Git's `user.name` for the root folder, else
+ * its `user.email`, else the operating system's login name.
+ */
+export async function gitUserName(root: string): Promise<string> {
+  for (const key of ["user.name", "user.email"]) {
+    try {
+      const result = await $`git -C ${root} config ${key}`.quiet().nothrow();
+      const value = result.exitCode === 0 ? result.stdout.toString().trim() : "";
+      if (value !== "") return value;
+    } catch {
+      // Git isn't installed
+      break;
+    }
+  }
+  try {
+    return userInfo().username || "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
+/**
  * Markdown files and folder configuration files (`.specquer-config.yaml`) Git doesn't ignore
- * (tracked, or untracked and not ignored), relative to the root, and the files of `.specquer`
- * folders, which reveal nested Specquer folders (their `shared/` data is committed).
+ * (tracked, or untracked and not ignored), relative to the root, comment sidecars
+ * (`*.md.comments.yaml`), and the files of `.specquer` folders, which reveal nested Specquer
+ * folders (their `shared/` data is committed).
  */
 export async function gitMarkdownFiles(root: string): Promise<string[] | null> {
-  const result = await $`git -C ${root} ls-files -z --cached --others --exclude-standard -- ${":(icase)*.md"} ${":(glob)**/.specquer-config.yaml"} ${":(glob)**/.specquer/**"}`
+  const result = await $`git -C ${root} ls-files -z --cached --others --exclude-standard -- ${":(icase)*.md"} ${":(icase)*.md.comments.yaml"} ${":(glob)**/.specquer-config.yaml"} ${":(glob)**/.specquer/**"}`
     .quiet()
     .nothrow();
   if (result.exitCode !== 0) return null;

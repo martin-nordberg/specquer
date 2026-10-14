@@ -2,6 +2,8 @@ import { Hono } from "hono";
 import { setCookie } from "hono/cookie";
 import { type ApiHandlers, createApiRouter } from "@specquer/shared/api";
 import { ChatService, type ChatServiceOptions } from "./chat/service.ts";
+import { CommentService, type CommentServiceOptions } from "./comments/comment-service.ts";
+import { isMarkdownFile, joinPath, parentPath } from "@specquer/shared/paths";
 import { FileService } from "./files.ts";
 import { ModelRuntime } from "./model-runtime.ts";
 import { addAgentGuideFile, hasAgentGuideFile } from "./sections/agent-guide.ts";
@@ -32,6 +34,8 @@ export interface AppConfig extends SecurityConfig {
   summaries?: SummaryServiceOptions;
   /** Overrides for document chat. */
   chat?: ChatServiceOptions;
+  /** Overrides for comment threads (tests fix the user's name and the time). */
+  comments?: CommentServiceOptions;
 }
 
 export function createHandlers(
@@ -40,6 +44,7 @@ export function createHandlers(
   sections: SectionIndex,
   summaries: SummaryService,
   chat: ChatService,
+  comments: CommentService,
 ): ApiHandlers {
   // Pre-filling and the chat's search index catch up after files change
   const filesChanged = () => {
@@ -66,6 +71,8 @@ export function createHandlers(
       return result;
     },
     async create(parent, name, kind, options = {}) {
+      // A new document starts without threads, even where a leftover sidecar is (R3.6)
+      if (kind === "file") await comments.beforeCreate(joinPath(parent, name));
       const path = await sections.create(parent, name, kind, kind === "file" ? options.prefix : undefined);
       if (path === null) return { ok: false, reason: "exists" };
       if (kind === "folder" && (options.folderType !== undefined || options.prefix !== undefined)) {
@@ -78,15 +85,23 @@ export function createHandlers(
       return { ok: true, path };
     },
     async rename(path, newName) {
+      const document = isMarkdownFile(path) && (await files.kindOf(path)) === "file";
+      if (document) await comments.beforeCreate(joinPath(parentPath(path), newName));
       const newPath = await files.rename(path, newName);
       if (newPath === null) return { ok: false, reason: "exists" };
-      if (newPath !== path) await sections.renamed(path, newPath);
+      if (newPath !== path) {
+        await sections.renamed(path, newPath);
+        // A folder carries its sidecars; a document's follows it (R3.5)
+        if (document) await comments.renamed(path, newPath);
+      }
       filesChanged();
       return { ok: true, path: newPath, uiState: await uiState.renamed(path, newPath) };
     },
     deletePreview: (path) => files.deletePreview(path),
     async deleteEntry(path) {
+      const document = isMarkdownFile(path) && (await files.kindOf(path)) === "file";
       await files.deleteEntry(path);
+      if (document) await comments.deleted(path);
       await sections.deleted(path);
       filesChanged();
       return uiState.deleted(path);
@@ -101,7 +116,7 @@ export function createHandlers(
       if (!dryRun && changed.length > 0) filesChanged();
       return { files: changed, agentGuide: await hasAgentGuideFile(files) };
     },
-    sectionProblems: (folder) => sections.problems(folder),
+    sectionProblems: async (folder) => [...(await sections.problems(folder)), ...(await comments.problems(folder))],
     sectionStatuses: (path) => sections.statuses(path),
     renumberSection: (path, id, uid, baseVersion) => sections.renumber(path, id, uid, baseVersion),
     renumberDocument: (path, baseVersion) => sections.renumberDocument(path, baseVersion),
@@ -118,6 +133,8 @@ export function createHandlers(
     testModel: (config, signal) => summaries.testModel(config, signal),
     chat: (request, signal) => chat.ask(request, signal),
     chatHistory: () => chat.history.read(),
+    comments: (path) => comments.threads(path),
+    changeComments: (path, change) => comments.change(path, change),
     clearChatHistory: () => chat.history.clear(),
     restoreChatHistory: (turns) => chat.history.restore(turns),
     async folderSettings(path) {
@@ -151,6 +168,7 @@ export function createApp(config: AppConfig) {
   const files = new FileService(config.root);
   const uiState = new UiStateStore(config.root, (path) => files.kindOf(path));
   const sections = new SectionIndex(files);
+  const comments = new CommentService(files, sections, config.comments);
   const runtime = new ModelRuntime(config.root, config.summaries);
   const summaries = new SummaryService(config.root, { files, sections }, { ...config.summaries, runtime });
   const chat = new ChatService(config.root, runtime, { files, sections }, config.chat);
@@ -197,7 +215,7 @@ export function createApp(config: AppConfig) {
     }),
   );
 
-  app.route("/", createApiRouter(createHandlers(files, uiState, sections, summaries, chat)));
+  app.route("/", createApiRouter(createHandlers(files, uiState, sections, summaries, chat, comments)));
 
   app.notFound((c) => (c.req.path.startsWith("/api/") ? c.json({ error: "not_found", message: "Not found" }, 404) : c.text("Not found", 404)));
   return { app, sections, summaries, chat };

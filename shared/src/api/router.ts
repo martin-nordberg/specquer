@@ -4,6 +4,7 @@ import { streamSSE } from "hono/streaming";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { ZodType } from "zod";
 import { type ChatEvent, type ChatRequest, type ChatTurn, chatRequestSchema, chatRestoreSchema } from "../chat/chat.ts";
+import { type CommentChange, type CommentChangeResult, type CommentsResponse, commentChangeSchema } from "../comments/comments.ts";
 import type { BodyEdit } from "../markdown/sections.ts";
 import type { FolderSetting, FolderType, ModelConfig } from "../settings/settings.ts";
 import { type UiState, type UiStatePatch, uiStatePatchSchema } from "../uistate/uistate.ts";
@@ -122,6 +123,10 @@ export interface ApiHandlers {
    */
   chat(request: ChatRequest, signal: AbortSignal): Promise<AsyncIterable<ChatEvent>>;
   chatHistory(): Promise<ChatTurn[]>;
+  /** A document's comment threads (Step 012). */
+  comments(path: string): Promise<CommentsResponse>;
+  /** Applies one change to a document's comment threads. */
+  changeComments(path: string, change: CommentChange): Promise<CommentChangeResult>;
   /** Clears the conversation; returns the turns cleared, for Undo. */
   clearChatHistory(): Promise<ChatTurn[]>;
   /** Puts cleared turns back in front of any added since; returns the conversation. */
@@ -296,6 +301,12 @@ export function createApiRouter(handlers: ApiHandlers) {
           clearInterval(keepAlive);
         }
       });
+    })
+    .get("/comments", validate("query", fileQuerySchema), async (c) => {
+      return c.json(await handlers.comments(c.req.valid("query").path));
+    })
+    .patch("/comments", validate("query", fileQuerySchema), validate("json", commentChangeSchema), async (c) => {
+      return c.json(await handlers.changeComments(c.req.valid("query").path, c.req.valid("json")));
     })
     .get("/chat/history", async (c) => c.json({ turns: await handlers.chatHistory() }))
     .delete("/chat/history", async (c) => c.json({ turns: await handlers.clearChatHistory() }))

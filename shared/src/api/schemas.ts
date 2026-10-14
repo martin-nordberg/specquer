@@ -119,7 +119,16 @@ export type SectionProblem =
   /** A section whose own status (`data-status`) is blank or not allowed for its prefix; `line` is counted in the body. */
   | { kind: "invalid-status"; path: string; id: string; line: number; value: string; prefix: string }
   /** A prefix's `prefix.config.yaml` that can't be used: the prefix uses the default statuses. */
-  | PrefixConfigProblem;
+  | PrefixConfigProblem
+  /** A comment sidecar that can't be used: its threads aren't shown or written (Step 012). */
+  | { kind: "comment-sidecar"; path: string; problem: SidecarProblem; message: string }
+  /** A comment sidecar with no document beside it. */
+  | { kind: "orphaned-sidecar"; path: string }
+  /** A thread whose section isn't in the saved document; `path` is the document's. */
+  | { kind: "detached-thread"; path: string; threadUid: string; sectionUid: string; text: string };
+
+/** Why a comment sidecar can't be used. */
+export type SidecarProblem = "unparsable" | "conflict-markers" | "format" | "unknown-status" | "repeated-uid";
 
 /** A prefix's `prefix.config.yaml` that can't be used, and why. */
 export interface PrefixConfigProblem {

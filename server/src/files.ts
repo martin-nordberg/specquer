@@ -11,6 +11,7 @@ import {
   parentPath,
   pathSegments,
 } from "@specquer/shared/paths";
+import { isSidecarPath, sidecarPath } from "@specquer/shared/comments";
 import { FOLDER_CONFIG_FILE } from "@specquer/shared/settings";
 import { gitInfo, gitMarkdownFiles, gitUncommitted, gitUntrackedFolders } from "./git.ts";
 
@@ -164,15 +165,16 @@ export class FileService {
 
   /**
    * Every Markdown file the tree would show and every folder configuration file
-   * (`.specquer-config.yaml`) in the folders it visits, sorted, without the tree's size limit, and
-   * the folders below the root that hold a `.specquer` folder of their own (`nested`, sorted).
+   * (`.specquer-config.yaml`) and comment sidecar in the folders it visits, sorted, without the
+   * tree's size limit, and the folders below the root that hold a `.specquer` folder of their own
+   * (`nested`, sorted).
    */
-  async listFiles(): Promise<{ markdown: string[]; configs: string[]; nested: string[] }> {
-    const { files, configs, walked } = await this.markdownFiles();
-    return { markdown: files, configs, nested: [...walked.nested].sort() };
+  async listFiles(): Promise<{ markdown: string[]; configs: string[]; sidecars: string[]; nested: string[] }> {
+    const { files, configs, sidecars, walked } = await this.markdownFiles();
+    return { markdown: files, configs, sidecars, nested: [...walked.nested].sort() };
   }
 
-  private async markdownFiles(): Promise<{ files: string[]; configs: string[]; walked: WalkResult }> {
+  private async markdownFiles(): Promise<{ files: string[]; configs: string[]; sidecars: string[]; walked: WalkResult }> {
     const walked: WalkResult = { files: [], emptyFolders: [], entries: 0, nested: new Set() };
     const gitFiles = await gitMarkdownFiles(this.root);
     if (gitFiles === null) await this.walk("", walked, true);
@@ -187,21 +189,23 @@ export class FileService {
     }
     const files: string[] = [];
     const configs: string[] = [];
+    const sidecars: string[] = [];
     for (const path of walked.files) {
       const nested = nestedSpecquerFolder(path);
       if (nested !== undefined) walked.nested.add(nested);
       const check = checkPath(path);
       if (!check.ok) continue;
-      const isConfig = baseName(check.path) === FOLDER_CONFIG_FILE;
-      if (!isConfig && !isMarkdownFile(check.path)) continue;
+      const list = baseName(check.path) === FOLDER_CONFIG_FILE ? configs : isSidecarPath(check.path) ? sidecars : isMarkdownFile(check.path) ? files : null;
+      if (list === null) continue;
       if (pathSegments(check.path).some((segment) => SKIPPED_FOLDERS.has(segment))) continue;
       // Git lists tracked files that were deleted from disk
       if ((await this.kindOf(check.path)) !== "file") continue;
-      (isConfig ? configs : files).push(check.path);
+      list.push(check.path);
     }
     files.sort();
     configs.sort();
-    return { files, configs, walked };
+    sidecars.sort();
+    return { files, configs, sidecars, walked };
   }
 
   /**
@@ -224,7 +228,7 @@ export class FileService {
       if (!entry.isDirectory() || SKIPPED_FOLDERS.has(entry.name)) {
         // A folder holding only its configuration file counts as empty, so the tree shows it
         if (entry.name !== FOLDER_CONFIG_FILE) holdsFiles = true;
-        if (collectFiles && entry.isFile() && (isMarkdownFile(path) || entry.name === FOLDER_CONFIG_FILE)) result.files.push(path);
+        if (collectFiles && entry.isFile() && (isMarkdownFile(path) || isSidecarPath(path) || entry.name === FOLDER_CONFIG_FILE)) result.files.push(path);
       } else if (await this.walk(path, result, collectFiles)) holdsFiles = true;
     }
     if (!holdsFiles && folder !== "") result.emptyFolders.push(folder);
@@ -306,6 +310,45 @@ export class FileService {
     return newPath;
   }
 
+  /** A file's text, or `undefined` if it doesn't exist (for sidecars, which come and go). */
+  async readTextIfExists(path: string): Promise<string | undefined> {
+    try {
+      return (await this.readFile(path)).text;
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) return undefined;
+      throw err;
+    }
+  }
+
+  /** Writes a file whose folder exists, creating or replacing it. */
+  async writeText(path: string, text: string): Promise<void> {
+    const folder = await this.existingFolder(parentPath(path));
+    await writeAtomically(join(folder, baseName(path)), text);
+  }
+
+  /** Removes a file, if it exists. */
+  async removeFile(path: string): Promise<void> {
+    try {
+      const { absolute, isFolder } = await this.existingEntry(path);
+      if (!isFolder) await rm(absolute);
+    } catch (err) {
+      if (!(err instanceof ApiError && err.status === 404)) throw err;
+    }
+  }
+
+  /** Moves a file to another name in the same folder, if it exists, replacing what is there. */
+  async moveFile(from: string, to: string): Promise<void> {
+    if (parentPath(from) !== parentPath(to)) throw new ApiError(400, "invalid", "Files are only moved within their folder.");
+    let source;
+    try {
+      source = await this.existingEntry(from);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) return;
+      throw err;
+    }
+    if (!source.isFolder) await rename(source.absolute, join(dirname(source.absolute), baseName(to)));
+  }
+
   async deletePreview(path: string): Promise<DeletePreview> {
     const { absolute, isFolder } = await this.existingEntry(path);
     const files: string[] = [];
@@ -322,8 +365,10 @@ export class FileService {
     };
     if (isFolder) await walk(absolute, path);
     else {
-      fileCount = 1;
       files.push(path);
+      // A document's comment sidecar is deleted with it (Step 012, R3.5)
+      if (isMarkdownFile(path) && (await this.kindOf(sidecarPath(path))) === "file") files.push(sidecarPath(path));
+      fileCount = files.length;
     }
     files.sort();
     const git = await gitInfo(this.root);

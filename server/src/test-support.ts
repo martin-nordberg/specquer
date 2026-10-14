@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { $ } from "bun";
 import { createApp } from "./app.ts";
 import type { ChatServiceOptions } from "./chat/service.ts";
+import type { CommentServiceOptions } from "./comments/comment-service.ts";
 import type { SummaryServiceOptions } from "./summaries/service.ts";
 import { sessionCookieName } from "./security.ts";
 
@@ -31,6 +32,8 @@ export function testApp(
   summaries: SummaryServiceOptions = { env: {} },
   // A question updates the chat's index itself; no background update after a test is over
   chat: ChatServiceOptions = { indexDelay: 3_600_000 },
+  // A fixed name, so tests don't depend on the Git configuration of the machine
+  comments: CommentServiceOptions = { userName: async () => "Tester" },
 ) {
   const { app, sections, summaries: summaryService, chat: chatService } = createApp({
     root,
@@ -40,6 +43,7 @@ export function testApp(
     fetchPage: async () => new Response(page),
     summaries,
     chat,
+    comments,
   });
   const cookie = `${sessionCookieName(TEST_PORT)}=${TEST_TOKEN}`;
   /** A request as the signed-in browser would send it. */
