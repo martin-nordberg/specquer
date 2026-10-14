@@ -1,0 +1,9 @@
+# Settings for the NOTE prefix; edited by hand. Commit this file.
+#
+# statusValues: the statuses a NOTE section can have, in order. The first is the
+# default: a section without a status of its own, and no NOTE parent, takes it.
+# Each value is text, not blank, without ", and listed once (ignoring case).
+statusValues:
+  - Draft
+  - Specified
+  - Archived
