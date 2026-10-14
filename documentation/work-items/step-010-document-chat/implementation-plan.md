@@ -501,7 +501,7 @@ _Proposed_; the work proceeds on them unless they are changed:
 | No FTS5 in the macOS system SQLite | Chat unavailable on macOS | Checked first in Phase 2; a clear message if missing; `Database.setCustomSQLite` as the fallback |
 | Re-rendering Markdown while streaming | Jank on long answers | Throttled at 150 ms; answers are short compared with specs |
 
-<a id=""></a>
+<a id="WORK-00459" data-uid="uxvr5a043b0w"></a>
 ## 8. Implementation Status
 
 Implemented October 2026, one commit per phase. Differences from the plan:

@@ -1,13 +1,13 @@
-<a id=""></a>
+<a id="NOTE-00078" data-uid="v0ebgzh2azbo"></a>
 
-<a id=""></a>
+<a id="NOTE-00079" data-uid="g48jldurqcdl"></a>
 # A Stopped or Restarted Server
 
 _Notes from October 2026, after Step 009._
 
 **Summary:** when the server goes away under an open tab, the client keeps the edits in memory and shows "Save failed", and autosave retries every 60 seconds. But it doesn't say why, it can't get back in after a restart, and closing the tab after a failed save loses the edits silently. The proposal is to do three things together: say what happened, never lose edits silently, and keep the session token across restarts, so a restart on the same port needs no action from the user. Local drafts in browser storage can wait. This answers one of the behaviors in [Specification Gaps](/notes/specification-gaps).
 
-<a id=""></a>
+<a id="NOTE-00080" data-uid="pp2rfvelmvrr"></a>
 ## What Happens Today
 
 | Case | What the open tab gets | Can the tab recover? |
@@ -22,10 +22,10 @@ What the client does now:
 - `client/src/lib/api.ts` turns every failure into an `ApiRequestError` with its status. Nothing tells a network error from a `401`.
 - There is no `beforeunload` guard.
 
-<a id=""></a>
+<a id="NOTE-00081" data-uid="slru63zluybw"></a>
 ## Options
 
-<a id=""></a>
+<a id="NOTE-00082" data-uid="u5diqazr7g52"></a>
 ### 1. Say What Happened
 
 - Tell "Specquer isn't running" (a network error) apart from "Specquer was restarted; this tab's session has ended" (`401`).
@@ -33,7 +33,7 @@ What the client does now:
 - The message suggests running `specquer` again. Since Step 009 that opens the running instance, or starts one and opens it.
 - Cost: low. Classify the errors in `lib/api.ts` and add a banner in `App.tsx`.
 
-<a id=""></a>
+<a id="NOTE-00083" data-uid="jy0z7e6s4wyd"></a>
 ### 2. Never Lose Edits Silently
 
 - **Warn before closing:** a `beforeunload` warning while there are unsaved edits. Without it, closing the tab after a failed save discards them, which is the real risk today.
@@ -41,7 +41,7 @@ What the client does now:
 - **Retry sooner:** while the server is unreachable, retry the save on a short backoff (2 s, 4 s, … up to 30 s) instead of every 60 seconds. The `baseVersion` check still keeps a save from overwriting a change made on disk meanwhile.
 - Cost: low.
 
-<a id=""></a>
+<a id="NOTE-00084" data-uid="cbkdsbs4vjfw"></a>
 ### 3. Keep the Session Across Restarts
 
 - The server keeps its token in `.specquer/user/` (mode `0600`, like `instance.json`) and reuses it at every start. A restart on the same port then behaves like a stopped server: the cookie still works, and the tab carries on by itself.
@@ -50,7 +50,7 @@ What the client does now:
 - **Rotating it:** a `--new-session` option, or deleting the file.
 - **Specifications:** Security §3 changes.
 
-<a id=""></a>
+<a id="NOTE-00085" data-uid="f0pgm333dtn8"></a>
 ### 4. Local Drafts
 
 - Unsaved edits are kept in `localStorage` or IndexedDB, keyed by root, path and base version, and offered back when the file is next opened.
@@ -58,12 +58,12 @@ What the client does now:
 - **Limitation:** browser storage belongs to the origin, so after a port change the new tab can't see the old drafts.
 - **Cost:** restoring needs a merge-or-discard flow next to the conflict dialog. That is real UI work for a case that options 2 and 3 mostly cover.
 
-<a id=""></a>
+<a id="NOTE-00086" data-uid="i7vqj22jvfqr"></a>
 ### 5. Reconnect Without a Stored Token
 
 Not possible by design: the only proof a tab holds is the old token, and accepting it after a restart amounts to option 3. A future desktop shell, which would start the server itself, could pass the token in directly.
 
-<a id=""></a>
+<a id="NOTE-00087" data-uid="v3vghy6hu9qg"></a>
 ## Recommendation
 
 Do options 1, 2 and 3 together, as one step:

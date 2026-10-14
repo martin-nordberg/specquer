@@ -5,5 +5,4 @@
 # Each value is text, not blank, without ", and listed once (ignoring case).
 statusValues:
   - Draft
-  - Specified
   - Archived

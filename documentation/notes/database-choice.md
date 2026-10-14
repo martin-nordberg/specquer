@@ -1,6 +1,7 @@
-<a id="NOTE-00001" data-uid="aa5s6iueggr8"></a>
+<a id="NOTE-00001" data-uid="aa5s6iueggr8" data-status="Archived"></a>
 
 <a id="NOTE-00002" data-uid="k3s3wfxsegwa"></a>
+
 # Database Choice for the Markdown Database
 
 _Notes from October 2026._
@@ -8,6 +9,7 @@ _Notes from October 2026._
 **Summary:** use **SQLite through Bun's built-in `bun:sqlite`**, as one database file at `.specquer/cache.db`. It is the only one of the top choices that needs no extra dependency and still works inside the single executable, and it covers everything the [Ideas](/notes/ideas) specification describes so far. The open questions (especially question 7, on whether `.specquer` is committed) may later add a second store for the parts that must be shared through Git.
 
 <a id="NOTE-00003" data-uid="exo59dikiogc"></a>
+
 ## What the Database Has to Do
 
 From the Ideas specification:
@@ -21,18 +23,19 @@ From the Ideas specification:
 - **Probably later:** search across specs (open question 16) and embeddings for similarity.
 
 <a id="NOTE-00004" data-uid="bxcfsyly0jm7"></a>
+
 ## The Four Candidates
 
-| | **SQLite (`bun:sqlite`)** | **PGlite** (Postgres compiled to WebAssembly) | **DuckDB** | **Plain files** (JSON/YAML in `.specquer`) |
-|---|---|---|---|---|
-| Extra dependencies | **None**, built into Bun | ~26 MB package (+ pgvector package) | Native add-on for each platform | None |
-| Works in `bun build --compile` | **Yes** | **No** as tested: it loads its WebAssembly files from disk, so they'd have to be shipped beside the binary or embedded by hand | **No** as tested: it loads a platform-specific native library at runtime | Yes |
-| Startup and footprint | Instant; small file | ~1.7 s cold start; 39 MB data folder when nearly empty | Fast (17 ms); small file | Instant, but slow once there are many files |
-| Section tree | Recursive queries (CTEs) | Recursive queries plus `ltree` | Recursive queries | Hand-written code |
-| Search across specs | **FTS5** full-text search, built in | Postgres full-text search | Full-text search extension | Hand-written code |
-| Vector similarity | Through the `sqlite-vec` extension, which is a separate file and blocked by Apple's SQLite on macOS. Brute-force search in TypeScript is fine at spec scale | **pgvector**, the strongest option | Built-in array functions; a vector-search extension exists | Hand-written code |
-| Workload fit | Small transactional writes and reads by key: **matches** | Same, with richer SQL | Built for analysis of whole columns; frequent small updates are its weak spot | Fine for small amounts of data that should be easy to diff |
-| Shareable through Git | Binary file: merges badly | Data folder: not committable | Binary file | **Yes**: readable diffs and merges |
+|                                | **SQLite (`bun:sqlite`)**                                                                                                                                   | **PGlite** (Postgres compiled to WebAssembly)                                                                                  | **DuckDB**                                                                    | **Plain files** (JSON/YAML in `.specquer`)                 |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Extra dependencies             | **None**, built into Bun                                                                                                                                    | \~26 MB package (+ pgvector package)                                                                                           | Native add-on for each platform                                               | None                                                       |
+| Works in `bun build --compile` | **Yes**                                                                                                                                                     | **No** as tested: it loads its WebAssembly files from disk, so they'd have to be shipped beside the binary or embedded by hand | **No** as tested: it loads a platform-specific native library at runtime      | Yes                                                        |
+| Startup and footprint          | Instant; small file                                                                                                                                         | \~1.7 s cold start; 39 MB data folder when nearly empty                                                                        | Fast (17 ms); small file                                                      | Instant, but slow once there are many files                |
+| Section tree                   | Recursive queries (CTEs)                                                                                                                                    | Recursive queries plus `ltree`                                                                                                 | Recursive queries                                                             | Hand-written code                                          |
+| Search across specs            | **FTS5** full-text search, built in                                                                                                                         | Postgres full-text search                                                                                                      | Full-text search extension                                                    | Hand-written code                                          |
+| Vector similarity              | Through the `sqlite-vec` extension, which is a separate file and blocked by Apple's SQLite on macOS. Brute-force search in TypeScript is fine at spec scale | **pgvector**, the strongest option                                                                                             | Built-in array functions; a vector-search extension exists                    | Hand-written code                                          |
+| Workload fit                   | Small transactional writes and reads by key: **matches**                                                                                                    | Same, with richer SQL                                                                                                          | Built for analysis of whole columns; frequent small updates are its weak spot | Fine for small amounts of data that should be easy to diff |
+| Shareable through Git          | Binary file: merges badly                                                                                                                                   | Data folder: not committable                                                                                                   | Binary file                                                                   | **Yes**: readable diffs and merges                         |
 
 **What was tested,** with the project's Bun 1.4.2 on Linux:
 
@@ -43,6 +46,7 @@ From the Ideas specification:
 PGlite and DuckDB could probably be made to work by shipping files beside the binary, but that breaks the "one deliverable" principle.
 
 <a id="NOTE-00005" data-uid="z88j6ontbdfl"></a>
+
 ## Why SQLite
 
 - **It fits the architecture.** No new dependency, it is in the single executable, and it is already the prescribed choice in `CLAUDE.md` ("`bun:sqlite` for SQLite").
@@ -52,6 +56,7 @@ PGlite and DuckDB could probably be made to work by shipping files beside the bi
 - **Its limits are acceptable.** The file is binary, so it can't be meaningfully committed or merged. That is fine while it is a cache.
 
 <a id="NOTE-00006" data-uid="oeshvbybga6z"></a>
+
 ## When the Other Options Would Win
 
 - **PGlite:** if embeddings or heavy relational queries become central *and* shipping its files beside the executable, or embedding them by hand, is acceptable.
@@ -59,6 +64,7 @@ PGlite and DuckDB could probably be made to work by shipping files beside the bi
 - **Plain files:** for whatever must be **shared through Git**. If question 7 decides that fragment identity, traceability links or summaries must travel with the repository, keep those in small text files (one per document or work item) that diff and merge cleanly. SQLite stays the rebuildable index over them. This hybrid is likely where the design ends up.
 
 <a id="NOTE-00007" data-uid="y4h1ryeoqlpr"></a>
+
 ## Possible Table Layout
 
 - `revisions(commit, parent, time)`

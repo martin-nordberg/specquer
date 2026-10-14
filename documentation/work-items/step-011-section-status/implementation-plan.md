@@ -1,11 +1,11 @@
-<a id=""></a>
+<a id="WORK-00460" data-uid="hpgwi7vvuexp"></a>
 
-<a id=""></a>
+<a id="WORK-00461" data-uid="zpkev0o9ah46"></a>
 # Step 011 - Implementation Plan
 
 _Plan for the [Section Status requirements](requirements.md). Drafted October 2026._
 
-<a id=""></a>
+<a id="WORK-00462" data-uid="qtxfyai3gqhj"></a>
 ## 1. Summary
 
 Step 011 gives each section a status, kept in its anchor as `data-status`, inherited from its parent section within one prefix, checked against a per-prefix list in `.specquer/shared/<prefix>/prefix.config.yaml`, and changed from a menu on the section badge.
@@ -28,7 +28,7 @@ There are five phases (§5):
 
 Decisions taken while planning are in §6, marked _Proposed_; the work proceeds on them unless they are changed.
 
-<a id=""></a>
+<a id="WORK-00463" data-uid="fcnnqv3iho2w"></a>
 ## 2. Precedence
 
 The requirements' Precedence table applies. This plan adds:
@@ -42,7 +42,7 @@ The requirements' Precedence table applies. This plan adds:
 | `CodeEditor` outside changes | Always kept out of the undo history | A change marked undoable goes into the history (§4.7) |
 | **Add section anchors** | Adds and corrects IDs and UIDs | Also corrects the capitalization and spaces of statuses, as a save does (§4.4, D5) |
 
-<a id=""></a>
+<a id="WORK-00464" data-uid="dsknkwg3t4nb"></a>
 ## 3. Starting Point
 
 - **Anchors** (`shared/src/markdown/sections.ts`):
@@ -70,10 +70,10 @@ The requirements' Precedence table applies. This plan adds:
 - **Problems dialog** (`client/src/components/ProblemsDialog.tsx`): `describe(problem)` switches on `kind`.
 - **Agent rules**: `shared/src/sections/agent-guide.ts` holds the rules' text. `server/src/sections/agent-guide.ts` writes them to `AGENTS.md`, and `CLAUDE.md` repeats them by hand.
 
-<a id=""></a>
+<a id="WORK-00465" data-uid="lcnytxc0v7m4"></a>
 ## 4. Proposed Design
 
-<a id=""></a>
+<a id="WORK-00466" data-uid="w4rf9mwtjt2w"></a>
 ### 4.1 Anchors (`shared/src/markdown/sections.ts`)
 
 - **Reading the status:**
@@ -87,7 +87,7 @@ The requirements' Precedence table applies. This plan adds:
   - the value is the allowed value as written; `"` can't occur in it (§4.3).
 - **The open tag alone:** `withStatus(openTag, status)` does the same to a tag string, for the WYSIWYG view's `html` node (§4.8). `statusEdit` and `withStatus` share the attribute logic.
 
-<a id=""></a>
+<a id="WORK-00467" data-uid="mgptztmn1vcc"></a>
 ### 4.2 Effective Status (`shared/src/sections/status.ts`)
 
 - `DEFAULT_STATUS_VALUES`: the six values of R2.3, in order.
@@ -102,7 +102,7 @@ The requirements' Precedence table applies. This plan adds:
 - `allowed(prefix)` returns the prefix's usable list, or `DEFAULT_STATUS_VALUES`.
 - It has no Bun or DOM APIs and runs on both sides. The server uses it with the index's sections; the client uses it with `analyzeBody` of the body being edited.
 
-<a id=""></a>
+<a id="WORK-00468" data-uid="jp9iwfey213x"></a>
 ### 4.3 Prefix Configuration (`server/src/sections/prefix-config.ts`, `shared/src/settings/`)
 
 - **Shared:** `PREFIX_CONFIG_FILE = "prefix.config.yaml"` and `prefixConfigSchema` (`statusValues: string[]`) in `shared/src/settings/`, ready for a settings dialog later (requirements §4).
@@ -119,7 +119,7 @@ The requirements' Precedence table applies. This plan adds:
   - It gives `allowed(prefix)` (§4.2) and `problems()`, the unusable files by prefix.
 - **The index** holds a `PrefixConfigs` beside `FolderConfigs`, and `load()` loads both.
 
-<a id=""></a>
+<a id="WORK-00469" data-uid="iocpinujzvbe"></a>
 ### 4.4 The Index (`server/src/sections/section-index.ts`)
 
 - **Corrections on save** (R1.5): in `anchor()`, after the prefixes are worked out, `sectionStatuses` runs on the sections with each section's final prefix. A section whose own status is valid but differs from its `canonical` value goes into `plan.statuses`.
@@ -135,14 +135,14 @@ The requirements' Precedence table applies. This plan adds:
   - `folderPrefix`;
   - `statusValues`: the usable list of every prefix that has a usable file. Other prefixes use the defaults, which the client has in `shared`.
 
-<a id=""></a>
+<a id="WORK-00470" data-uid="cu5i8khnjplx"></a>
 ### 4.5 API (`shared/src/api/`, `server/src/app.ts`)
 
 - `SectionProblem` gains the two kinds of §4.4.
 - `GET /api/sections/statuses?path=` (schema `fileQuerySchema`) returns `{ sectioned, folderPrefix, statusValues: Record<string, string[]> }`.
 - No other route changes. `SectionInfo` stays as it is: the client works statuses out from the text it holds, which may not be saved yet.
 
-<a id=""></a>
+<a id="WORK-00471" data-uid="c107tvck8td8"></a>
 ### 4.6 The Preview Badge (`SectionBadge.tsx`, new `SectionMenu.tsx`)
 
 - **Tooltip** (R4.1): the first line becomes `{id} - {status}`:
@@ -157,7 +157,7 @@ The requirements' Precedence table applies. This plan adds:
 - **Opening the menu** (R4.3, R4.4): `contextmenu` on the badge (the browser menu is suppressed), and on the focused badge `keydown` of `ContextMenu` or `Shift+F10`, handled directly rather than relying on the browser to fire `contextmenu` (D3).
 - **Preview** computes the statuses once per rendered text, beside `buildOutline`: `sectionStatuses(analyzeBody(markdown).sections, …)`, keyed by `id/uid` for the `Link` component. The status lists come from §4.9.
 
-<a id=""></a>
+<a id="WORK-00472" data-uid="opmr26d3ri1u"></a>
 ### 4.7 The Dialog and the Edit (`SectionAttributesDialog.tsx`, `document-store.ts`, `CodeEditor.tsx`)
 
 - **Dialog** (R5): a shadcn `Dialog` titled **Section attributes**, with the ID and title, and a native `<select>` labeled **Status**. The choices are:
@@ -173,7 +173,7 @@ The requirements' Precedence table applies. This plan adds:
   - **WYSIWYG view:** the change is a ProseMirror transaction (§4.8), so Milkdown's history has it.
   - **Preview view:** there are no undo keys. Choosing again in the dialog reverts.
 
-<a id=""></a>
+<a id="WORK-00473" data-uid="ayumxibro538"></a>
 ### 4.8 The WYSIWYG Badge (`MilkdownEditor.tsx`)
 
 - `sectionAnchorView`'s span gets `tabindex="0"`, `role="button"` and an `aria-label` like the preview badge's. The class `section-badge-problem` marks an invalid status.
@@ -182,7 +182,7 @@ The requirements' Precedence table applies. This plan adds:
 - **The edit:** on OK, `tr.setNodeMarkup(pos, undefined, { ...attrs, value: withStatus(value, status) })`. The listener then reports the new Markdown through `onChange`.
 - **Paste:** unchanged. A copy's anchor becomes a bare `<a id="">`, dropping its status, as requirements R1.8 accepts.
 
-<a id=""></a>
+<a id="WORK-00474" data-uid="puo3lcadud1z"></a>
 ### 4.9 Status Lists in the Client (`App.tsx`)
 
 - `App` loads `GET /api/sections/statuses` for the open file:
@@ -194,7 +194,7 @@ The requirements' Precedence table applies. This plan adds:
   It passes `{ sectioned, folderPrefix, allowed }` to `ContentView`, which hands it to `Preview` and `MilkdownEditor`.
 - Until it loads, badges show the ID alone and the menu has only **Copy this section ID**.
 
-<a id=""></a>
+<a id="WORK-00475" data-uid="oea5s7sv08hw"></a>
 ### 4.10 Problems Dialog and Agent Rules
 
 - **`ProblemsDialog.describe`:**
@@ -206,10 +206,10 @@ The requirements' Precedence table applies. This plan adds:
 
   `AGENTS.md` here is rewritten with **Add section anchors**. `CLAUDE.md`'s "Section anchors" gets the same line by hand.
 
-<a id=""></a>
+<a id="WORK-00476" data-uid="kz48b4aln7a3"></a>
 ## 5. Phases
 
-<a id=""></a>
+<a id="WORK-00477" data-uid="jpopel33erd7"></a>
 ### Phase 1: Shared Foundations
 
 - §4.1, §4.2, the shared part of §4.3, and the agent rule (§4.10).
@@ -224,7 +224,7 @@ The requirements' Precedence table applies. This plan adds:
   - the agent guide holds the new rule.
 - *Done when* `bun test` passes.
 
-<a id=""></a>
+<a id="WORK-00478" data-uid="b14xmy87xyoh"></a>
 ### Phase 2: The Server
 
 - §4.3, §4.4 and §4.5.
@@ -240,7 +240,7 @@ The requirements' Precedence table applies. This plan adds:
   - `GET /api/sections/statuses` for sectioned and non-sectioned files.
 - *Done when* `bun test` passes.
 
-<a id=""></a>
+<a id="WORK-00479" data-uid="g72r5rgd97qr"></a>
 ### Phase 3: The Client
 
 - §4.6 to §4.10.
@@ -258,7 +258,7 @@ The requirements' Precedence table applies. This plan adds:
   - `ProblemsDialog` describes the two new kinds.
 - *Done when* `bun run typecheck` and `bun test` pass.
 
-<a id=""></a>
+<a id="WORK-00480" data-uid="gxqj7zeo748g"></a>
 ### Phase 4: End-to-End Tests
 
 - `e2e/section-status.spec.ts`:
@@ -272,7 +272,7 @@ The requirements' Precedence table applies. This plan adds:
 - `e2e/fixtures.ts` gains a helper that writes a prefix's `prefix.config.yaml`.
 - *Done when* the suite passes on Chrome and WebKit.
 
-<a id=""></a>
+<a id="WORK-00481" data-uid="twdipeefmppa"></a>
 ### Phase 5: Documentation
 
 - The specifications in requirements §5. `CLAUDE.md`: `prefix-config.ts` and `status.ts` in the package descriptions, `prefix.config.yaml`, the agent rule, and Step 011 in "Project state".
@@ -280,7 +280,7 @@ The requirements' Precedence table applies. This plan adds:
 - The docs sidebar gains Step 011 (requirements and plan), and an Implementation Status section is added here.
 - *Done when* `bun run typecheck`, `bun test`, `bun run test:e2e` and `docs:build` pass.
 
-<a id=""></a>
+<a id="WORK-00482" data-uid="xc7hhgpkn9pd"></a>
 ## 6. Decisions
 
 _Proposed_; the work proceeds on them unless they are changed:
@@ -293,7 +293,7 @@ _Proposed_; the work proceeds on them unless they are changed:
 - **D6. Unusable configuration files are found by the reader, not by scans of Markdown files** (§4.3). Their problems need no document to be open, and the defaults apply as soon as the file is read.
 - **D7. No status on `SectionInfo` for now** (§4.5). Nothing outside the open file shows a status yet (requirements §4). Adding it later, for the outline or link completion, is a field and a call to `sectionStatuses`.
 
-<a id=""></a>
+<a id="WORK-00483" data-uid="u9v74ddil2fl"></a>
 ## 7. Risks
 
 | Risk | Impact | Mitigation |
@@ -305,7 +305,7 @@ _Proposed_; the work proceeds on them unless they are changed:
 | Duplicate IDs within one file | The preview's `id/uid` key could find the wrong section's status | Such files already have a problem and a ring; the dialog finds the section again by ID and UID when it opens and on OK |
 | Hand-edited `prefix.config.yaml` | A typo marks every status of a prefix invalid | The defaults apply and the file is reported (D6), so a typo can't remove values |
 
-<a id=""></a>
+<a id="WORK-00484" data-uid="p917yzd90g2b"></a>
 ## 8. Implementation Status
 
 Phases 1 to 5 were carried out in October 2026. What differs from the plan, or was learned doing it:
