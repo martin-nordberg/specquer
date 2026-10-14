@@ -508,6 +508,7 @@ Implemented October 2026, one commit per phase. Differences from the plan:
 
 - **The open file's ranking** (§4.2, D5): its matches come first, at most half the units, rather than a scaled bm25 score, which couldn't outrank a strong title match elsewhere.
 - **Cited files that no longer exist** (§4.10): checked when an answer is shown only for citations without a section ID (their file must be in the tree). A citation with an ID is looked up when it is clicked, falling back to the stored path; it isn't marked in advance.
+- **Keep-alive every 5 seconds, not 15** (§4.6): Bun closes a started response that sends nothing for its idle timeout, 10 seconds by default, so a model thinking longer than that before its first words cut the stream, and the browser showed "network error". Found in use; `e2e/chat.spec.ts` now covers a model that takes 12 seconds to start.
 - **The settings API's `chat:` block** was done in Phase 4, with the server, and the dialog's tab in Phase 5. `AgentSettingsUpdate` is now the schema's input type, so callers may leave blocks out.
 - **Chat answers share the model's settings with summaries**, including its 1,024-token output limit (`createChatModel`). Long answers are cut there; a separate limit for chat can follow if needed.
 

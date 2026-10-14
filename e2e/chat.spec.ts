@@ -69,6 +69,16 @@ test("asking streams an answer whose citation opens the section in Preview, and 
   await expect(chatPane(page).getByLabel("Your question")).toHaveText("How is a copied section renumbered?");
 });
 
+test("an answer that takes longer than Bun's idle timeout to start still arrives", async ({ page, specquer, model }) => {
+  test.setTimeout(60_000);
+  // Bun closes a started response that is quiet for 10 seconds; keep-alive comments prevent it
+  model.delay = 12_000;
+  await launch(page, specquer);
+  await openChat(page);
+  await ask(page, "How is a copied section renumbered?");
+  await expect(answers(page).last()).toContainText("The answer is in the specs", { timeout: 30_000 });
+});
+
 test("Clear empties the conversation, and Undo puts it back", async ({ page, specquer }) => {
   await launch(page, specquer);
   await openChat(page);

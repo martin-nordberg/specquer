@@ -157,7 +157,7 @@ The rules for summaries are specified in [Data Architecture](data-architecture.m
 
 | Route | Behavior |
 | ----- | -------- |
-| `POST /api/chat` | Body `{ question, openFile? }` (1 to 8,000 characters, not blank; `openFile` a Markdown path). Answers with server-sent events, each a JSON event named by its `type`: `status` (`searching`, then `thinking`), `citations` (the numbered sources: `n`, `path`, `outlinePath`, `sectionId` if any, `title`), `token` (a piece of the answer), then `done` (`model`, `elapsedMs`, `at`) or `error` (`code`, `message`). A comment (`: keep-alive`) goes out every 15 seconds while the stream is quiet. Without a model or key it answers `503 not_configured` before streaming; an invalid body `400`. Closing the request stops the answer. |
+| `POST /api/chat` | Body `{ question, openFile? }` (1 to 8,000 characters, not blank; `openFile` a Markdown path). Answers with server-sent events, each a JSON event named by its `type`: `status` (`searching`, then `thinking`), `citations` (the numbered sources: `n`, `path`, `outlinePath`, `sectionId` if any, `title`), `token` (a piece of the answer), then `done` (`model`, `elapsedMs`, `at`) or `error` (`code`, `message`). A comment (`: keep-alive`) goes out every 5 seconds while the stream is quiet, since Bun closes a started response that sends nothing for 10 seconds. Without a model or key it answers `503 not_configured` before streaming; an invalid body `400`. Closing the request stops the answer. |
 | `GET /api/chat/history` | `{ turns }`: the conversation, oldest first. |
 | `DELETE /api/chat/history` | Clears it; returns the turns cleared, for Undo. |
 | `PUT /api/chat/history` | Body `{ turns }`: puts cleared turns back in front of any added since; returns the conversation. |

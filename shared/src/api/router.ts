@@ -125,8 +125,12 @@ export interface ApiHandlers {
   restoreChatHistory(turns: ChatTurn[]): Promise<ChatTurn[]>;
 }
 
-/** While an answer's stream is quiet, a comment goes out this often, so nothing in between takes it for dead. */
-export const CHAT_KEEP_ALIVE = 15_000;
+/**
+ * While an answer's stream is quiet, a comment goes out this often. Bun closes a started response
+ * that sends nothing for its idle timeout (10 seconds by default), and a model can think longer
+ * than that before its first words.
+ */
+export const CHAT_KEEP_ALIVE = 5_000;
 
 /** A failed settings save as a response: a conflict, or a file that isn't valid YAML. */
 function settingsFailure(result: Extract<SettingsSaveResult, { ok: false }>) {

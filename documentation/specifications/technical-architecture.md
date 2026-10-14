@@ -119,7 +119,7 @@ The router's type is what the client's typed Hono client uses, so the client get
 
 - `Bun.serve()`'s `routes` serve only the bundled client: the HTML page at an internal path and its scripts and stylesheets. Bun's HTML routes can't add headers, so the page itself is not served from `/`.
 - Everything else goes to Hono through `fetch: app.fetch`. Hono's `/` handler checks the session, fetches the page from the internal path, and returns it with the Content-Security-Policy. Hono also serves the preview worker script (§7.3) and the API.
-- One route streams: `POST /api/chat` answers with server-sent events. Its handler returns an async iterable of events and the shared router writes them with Hono's `streamSSE`, with a keep-alive comment every 15 seconds, so handlers stay free of Hono. The typed client types the request but not the events, so the client reads the stream itself (`readEvents`) and checks each event with its Zod schema.
+- One route streams: `POST /api/chat` answers with server-sent events. Its handler returns an async iterable of events and the shared router writes them with Hono's `streamSSE`, with a keep-alive comment every 5 seconds (Bun closes a started response that is quiet for 10 seconds), so handlers stay free of Hono. The typed client types the request but not the events, so the client reads the stream itself (`readEvents`) and checks each event with its Zod schema.
 
 The command line, the file-system rules and the API are specified in [Server Requirements](server-requirements.md).
 
