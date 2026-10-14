@@ -300,7 +300,8 @@ export function DeleteDialog({ node, onClose, loadPreview, onDelete }: DeleteDia
             Delete “{node?.name}”{isFolder ? " and everything in it" : ""}? This can't be undone in Specquer.
           </DialogDescription>
         </DialogHeader>
-        {isFolder && preview !== null && (
+        {/* A file is listed when something goes with it: its comment sidecar (Step 012) */}
+        {preview !== null && (isFolder || preview.files.length > 1) && (
           <div className="grid gap-2 text-sm">
             <p>
               {preview.fileCount === 0
