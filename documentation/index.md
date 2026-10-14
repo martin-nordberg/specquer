@@ -7,18 +7,20 @@ hero:
   tagline: "A tool for spec-driven development"
   actions:
     - theme: brand
-      text: Architecture
-      link: /specifications/architecture/overview
+      text: Architecture Overview
+      link: /specifications/overview
     - theme: alt
       text: References
       link: /references/overview
 
 features:
-  - title: Feature A
-    details: Lorem ipsum dolor sit amet, consectetur adipiscing elit
-  - title: Feature B
-    details: Lorem ipsum dolor sit amet, consectetur adipiscing elit
-  - title: Feature C
-    details: Lorem ipsum dolor sit amet, consectetur adipiscing elit
+  - title: Markdown Browsing and Editing
+    details: Markdown specification documents editable as plain text, WYSIWYG, or HTML preview
+  - title: Structured Hierarchy of Specification Sections
+    details: Documents are broken down by heading level hierarchically and recursively.
+  - title: AI-Assisted Document Review
+    details: AI summarization of documents by section (level by level hierarchically). 
+             AI Chat to answer questions about the body of documentation with citations
+             for answers.
 ---
 
