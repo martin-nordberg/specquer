@@ -77,6 +77,34 @@ test("the preview and split views show badges with a tooltip, and their menu cop
   await expect(page.getByTestId("preview").getByRole("button", { name: /^Section SPEC-/ })).toHaveCount(4);
 });
 
+test("WYSIWYG lays badges out as the preview does, and the cursor skips a heading's anchor line", async ({ page, specquer }) => {
+  await openFile(page, "specs", "anchored.md");
+  await view(page, "WYSIWYG").click();
+  const editor = page.getByRole("textbox", { name: "Markdown content (WYSIWYG)" });
+  const box = async (locator: import("@playwright/test").Locator) => (await locator.boundingBox())!;
+  const heading = await box(editor.getByRole("heading", { name: "Anchored" }));
+  const headingBadge = await box(editor.locator("[data-section-id='SPEC-00002']"));
+  // In the heading's first line, at the heading's size
+  expect(headingBadge.y).toBeGreaterThanOrEqual(heading.y);
+  expect(headingBadge.y + headingBadge.height).toBeLessThanOrEqual(heading.y + heading.height);
+  const itemBadge = await box(editor.locator("[data-section-id='SPEC-00004']"));
+  expect(headingBadge.height).toBeGreaterThan(itemBadge.height * 1.5);
+  // A list item's badge stays on the line of its text
+  const itemText = await box(editor.getByText("A listed requirement"));
+  expect(Math.abs(itemBadge.y + itemBadge.height / 2 - (itemText.y + itemText.height / 2))).toBeLessThan(itemText.height / 2);
+
+  await editor.getByRole("heading", { name: "Details" }).click();
+  await page.keyboard.press("Home");
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.type("Z");
+  await expect(saveStatus(page)).toHaveText("Unsaved changes");
+  await hideTab(page);
+  await expect(saveStatus(page)).toHaveText("Saved");
+  const text = await specquer.read("specs/anchored.md");
+  expect(text).toContain("Paragraph 60 of filler text.Z");
+  expect(text).toMatch(/<a id="SPEC-00003" data-uid="uidthree0003"><\/a>\n+## Details/);
+});
+
 test("WYSIWYG shows badges and keeps the anchors when editing", async ({ page, specquer }) => {
   await openFile(page, "specs", "anchored.md");
   await view(page, "WYSIWYG").click();

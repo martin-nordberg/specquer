@@ -100,3 +100,28 @@
 .markdown .section-badge { text-decoration: none; }
 /* An ID used more than once: a warning ring until the user renumbers one */
 .section-badge-problem { @apply ring-2 ring-warning; }
+
+/* ProseMirror's own stylesheet (not loaded) keeps the images it puts beside uneditable nodes
+   inline; Tailwind's base styles would make them blocks, breaking the line after each badge */
+.milkdown img.ProseMirror-separator { display: inline !important; border: none !important; margin: 0 !important; }
+
+/* WYSIWYG: a paragraph holding only section anchors (anchor-lines.ts), without the margins and
+   the line break ProseMirror adds after the badge */
+.milkdown .section-anchor-line {
+  @apply my-0;
+  & br.ProseMirror-trailingBreak { display: none; }
+}
+/* Before a heading, as in the preview: collapsed, with the badge floated into the heading's
+   first line at the heading's size. The paragraph takes the heading's top margin; its transparent
+   border keeps that margin from collapsing through it, which would misplace the float */
+.milkdown .section-anchor-line[data-before-heading] {
+  height: 0;
+  border-top: 1px solid transparent;
+  /* The preview's gap after a badge is its margin and a space */
+  & .section-badge { float: left; margin-top: calc((1lh - 1.1em) / 2); margin-right: calc(var(--spacing) * 1.5 + 0.25em); }
+  & + :is(h1, h2, h3, h4, h5, h6) { @apply mt-0; }
+}
+.milkdown .section-anchor-line[data-before-heading="1"] { @apply text-3xl; margin-top: calc(var(--spacing) * 6 - 1px); }
+.milkdown .section-anchor-line[data-before-heading="2"] { @apply text-2xl; margin-top: calc(var(--spacing) * 6 - 1px); }
+.milkdown .section-anchor-line[data-before-heading="3"] { @apply text-xl; margin-top: calc(var(--spacing) * 5 - 1px); }
+.milkdown .section-anchor-line:is([data-before-heading="4"], [data-before-heading="5"], [data-before-heading="6"]) { margin-top: calc(var(--spacing) * 4 - 1px); }

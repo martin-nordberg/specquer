@@ -5,12 +5,13 @@ import { commonmark, htmlSchema } from "@milkdown/kit/preset/commonmark";
 import { gfm } from "@milkdown/kit/preset/gfm";
 import { Fragment, type Node, Slice } from "@milkdown/kit/prose/model";
 import type { EditorView } from "@milkdown/kit/prose/view";
-import { $view } from "@milkdown/kit/utils";
+import { $prose, $view } from "@milkdown/kit/utils";
 import { useEffect, useRef, useState } from "react";
 import type { SectionStatusLists } from "@specquer/shared/api";
 import { anchorTagSectionId, anchorTagStatus, anchorTagUid, hasConflictMarkers, isAnchorCloseTag, withStatus } from "@specquer/shared/markdown";
 import { type SectionWithStatus, allowedStatuses, badgeStatus, findSection, hasInvalidOwnStatus, statusLabel, statusesOfBody } from "@/app/section-status";
 import { SectionAttributesDialog, type SectionAttributesTarget } from "@/components/SectionAttributesDialog";
+import { anchorLinesPlugin } from "@/components/anchor-lines";
 import { badgeLabel } from "@/components/SectionBadge";
 import { CONFLICT_MARKERS_REASON, SectionMenu, type SectionMenuTarget, isMenuKey } from "@/components/SectionMenu";
 import { cn } from "@/lib/utils";
@@ -218,6 +219,7 @@ export function MilkdownEditor({ value, onChange, statusLists, onStatusMenu, cla
       .use(commonmark)
       .use(gfm)
       .use(sectionAnchorView(handlers))
+      .use($prose(() => anchorLinesPlugin()))
       .use(history)
       .use(listener)
       .create()
