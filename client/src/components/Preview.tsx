@@ -21,6 +21,9 @@ import { allowedStatuses, badgeStatus, findSection, statusesOfBody } from "@/app
 import { type SummaryEntry, type SummaryStore, summaryKey } from "@/app/summaries";
 import { SectionAttributesDialog, type SectionAttributesTarget } from "@/components/SectionAttributesDialog";
 import { SectionBadge } from "@/components/SectionBadge";
+import { CommentPip } from "@/components/comments/CommentPip";
+import { type CommentMarkers, NO_UID_REASON, flashClass } from "@/components/comments/markers";
+import { hiddenCounts, markSections, shownAnchorUids } from "@/components/comments/section-marks";
 import { CONFLICT_MARKERS_REASON } from "@/components/SectionMenu";
 import { SectionSummary } from "@/components/SectionSummary";
 import { SummaryControl } from "@/components/SummaryControl";
@@ -95,6 +98,19 @@ export interface PreviewSummaries {
   store: SummaryStore;
 }
 
+/** The preview's tint for highlighted and flashing sections, by their blocks' marks (decision D4). */
+function highlightRules(comments: CommentMarkers): string {
+  const selector = (uids: readonly string[]) => uids.map((uid) => `[data-testid="preview"] [data-section-uid="${CSS.escape(uid)}"]`).join(", ");
+  const rules: string[] = [];
+  if (comments.highlight !== null && comments.highlight.length > 0) rules.push(`${selector(comments.highlight)} { background-color: var(--comment-highlight); }`);
+  if (comments.flash !== null && comments.flash.uids.length > 0) {
+    const name = flashClass(comments.flash);
+    rules.push(`${selector(comments.flash.uids)} { animation: ${name} 1.2s ease-out; }`);
+    rules.push(`@media (prefers-reduced-motion: reduce) { ${selector(comments.flash.uids)} { animation: none; background-color: var(--comment-highlight); } }`);
+  }
+  return rules.join("\n");
+}
+
 /** A section the preview shows as a summary. */
 interface ShownSummary {
   section: SummarizedSection;
@@ -103,10 +119,10 @@ interface ShownSummary {
 }
 
 /**
- * A request to scroll the preview to a section, by its section ID or (for a citation of a section
- * without one) by its heading's outline path; `request` changes for each new request.
+ * A request to scroll to a section, by its section ID (and UID, when known) or (for a citation of a
+ * section without one) by its heading's outline path; `request` changes for each new request.
  */
-export type ScrollTarget = { request: number } & ({ sectionId: string } | { outlinePath: string });
+export type ScrollTarget = { request: number } & ({ sectionId: string; uid?: string } | { outlinePath: string });
 
 export interface PreviewProps {
   markdown: string;
@@ -126,6 +142,8 @@ export interface PreviewProps {
   /** Called when a badge's menu opens, to load the status lists again. */
   onStatusMenu?: () => void;
   scrollTarget?: ScrollTarget;
+  /** Comment threads: pips, highlighting and the badge menu's comment items (Step 012). */
+  comments?: CommentMarkers;
   /** Summaries; without them the preview always shows the full text. */
   summaries?: PreviewSummaries;
   /** Delay before rendering changes; 0 renders at once. */
@@ -144,6 +162,7 @@ export function Preview({
   onSetStatus,
   onStatusMenu,
   scrollTarget,
+  comments,
   summaries,
   debounce = 0,
   className,
@@ -256,10 +275,20 @@ export function Preview({
     return result;
   }, [rendered, outline, stop, saved]);
 
+  const marking = comments !== undefined;
   const shownTree = useMemo(() => {
     if (rendered === null || outline === null) return null;
-    return summarizeTree(rendered.tree, rendered.markdown, outline, [...shown.values()].map((entry) => entry.section));
-  }, [rendered, outline, shown]);
+    const summarized = summarizeTree(rendered.tree, rendered.markdown, outline, [...shown.values()].map((entry) => entry.section));
+    // Blocks marked with their sections, for highlighting from comment threads
+    return marking ? markSections(summarized, rendered.markdown) : summarized;
+  }, [rendered, outline, shown, marking]);
+
+  // The threads of sections the summary slider hides, counted on their nearest shown ancestor (R5.6)
+  const counts = comments?.counts;
+  const hidden = useMemo(
+    () => (shownTree === null || rendered === null || counts === undefined || shown.size === 0 ? new Map<string, number>() : hiddenCounts(rendered.markdown, shownAnchorUids(shownTree), counts)),
+    [shownTree, rendered, counts, shown],
+  );
 
   // A click on a summary shows the full text and scrolls to its section
   const [outlineScroll, setOutlineScroll] = useState<{ path: string; request: number } | null>(null);
@@ -274,13 +303,13 @@ export function Preview({
 
   // The link component keeps its identity, so badges (and their open menus) aren't remounted
   // when statuses or problems change; it reads what changes from here when it renders
-  const current = { sections, statuses, statusLists, onSetStatus, conflicted, currentFile, loadSections, onRenumber, openAttributes, onStatusMenu, onOpenFile };
+  const current = { sections, statuses, statusLists, onSetStatus, conflicted, currentFile, loadSections, onRenumber, openAttributes, onStatusMenu, onOpenFile, comments, hidden };
   const linkData = useRef(current);
   linkData.current = current;
   const Link = useMemo(
     () =>
       function Link({ href, children, ...props }: ComponentProps<"a"> & { node?: unknown; "data-section-anchor"?: string; "data-uid"?: string }) {
-        const { sections, statuses, statusLists, onSetStatus, conflicted, currentFile, loadSections, onRenumber, openAttributes, onStatusMenu, onOpenFile } =
+        const { sections, statuses, statusLists, onSetStatus, conflicted, currentFile, loadSections, onRenumber, openAttributes, onStatusMenu, onOpenFile, comments, hidden } =
           linkData.current;
         delete props.node;
         if (props["data-section-anchor"] !== undefined && typeof props.id === "string") {
@@ -290,6 +319,17 @@ export function Preview({
           const info = sections.find((section) => section.id === id && (uid === undefined || section.uid === uid));
           const status = findSection(statuses, id, uid)?.status;
           const editable = statusLists?.sectioned === true && onSetStatus !== undefined;
+          const count = uid === undefined ? 0 : (comments?.counts.get(uid) ?? 0);
+          const hiddenCount = uid === undefined ? 0 : (hidden.get(uid) ?? 0);
+          const commentItems =
+            comments?.available !== true
+              ? {}
+              : {
+                  ...(uid === undefined
+                    ? { onAddComment: () => undefined, addCommentDisabled: NO_UID_REASON }
+                    : { onAddComment: () => comments.onAddComment(uid), ...(comments.addDisabled === undefined ? {} : { addCommentDisabled: comments.addDisabled }) }),
+                  ...(uid !== undefined && comments.withThreads.has(uid) ? { onShowComments: () => comments.onPip(uid) } : {}),
+                };
           return (
             <>
               <a {...props} />
@@ -304,7 +344,19 @@ export function Preview({
                 {...(editable ? { onAttributes: () => openAttributes(id, uid ?? null) } : {})}
                 {...(editable && conflicted ? { attributesDisabled: CONFLICT_MARKERS_REASON } : {})}
                 {...(onStatusMenu === undefined ? {} : { onMenuOpen: onStatusMenu })}
+                {...commentItems}
               />
+              {comments !== undefined && uid !== undefined && count + hiddenCount > 0 && (
+                <CommentPip
+                  sectionUid={uid}
+                  count={count + hiddenCount}
+                  hidden={hiddenCount}
+                  filter={comments.filter}
+                  previews={comments.previews.get(uid) ?? []}
+                  onPip={comments.onPip}
+                  onPipHover={comments.onPipHover}
+                />
+              )}
             </>
           );
         }
@@ -369,7 +421,37 @@ export function Preview({
     onStatusMenu,
     openAttributes,
     conflicted,
+    comments,
+    hidden,
   ]);
+
+  // The section at the top, as the preview scrolls, for the Comments pane to follow (R7.7)
+  const onTopSection = comments?.onTopSection;
+  useEffect(() => {
+    const element = container.current;
+    if (element === null || onTopSection === undefined) return;
+    let frame = 0;
+    const report = () => {
+      frame = 0;
+      const top = element.getBoundingClientRect().top + 4;
+      let uid: string | null = null;
+      for (const anchor of element.querySelectorAll<HTMLElement>("a[data-section-anchor][data-uid]")) {
+        // The anchor itself is hidden; its badge is where it shows
+        const shown = (anchor.nextElementSibling as HTMLElement | null) ?? anchor;
+        if (shown.getBoundingClientRect().top > top) break;
+        uid = anchor.dataset.uid ?? null;
+      }
+      onTopSection(uid);
+    };
+    const onScroll = () => {
+      if (frame === 0) frame = requestAnimationFrame(report);
+    };
+    element.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      element.removeEventListener("scroll", onScroll);
+      cancelAnimationFrame(frame);
+    };
+  }, [onTopSection]);
 
   // Scroll to a requested section once it has been rendered; a section hidden by a summary
   // shows the full text first
@@ -422,6 +504,7 @@ export function Preview({
         />
       )}
       <div ref={container} className="min-h-0 flex-1 overflow-auto">
+        {comments !== undefined && <style>{highlightRules(comments)}</style>}
         {error !== null && <p className="text-error-text p-4">Preview failed: {error}</p>}
         <article className="markdown px-6 py-4">{content}</article>
       </div>

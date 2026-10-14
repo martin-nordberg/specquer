@@ -102,6 +102,23 @@
 /* An ID used more than once: a warning ring until the user renumbers one */
 .section-badge-problem { @apply ring-2 ring-warning; }
 
+/* Comment threads (Step 012): the pip beside a section badge, the highlighted section and its flash */
+.comment-pip {
+  @apply mr-1.5 inline-flex cursor-pointer items-center gap-[0.15em] rounded-full bg-secondary px-[0.35em] align-[0.1em] font-sans text-[0.7rem] leading-[1.5] font-semibold text-secondary-foreground outline-none select-none focus-visible:ring-2 focus-visible:ring-ring/50;
+  & svg { @apply size-[1.1em] shrink-0; }
+}
+.markdown .comment-pip { text-decoration: none; }
+.milkdown .section-anchor-line[data-before-heading] .comment-pip { float: left; margin-top: calc((1lh - 1.5 * 0.7rem) / 2); }
+.cm-comment-gutter .comment-pip { @apply mr-0 text-[0.65rem]; }
+.comment-highlight { background-color: var(--comment-highlight); }
+@keyframes comment-flash-0 { from { background-color: var(--comment-highlight); } to { background-color: transparent; } }
+@keyframes comment-flash-1 { from { background-color: var(--comment-highlight); } to { background-color: transparent; } }
+.comment-flash-0 { animation: comment-flash-0 1.2s ease-out; }
+.comment-flash-1 { animation: comment-flash-1 1.2s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .comment-flash-0, .comment-flash-1 { animation: none; background-color: var(--comment-highlight); }
+}
+
 /* ProseMirror's own stylesheet (not loaded) keeps the images it puts beside uneditable nodes
    inline; Tailwind's base styles would make them blocks, breaking the line after each badge */
 .milkdown img.ProseMirror-separator { display: inline !important; border: none !important; margin: 0 !important; }

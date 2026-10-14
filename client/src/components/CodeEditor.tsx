@@ -69,9 +69,14 @@ export interface CodeEditorProps {
    * a dialog); other outside changes (anchors added on save) stay out of the undo history.
    */
   undoableEdits?: number;
+  /**
+   * Hands out the editor's view once it exists (and `null` when it goes), so stable extensions
+   * can be given new data with effects (the comment pips, Step 012).
+   */
+  onView?: (view: EditorView | null) => void;
 }
 
-export function CodeEditor({ value, onChange, language, ariaLabel, placeholder, className, extensions = [], undoableEdits = 0 }: CodeEditorProps) {
+export function CodeEditor({ value, onChange, language, ariaLabel, placeholder, className, extensions = [], undoableEdits = 0, onView }: CodeEditorProps) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const reported = useRef(value);
@@ -101,7 +106,9 @@ export function CodeEditor({ value, onChange, language, ariaLabel, placeholder, 
       ],
     });
     view.current = new EditorView({ state, parent: host.current! });
+    onView?.(view.current);
     return () => {
+      onView?.(null);
       view.current?.destroy();
       view.current = null;
     };

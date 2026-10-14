@@ -34,8 +34,11 @@ export interface CommentState {
   notice: string | null;
   /** The section highlighted from the pane or from a pip (R6). */
   highlight: { uid: string; from: "pane" | "pip" } | null;
-  /** A request to bring a section's group, or a thread, into view in the pane; `n` makes each one new. */
-  reveal: { sectionUid?: string; threadUid?: string; n: number } | null;
+  /**
+   * A request to bring a section's group, or a thread, into view in the pane; `n` makes each one
+   * new. `follow`: the pane following the document (R7.7), which never moves it under the user.
+   */
+  reveal: { sectionUid?: string; threadUid?: string; follow?: boolean; n: number } | null;
 }
 
 export class CommentStore {
@@ -225,6 +228,13 @@ export class CommentStore {
 
   revealSection(sectionUid: string): void {
     this.set({ reveal: { sectionUid, n: ++this.reveals } });
+  }
+
+  /** The pane follows the document to a section's group, unless the user is in the pane (R7.7). */
+  follow(sectionUid: string): void {
+    const reveal = this.state.reveal;
+    if (reveal?.follow === true && reveal.sectionUid === sectionUid) return;
+    this.set({ reveal: { sectionUid, follow: true, n: ++this.reveals } });
   }
 
   revealThread(threadUid: string): void {

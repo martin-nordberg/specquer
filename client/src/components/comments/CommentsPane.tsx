@@ -55,8 +55,14 @@ export function CommentsPane({ state, store, body, lists, filter, onFilterChange
   useEffect(() => {
     const reveal = state.reveal;
     if (reveal === null || list.current === null) return;
+    // Following the document never moves the pane under the pointer or the focus
+    if (reveal.follow === true && (list.current.matches(":hover") || list.current.contains(document.activeElement))) return;
     const selector = reveal.threadUid !== undefined ? `[data-thread-uid="${reveal.threadUid}"]` : `[data-section-group="${reveal.sectionUid}"]`;
     const element = list.current.querySelector<HTMLElement>(selector);
+    if (reveal.follow === true) {
+      if (element !== null) list.current.scrollTo({ top: element.offsetTop });
+      return;
+    }
     element?.scrollIntoView({ block: "nearest" });
     if (reveal.threadUid !== undefined) element?.querySelector<HTMLElement>("[data-thread-toggle]")?.focus();
   }, [state.reveal]);
@@ -130,7 +136,7 @@ export function CommentsPane({ state, store, body, lists, filter, onFilterChange
           </button>
         </div>
       )}
-      <div ref={list} className="min-h-0 flex-1 overflow-auto" data-testid="comment-groups">
+      <div ref={list} className="relative min-h-0 flex-1 overflow-auto" data-testid="comment-groups">
         {content}
       </div>
       <Dialog open={deleting !== null} onOpenChange={(open) => !open && setDeleting(null)}>

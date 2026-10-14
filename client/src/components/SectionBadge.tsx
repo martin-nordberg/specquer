@@ -28,6 +28,11 @@ export interface SectionBadgeProps {
   attributesDisabled?: string;
   /** Called when the menu opens. */
   onMenuOpen?: () => void;
+  /** **Add comment…** in the menu (Step 012). */
+  onAddComment?: () => void;
+  addCommentDisabled?: string;
+  /** **Show comments** in the menu, for a section with threads. */
+  onShowComments?: () => void;
 }
 
 const problemText = { duplicate: "Also used by a copy in", collision: "Also used by another section in" };
@@ -57,6 +62,9 @@ export function SectionBadge({
   onAttributes,
   attributesDisabled,
   onMenuOpen,
+  onAddComment,
+  addCommentDisabled,
+  onShowComments,
 }: SectionBadgeProps) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -149,6 +157,9 @@ export function SectionBadge({
         onCopy={() => void copy()}
         {...(onAttributes === undefined ? {} : { onAttributes: () => onAttributes() })}
         {...(attributesDisabled === undefined ? {} : { attributesDisabled })}
+        {...(onAddComment === undefined ? {} : { onAddComment })}
+        {...(addCommentDisabled === undefined ? {} : { addCommentDisabled })}
+        {...(onShowComments === undefined ? {} : { onShowComments })}
       />
     </TooltipProvider>
   );

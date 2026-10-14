@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { CreateOptions, SectionStatusLists, SummaryStatus, Tree, TreeFolder, TreeNode } from "@specquer/shared/api";
 import type { Citation } from "@specquer/shared/chat";
+import { firstLine, shownBy } from "@specquer/shared/comments";
 import { analyzeBody } from "@specquer/shared/markdown";
+import { descendantsOf, sectionParents } from "@specquer/shared/sections";
 import { isSameOrInside, renamedPath } from "@specquer/shared/paths";
 import {
   type UiState,
@@ -9,6 +11,7 @@ import {
   fileUiState,
   openFile,
   setCommentFilter,
+  setSidePane,
   setCommentsPaneFraction,
   toggleSidePane,
   setChatPaneFraction,
@@ -24,6 +27,7 @@ import { ChatPane } from "@/components/chat/ChatPane";
 import { ChatToggle } from "@/components/chat/ChatToggle";
 import { CommentsPane } from "@/components/comments/CommentsPane";
 import { CommentsToggle } from "@/components/comments/CommentsToggle";
+import type { CommentMarkers } from "@/components/comments/markers";
 import { ConflictDialog } from "@/components/ConflictDialog";
 import { ContentView, ViewSwitcher } from "@/components/ContentView";
 import { CreateDialog, type CreateRequest, DeleteDialog, RenameDialog } from "@/components/EntryDialogs";
@@ -42,6 +46,7 @@ import type { Api } from "@/lib/api";
 import { appIconSvg, svgDataUri } from "@/theme/logo";
 import { applyTheme, useSystemTheme } from "@/theme/theme";
 import { ChatStore } from "./chat-store";
+import { groupThreads, threadOrder } from "./comment-groups";
 import { CommentStore } from "./comment-store";
 import { AUTOSAVE_INTERVAL, DocumentStore, type SaveStatus } from "./document-store";
 import { SummaryStore } from "./summaries";
@@ -407,16 +412,120 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, [commentStore]);
-  /** Scrolls the document to a section by its UID. */
+  // A section flashes when the pane or F8 moves the document to it (R6.4)
+  const [flash, setFlash] = useState<{ uids: string[]; n: number } | null>(null);
+  useEffect(() => {
+    if (flash === null) return;
+    const timer = setTimeout(() => setFlash(null), 1300);
+    return () => clearTimeout(timer);
+  }, [flash]);
+  /** Scrolls the document to a section by its UID, and flashes it with its subsections. */
   const goToSection = useCallback(
     (sectionUid: string) => {
       const document = docStore.get().document;
       if (document === null) return;
-      const section = analyzeBody(document.body).sections.find((found) => found.uid === sectionUid);
-      if (section?.id != null) setScrollTarget({ path: document.path, sectionId: section.id, request: Date.now() });
+      const sections = analyzeBody(document.body).sections;
+      const index = sections.findIndex((found) => found.uid === sectionUid);
+      const section = sections[index];
+      if (section?.id == null) return;
+      setScrollTarget({ path: document.path, sectionId: section.id, uid: sectionUid, request: Date.now() });
+      const parents = sectionParents(sections);
+      const uids = [sectionUid, ...descendantsOf(parents, index).flatMap((i) => (sections[i]!.uid === null ? [] : [sections[i]!.uid!]))];
+      setFlash((current) => ({ uids, n: (current?.n ?? 0) + 1 }));
     },
     [docStore],
   );
+
+  // What the views show of the threads (R5, R6), built from the threads and the filter; the
+  // highlight's sections come from the text being edited, kept as one array while they don't change
+  const highlightUids = useRef<string[] | null>(null);
+  const highlight = useMemo(() => {
+    const uid = comments.highlight?.uid;
+    let next: string[] | null = null;
+    if (uid !== undefined && document_ !== null) {
+      const sections = analyzeBody(document_.body).sections;
+      const index = sections.findIndex((found) => found.uid === uid);
+      if (index >= 0) next = [uid, ...descendantsOf(sectionParents(sections), index).flatMap((i) => (sections[i]!.uid === null ? [] : [sections[i]!.uid!]))];
+    }
+    if (JSON.stringify(next) !== JSON.stringify(highlightUids.current)) highlightUids.current = next;
+    return highlightUids.current;
+  }, [comments.highlight, document_]);
+  const showComments = useCallback(
+    (sectionUid: string) => {
+      uiStore.update((s) => setSidePane(s, "comments"));
+      commentStore.revealSection(sectionUid);
+    },
+    [uiStore, commentStore],
+  );
+  const addComment = useCallback(
+    (sectionUid: string) => {
+      uiStore.update((s) => setSidePane(s, "comments"));
+      commentStore.startThread(sectionUid);
+    },
+    [uiStore, commentStore],
+  );
+  const pipHover = useCallback((sectionUid: string | null) => commentStore.setHighlight(sectionUid === null ? null : { uid: sectionUid, from: "pip" }), [commentStore]);
+  // The pane follows the document: the group of the top section, or of the nearest one above it with threads (R7.7)
+  const followSection = useCallback(
+    (sectionUid: string | null) => {
+      const document = docStore.get().document;
+      if (sectionUid === null || document === null || uiStore.get().sidePane !== "comments") return;
+      const filter = uiStore.get().commentFilter;
+      const withGroups = new Set(commentStore.get().threads.filter((thread) => shownBy(filter, thread.status)).map((thread) => thread.sectionUid));
+      const sections = analyzeBody(document.body).sections;
+      for (let index = sections.findIndex((found) => found.uid === sectionUid); index >= 0; index--) {
+        const uid = sections[index]!.uid;
+        if (uid !== null && withGroups.has(uid)) return commentStore.follow(uid);
+      }
+    },
+    [docStore, uiStore, commentStore],
+  );
+  const commentMarkers = useMemo<CommentMarkers | undefined>(() => {
+    if (!comments.loaded || comments.path !== currentPath) return undefined;
+    const counts = new Map<string, number>();
+    const previews = new Map<string, string[]>();
+    for (const thread of comments.threads) {
+      if (!shownBy(ui.commentFilter, thread.status)) continue;
+      counts.set(thread.sectionUid, (counts.get(thread.sectionUid) ?? 0) + 1);
+      previews.set(thread.sectionUid, [...(previews.get(thread.sectionUid) ?? []), firstLine(thread.comments[0]!.text)]);
+    }
+    return {
+      counts,
+      previews,
+      withThreads: new Set(comments.threads.map((thread) => thread.sectionUid)),
+      filter: ui.commentFilter,
+      highlight,
+      flash,
+      available: comments.available,
+      ...(comments.unusable === null ? {} : { addDisabled: "The comment file can't be used; see Section problems." }),
+      onPip: showComments,
+      onPipHover: pipHover,
+      onAddComment: addComment,
+      onTopSection: followSection,
+    };
+  }, [comments.loaded, comments.path, comments.threads, comments.available, comments.unusable, currentPath, ui.commentFilter, highlight, flash, showComments, pipHover, addComment, followSection]);
+
+  // F8 and Shift+F8: the next and previous thread the filter shows, across the document (R8)
+  const lastThread = useRef<string | null>(null);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "F8" || event.ctrlKey || event.altKey || event.metaKey) return;
+      const document = docStore.get().document;
+      if (document === null) return;
+      const order = threadOrder(groupThreads(document.body, commentStore.get().threads, uiStore.get().commentFilter));
+      if (order.length === 0) return;
+      event.preventDefault();
+      const step = event.shiftKey ? -1 : 1;
+      const at = order.findIndex((thread) => thread.threadUid === lastThread.current);
+      const next = order[at < 0 ? (step > 0 ? 0 : order.length - 1) : (at + step + order.length) % order.length]!;
+      lastThread.current = next.threadUid;
+      uiStore.update((s) => setSidePane(s, "comments"));
+      commentStore.revealThread(next.threadUid);
+      goToSection(next.sectionUid);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [docStore, uiStore, commentStore, goToSection]);
   useEffect(() => {
     window.addEventListener("focus", loadStatusLists);
     return () => window.removeEventListener("focus", loadStatusLists);
@@ -542,6 +651,7 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
             scrollTarget={scrollTarget?.path === document_.path ? scrollTarget : undefined}
             summaries={summaries}
             registerFlush={docStore.addFlusher}
+            comments={commentMarkers}
           />
         </div>
         <ConflictDialog

@@ -1,9 +1,15 @@
+import type { Text } from "@codemirror/state";
+import { EditorView } from "@codemirror/view";
 import { Columns2, Eye, FileCode, PenLine } from "lucide-react";
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { SectionInfo, SectionStatusLists } from "@specquer/shared/api";
+import { analyzeBody } from "@specquer/shared/markdown";
+import { sectionExtents } from "@specquer/shared/sections";
 import type { ViewType } from "@specquer/shared/uistate";
 import { cn } from "@/lib/utils";
 import { CodeEditor, lineWrapping } from "./CodeEditor";
+import { commentGutter, setCommentGutterMarkers } from "./comments/comment-gutter";
+import type { CommentMarkers } from "./comments/markers";
 import { MilkdownEditor } from "./MilkdownEditor";
 import { PREVIEW_DEBOUNCE, Preview, type PreviewSummaries, type ScrollTarget } from "./Preview";
 import { type SectionSearch, sectionCompletion } from "./section-completion";
@@ -66,6 +72,22 @@ export interface ContentViewProps {
   summaries?: PreviewSummaries;
   /** Registers the WYSIWYG view's flush of pending edits with the document store. */
   registerFlush?: (flush: () => void) => () => void;
+  /** Comment threads: pips, highlighting and the badge menu's comment items (Step 012). */
+  comments?: CommentMarkers;
+}
+
+/** The innermost section holding an offset of a text, by its UID (for the Comments pane to follow). */
+function sectionAt(doc: Text, offset: number, cache: { doc: Text | null; sections: Array<{ uid: string | null; from: number; to: number }> }): string | null {
+  if (cache.doc !== doc) {
+    const text = doc.toString();
+    const found = analyzeBody(text).sections;
+    const extents = sectionExtents(found.map((section) => ({ ...section, start: section.anchor?.from ?? section.insertAt })), text.length);
+    cache.doc = doc;
+    cache.sections = found.map((section, index) => ({ uid: section.uid, ...extents[index]! }));
+  }
+  let uid: string | null = null;
+  for (const section of cache.sections) if (section.uid !== null && section.from <= offset && offset < section.to) uid = section.uid;
+  return uid;
 }
 
 /** The Markdown body in the chosen view. All views edit the same in-memory text. */
@@ -87,7 +109,9 @@ export function ContentView({
   scrollTarget,
   summaries,
   registerFlush,
+  comments,
 }: ContentViewProps) {
+  const [textView, setTextView] = useState<EditorView | null>(null);
   const pathRef = useRef(path);
   pathRef.current = path;
   const searchRef = useRef(searchSections);
@@ -105,9 +129,47 @@ export function ContentView({
         const results = (await searchRef.current?.(id)) ?? [];
         return results.some((result) => result.id === id && result.path !== pathRef.current);
       }),
+      commentGutter(),
     ],
     [],
   );
+
+  // The text view's pips and highlights
+  useEffect(() => {
+    if (textView !== null) setCommentGutterMarkers(textView, comments ?? null);
+  }, [textView, comments]);
+
+  // The section at the top of the text view, as it scrolls (R7.7)
+  const onTopSection = comments?.onTopSection;
+  useEffect(() => {
+    if (textView === null || onTopSection === undefined) return;
+    const cache = { doc: null as Text | null, sections: [] as Array<{ uid: string | null; from: number; to: number }> };
+    let frame = 0;
+    const report = () => {
+      frame = 0;
+      const block = textView.lineBlockAtHeight(textView.scrollDOM.scrollTop);
+      onTopSection(sectionAt(textView.state.doc, block.from, cache));
+    };
+    const onScroll = () => {
+      if (frame === 0) frame = requestAnimationFrame(report);
+    };
+    textView.scrollDOM.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      textView.scrollDOM.removeEventListener("scroll", onScroll);
+      cancelAnimationFrame(frame);
+    };
+  }, [textView, onTopSection]);
+
+  // Scrolls the text view to a requested section's anchor
+  const scrolled = useRef<number | null>(null);
+  useEffect(() => {
+    if (textView === null || scrollTarget === undefined || !("sectionId" in scrollTarget) || scrolled.current === scrollTarget.request) return;
+    const { sectionId, uid } = scrollTarget;
+    const section = analyzeBody(textView.state.doc.toString()).sections.find((found) => found.id === sectionId && (uid === undefined || found.uid === uid));
+    if (section?.anchor === undefined) return;
+    scrolled.current = scrollTarget.request;
+    textView.dispatch({ effects: EditorView.scrollIntoView(section.anchor.from, { y: "start", yMargin: 8 }) });
+  }, [textView, scrollTarget]);
   const editor = (
     <CodeEditor
       value={body}
@@ -116,6 +178,7 @@ export function ContentView({
       ariaLabel="Markdown content"
       extensions={extensions}
       {...(undoableEdits === undefined ? {} : { undoableEdits })}
+      onView={setTextView}
     />
   );
   const preview = (debounce: number) => (
@@ -130,6 +193,7 @@ export function ContentView({
       onSetStatus={onSetStatus}
       onStatusMenu={onStatusMenu}
       scrollTarget={scrollTarget}
+      comments={comments}
       summaries={summaries}
       debounce={debounce}
     />
@@ -155,6 +219,8 @@ export function ContentView({
           statusLists={statusLists}
           onStatusMenu={onStatusMenu}
           registerFlush={registerFlush}
+          comments={comments}
+          scrollTarget={scrollTarget}
         />
       );
   }

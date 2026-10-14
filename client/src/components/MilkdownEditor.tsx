@@ -12,6 +12,9 @@ import { anchorTagSectionId, anchorTagStatus, anchorTagUid, hasConflictMarkers, 
 import { type SectionWithStatus, allowedStatuses, badgeStatus, findSection, hasInvalidOwnStatus, statusLabel, statusesOfBody } from "@/app/section-status";
 import { SectionAttributesDialog, type SectionAttributesTarget } from "@/components/SectionAttributesDialog";
 import { anchorLinesPlugin } from "@/components/anchor-lines";
+import type { ScrollTarget } from "@/components/Preview";
+import { commentDecorationsPlugin, sectionAtPos, setCommentMarkers } from "@/components/comments/comment-decorations";
+import { type CommentMarkers, NO_UID_REASON } from "@/components/comments/markers";
 import { badgeLabel } from "@/components/SectionBadge";
 import { CONFLICT_MARKERS_REASON, SectionMenu, type SectionMenuTarget, isMenuKey } from "@/components/SectionMenu";
 import { cn } from "@/lib/utils";
@@ -166,13 +169,20 @@ export interface MilkdownEditorProps {
    * the last change), so a save holds everything typed; returns the function that removes it.
    */
   registerFlush?: (flush: () => void) => () => void;
+  /** Comment threads: pips, highlighting and the badge menu's comment items (Step 012). */
+  comments?: CommentMarkers;
+  /** A request to scroll to a section. */
+  scrollTarget?: ScrollTarget;
   className?: string;
 }
 
 type MenuState = SectionMenuTarget & { uid: string | undefined; view: EditorView; pos: number | undefined; conflicted: boolean };
 
-export function MilkdownEditor({ value, onChange, statusLists, onStatusMenu, registerFlush, className }: MilkdownEditorProps) {
+export function MilkdownEditor({ value, onChange, statusLists, onStatusMenu, registerFlush, comments, scrollTarget, className }: MilkdownEditorProps) {
   const host = useRef<HTMLDivElement>(null);
+  const viewRef = useRef<EditorView | null>(null);
+  const commentsRef = useRef(comments);
+  commentsRef.current = comments;
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
   const listsRef = useRef(statusLists);
@@ -183,6 +193,7 @@ export function MilkdownEditor({ value, onChange, statusLists, onStatusMenu, reg
   const markdown = useRef(value);
   const cache = useRef<{ markdown: string; lists: SectionStatusLists; entries: SectionWithStatus[] } | null>(null);
   const [menu, setMenu] = useState<MenuState | null>(null);
+  const [ready, setReady] = useState(false);
   const [attributes, setAttributes] = useState<(SectionAttributesTarget & { uid: string | undefined; view: EditorView; pos: number | undefined }) | null>(null);
 
   const statusesNow = () => {
@@ -229,6 +240,7 @@ export function MilkdownEditor({ value, onChange, statusLists, onStatusMenu, reg
       .use(gfm)
       .use(sectionAnchorView(handlers))
       .use($prose(() => anchorLinesPlugin()))
+      .use($prose(() => commentDecorationsPlugin()))
       .use(history)
       .use(listener)
       .create()
@@ -236,7 +248,11 @@ export function MilkdownEditor({ value, onChange, statusLists, onStatusMenu, reg
         if (disposed) void created.destroy();
         else {
           editor = created;
-          reported = created.action((ctx) => ctx.get(editorViewCtx).state.doc);
+          const view = created.action((ctx) => ctx.get(editorViewCtx));
+          reported = view.state.doc;
+          viewRef.current = view;
+          if (commentsRef.current !== undefined) setCommentMarkers(view, commentsRef.current);
+          setReady(true);
         }
       });
     const unregister = registerFlush?.(() => {
@@ -252,6 +268,7 @@ export function MilkdownEditor({ value, onChange, statusLists, onStatusMenu, reg
     });
     return () => {
       disposed = true;
+      viewRef.current = null;
       unregister?.();
       void editor?.destroy();
     };
@@ -286,6 +303,60 @@ export function MilkdownEditor({ value, onChange, statusLists, onStatusMenu, reg
     return null;
   };
 
+  // New markers for the pips and highlights
+  useEffect(() => {
+    const view = viewRef.current;
+    if (view !== null) setCommentMarkers(view, comments ?? null);
+  }, [comments, ready]);
+
+  // The section at the top, as the view scrolls, for the Comments pane to follow (R7.7)
+  const onTopSection = comments?.onTopSection;
+  useEffect(() => {
+    const element = host.current;
+    if (element === null || onTopSection === undefined) return;
+    let frame = 0;
+    const report = () => {
+      frame = 0;
+      const view = viewRef.current;
+      if (view === null) return;
+      const rect = element.getBoundingClientRect();
+      const at = view.posAtCoords({ left: rect.left + rect.width / 2, top: rect.top + 8 });
+      onTopSection(at === null ? null : sectionAtPos(view.state.doc, at.pos));
+    };
+    const onScroll = () => {
+      if (frame === 0) frame = requestAnimationFrame(report);
+    };
+    element.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      element.removeEventListener("scroll", onScroll);
+      cancelAnimationFrame(frame);
+    };
+  }, [onTopSection]);
+
+  // Scrolls to a requested section's anchor
+  const scrolled = useRef<number | null>(null);
+  useEffect(() => {
+    const view = viewRef.current;
+    const element = host.current;
+    if (scrollTarget === undefined || !("sectionId" in scrollTarget) || view === null || element === null || scrolled.current === scrollTarget.request) return;
+    const pos = anchorPosition(view, scrollTarget.sectionId, scrollTarget.uid, undefined);
+    if (pos === undefined) return;
+    scrolled.current = scrollTarget.request;
+    const top = view.coordsAtPos(pos).top - element.getBoundingClientRect().top;
+    element.scrollTo({ top: element.scrollTop + top - 8 });
+  }, [scrollTarget, ready]);
+
+  const commentItems = (() => {
+    if (comments?.available !== true || menu === null) return {};
+    const uid = menu.uid;
+    if (uid === undefined) return { onAddComment: () => undefined, addCommentDisabled: NO_UID_REASON };
+    return {
+      onAddComment: () => comments.onAddComment(uid),
+      ...(comments.addDisabled === undefined ? {} : { addCommentDisabled: comments.addDisabled }),
+      ...(comments.withThreads.has(uid) ? { onShowComments: () => comments.onPip(uid) } : {}),
+    };
+  })();
+
   const sectioned = statusLists?.sectioned === true;
   return (
     <>
@@ -296,6 +367,7 @@ export function MilkdownEditor({ value, onChange, statusLists, onStatusMenu, reg
         onCopy={(sectionId) => void navigator.clipboard?.writeText(sectionId).catch(() => undefined)}
         {...(sectioned ? { onAttributes: openAttributes } : {})}
         {...(sectioned && menu?.conflicted === true ? { attributesDisabled: CONFLICT_MARKERS_REASON } : {})}
+        {...commentItems}
       />
       <SectionAttributesDialog target={attributes} onClose={() => setAttributes(null)} onApply={apply} />
     </>
