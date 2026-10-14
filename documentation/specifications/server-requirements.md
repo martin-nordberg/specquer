@@ -169,3 +169,16 @@ The rules for summaries are specified in [Data Architecture](data-architecture.m
 3. **The model call** goes through the queue the summaries use, at interactive priority, counted against `summaries.concurrency`; it is never shared or cached, and stops when the request does. The prompt has the earlier turns (the last `chat.historyTurns` within `chat.historyTokens`) and the sources, each escaped inside its `<source>` tag. An answer stops at `chat.answerTokens` output tokens (default 4,000).
 4. **Errors** after the stream starts are events: `rate_limited` for the provider's rate limit, `provider_error` with the provider's message otherwise.
 5. **History.** A finished answer, or one stopped with some text (marked `stopped`), is appended to `.specquer/user/chat-history.yaml` (the `yaml` package, atomically, one write at a time, at most 200 turns); a failed one isn't. A file that isn't valid YAML is moved aside (`chat-history.yaml.damaged-<time>`); invalid turns are dropped one by one.
+
+<a id=""></a>
+## 12. Comment Threads
+
+| Route | Behavior |
+| ----- | -------- |
+| `GET /api/comments?path=` | `{ available, threads, unusable? }`: a Markdown document's threads from its sidecar, each comment with its version. `available` is false for a file that isn't sectioned; `unusable` says why a sidecar can't be used. |
+| `PATCH /api/comments?path=` | Body: one change (`add-thread`, `reply`, `edit` with `baseVersion`, `delete-comment`, `set-status`, `delete-thread`). Returns `{ ok: true, threads, created? }` or `{ ok: false, reason, threads, message }`. |
+
+1. **Changes** are applied one at a time, each to the sidecar as it is on disk, by UIDs ([Data Architecture](data-architecture.md) §6.1). The last thread deleted removes the sidecar.
+2. **The user's name** is Git's `user.name` for the root folder, else `user.email`, else the login name; it is read at most once a minute.
+3. **Files.** Renaming a document renames its sidecar; deleting it deletes the sidecar, which the delete preview lists; creating or renaming a document onto a name with a leftover sidecar deletes that first. The file listing (Git or the walk) includes sidecars; the tree doesn't show them.
+4. **Problems** (`GET /api/sections/problems`) include unusable and orphaned sidecars and detached threads.

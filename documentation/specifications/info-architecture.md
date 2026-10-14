@@ -28,6 +28,7 @@ This document describes what Specquer works with and how its screen is organized
 | Chat | Questions about the specs answered by the model, in the chat pane, grounded in every Markdown file the tree shows and citing the sections used ([Step 010](/work-items/step-010-document-chat/requirements)). |
 | Chat history | `.specquer/user/chat-history.yaml`: the conversation, per user, ignored by Git, at most 200 questions with their answers. |
 | Search index | `.specquer/cache/search.db`: the full-text index (SQLite FTS5) the chat searches; per user, ignored by Git, rebuilt from the files. |
+| Comment thread | A conversation of Markdown comments about one section, Open or Resolved, kept in the document's sidecar `<name>.md.comments.yaml` (committed; not shown in the tree) and read and written in the Comments pane ([Step 012](/work-items/step-012-comment-threads/requirements)). |
 
 ```
 root folder
@@ -50,6 +51,7 @@ root folder
 ├── docs/                    folder (shown: contains .md files)
 │   ├── .specquer-config.yaml  optional: the folder's type and default prefix
 │   ├── overview.md          spec file
+│   ├── overview.md.comments.yaml  optional: its comment threads (not shown)
 │   └── images/              not shown (no .md files)
 ├── AGENTS.md                optional: rules for coding agents
 └── README.md                spec file
@@ -58,7 +60,7 @@ root folder
 <a id="SPEC-00035" data-uid="ih7efd3xle7k"></a>
 ## 2. Screen Layout
 
-Specquer has one view: a header and two or three panes side by side. The chat pane on the right is opened and closed with the **Chat** button in the header.
+Specquer has one view: a header and two or three panes side by side. The third pane on the right shows the chat or the comment threads, opened and closed with the **Chat** and **Comments** buttons in the header.
 
 ```
 ┌───────────────────────────────────────────────────────────────────────────────┐

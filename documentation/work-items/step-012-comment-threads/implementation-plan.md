@@ -266,3 +266,21 @@ _Proposed_; the work proceeds on them unless they are changed:
 | Extents in three renderings | The tint covers the wrong elements in one view | One `sectionExtents` in `shared`; each view maps offsets to its own elements, with tests per view |
 | Hand-edited or merged sidecars | Unusable files stop comment writes | Reported as problems (R4.1); the pane says why it shows no threads |
 | `listFiles` grows with sidecars | Slower scans in large trees | Sidecars are found by the same walk or Git listing, not a second pass |
+
+<a id=""></a>
+## 8. Implementation Status
+
+Phases 1 to 7 were carried out in October 2026, one commit each. What differs from the plan, or was learned doing it:
+
+1. **Sidecars aren't cached** (§4.3). They are small, so the server reads one for each request instead of keeping it by modification time and size.
+2. **A comment saved when the window loses focus stays open** (§4.7). The comment store numbers each editor's session: a new thread or reply saved without closing becomes, for that editor, an edit of the comment it created, so the editor's own `blur` and the window's `blur` (both of which save) never add it twice. Saves run one after another.
+3. **Milkdown's output is cleaned up** (§4.7): its trailing line break is dropped, and the colon it escapes in a URL (`https\://`, so the URL doesn't become a link) is unescaped, since comments never render links. An unchanged editor reports the comment's text exactly, so opening one never rewrites it.
+4. **Pips have a `title` tooltip** (§4.8) with the first line of each thread, in all three views, rather than a Radix tooltip, since two of the three are DOM nodes built for the editors.
+5. **The text view's pips are hidden from assistive technology** (§4.8): CodeMirror marks its gutters `aria-hidden`. There the Comments pane and F8 are the way to the threads; the preview's and WYSIWYG view's pips are focusable buttons with their names.
+6. **The delete dialog lists a file's sidecar** (§4.4): it now lists the files for a file, too, when more than one goes.
+7. **`remarkRestrict` is shared** (§4.1): the answer pipeline's restriction gained `resolveReferences` for comments, and a link whose text is its URL without `http://` (a `www.` autolink) shows only its text, in answers too.
+8. **The highlight has its own color** (`commentHighlight` in `palette.ts`), nudged until secondary text on it passes WCAG AA in both modes.
+9. **Deleting a lone first comment asks first**, through **Delete thread**, since it deletes the thread (R2.9).
+10. **`ScrollTarget` carries the UID** (§4.10), so the text and WYSIWYG views find the right anchor when an ID is used twice; the views report their top section through `onTopSection`, and the pane follows with a `follow` reveal.
+11. **The end-to-end fixture sets `user.name`** in its repository, so the names comments record don't depend on the machine.
+12. **Tests**: `bun run typecheck` and `bun test` (635) pass. The end-to-end suite passes on Chrome and WebKit (170), including the new `e2e/comments.spec.ts` and the window-blur tests in `editing.spec.ts` and `views.spec.ts`.

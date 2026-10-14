@@ -315,8 +315,10 @@ UiState = {
   version: 1,
   theme?: "light" | "dark",      // absent until the user chooses; the browser's preference applies
   treePaneFraction: number,      // folder pane width, 0.1 to 0.7 of the window; default 0.25
-  chatOpen: boolean,             // whether the chat pane is open; default false
+  sidePane: "chat" | "comments" | null,  // the third pane; default null (read from an old `chatOpen: true` as "chat")
   chatPaneFraction: number,      // chat pane width, 0.15 to 0.5 of the window; default 0.3
+  commentsPaneFraction: number,  // Comments pane width, the same limits and default
+  commentFilter: "open" | "resolved" | "all",  // which comment threads show; default "open"
   expandedFolders: string[],     // workspace paths
   recentFiles: string[],         // most recent first, at most 10, never the current file
   currentFile?: string,          // the open file
@@ -509,3 +511,52 @@ turns:
 - At most 200 turns are kept; invalid turns are dropped one by one; a file that isn't YAML is moved aside.
 - **Clear** returns the turns cleared; **Undo** puts them back in front of any added since.
 - **Sent to the model:** the last `chat.historyTurns` turns within `chat.historyTokens`, newest kept first; questions and answers' text only, not citations or earlier sources.
+
+<a id=""></a>
+## 6. Comment Threads
+
+Threads of Markdown comments on sections ([Step 012](/work-items/step-012-comment-threads/requirements), [Client Requirements](client-requirements.md) §12). The format, checks, change types and filter are in `shared/src/comments/` (`@specquer/shared/comments`); comment rendering in `shared/src/markdown/comment.ts`; section extents in `shared/src/sections/tree.ts`; reading, changing and the problems in `server/src/comments/`; the store, grouping and views in the client's `app/comment-store.ts`, `app/comment-groups.ts` and `components/comments/`.
+
+<a id=""></a>
+### 6.1. Sidecar Files
+
+A document's threads are in a sidecar beside it, named after it with `.comments.yaml` added (`a.md` → `a.md.comments.yaml`), committed with it. It exists only while the document has threads.
+
+```yaml
+# Comment threads on the sections of the document beside this file; written by Specquer. Commit this file.
+threads:
+  - threadUid: q7d2kx9m0w4a
+    sectionUid: abcdef123456         # the section's data-uid
+    status: Resolved                 # Open or Resolved
+    statusChangedBy: Wilbur Smith    # with statusChangedAt, once the status has changed
+    statusChangedAt: '2026-10-13T08:15:40Z'
+    comments:
+      - commentUid: r3n8vb1z6p0c
+        createdBy: Martin Nordberg
+        createdAt: '2026-10-10T12:22:59Z'
+        updatedBy: Wilbur Smith      # with updatedAt, once edited
+        updatedAt: '2026-10-14T19:05:12Z'
+        text: |-
+          Multi-line text
+          in a block scalar.
+```
+
+- **UIDs** for threads and comments are CUID2s of section UIDs' length, issued by the server. Times are UTC to the second, quoted.
+- **Writing** uses the `yaml` package with keys in the order above, atomically. Each change (`add-thread`, `reply`, `edit`, `delete-comment`, `set-status`, `delete-thread`) is applied by UIDs to the file as read at that moment, one change at a time, so changes to other threads made on disk are kept (decision D1 of the plan). An `edit` carries the comment's version (a hash of its text and update time) and is refused as `conflict` if it changed; other refusals are `resolved` (replies, edits and deletes in a Resolved thread), `has-replies` (a first comment with replies), `not-found`, `empty`, `unusable` and `unavailable` (a file that isn't sectioned). A change returns the threads as they are on disk, whether made or not.
+- **With the document:** renames and deletes through Specquer move or remove the sidecar; creating or renaming a document onto a name with a leftover sidecar deletes it first. The agent rules say to do the same.
+
+<a id=""></a>
+### 6.2. Problems
+
+Listed with the section problems of a folder:
+
+- `comment-sidecar`: a sidecar that has conflict markers, isn't valid YAML, doesn't match the format, has a status other than Open or Resolved, or repeats a UID. Its threads aren't shown, and it isn't written until fixed.
+- `orphaned-sidecar`: a sidecar with no document beside it.
+- `detached-thread`: a thread whose section UID isn't in the saved document. The pane lists such threads as **Detached** from the text being edited, before the save.
+
+<a id=""></a>
+### 6.3. Client
+
+- **Extents:** a section's extent runs from its anchor to the next section that isn't inside it (subsections included); a list item's is its item. The views tint by them: the preview marks each top-level block with its innermost heading section and each sectioned list item with its own (`data-section-uid`) and switches one style rule; the WYSIWYG view uses ProseMirror decorations from a plugin; the text view uses CodeMirror line decorations and a gutter. None of them touches the document or its undo history.
+- **Comment Markdown** (`commentToHast`): the answer pipeline (§5.2) with references resolved: links and images become their text or alt text and URL, definitions show nothing. The comment editor turns link marks and image nodes into text after every change, and unescapes the colon Milkdown escapes in URLs.
+

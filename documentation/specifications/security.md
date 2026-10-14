@@ -71,6 +71,7 @@ Spec files may contain raw HTML (traceability anchors such as `<a name="r7k2" da
 - The preview is rendered to React elements, never with `innerHTML`.
 - Milkdown (the WYSIWYG view) shows raw HTML as text and doesn't render it. Only section anchors are shown differently, as a badge image Specquer draws itself; their attributes are never put into the page as HTML.
 - Section badges show the section ID and paths as text, never as HTML.
+- Comments ([Step 012](/work-items/step-012-comment-threads/requirements)) use the chat answers' restricted pipeline: raw HTML is never parsed, and no link or image is rendered, only their text and URL. The comment editor turns links and images into text. The names recorded with comments come from Git and are labels, not identities: anyone can edit any comment.
 - Links to other `.md` files open them in Specquer; other links open in a new tab with `rel="noopener noreferrer"`.
 
 <a id="SPEC-00070" data-uid="cj8b93fcfnht"></a>
