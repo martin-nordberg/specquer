@@ -111,3 +111,22 @@ export const folderSettingSchema = z.object({
   defaultPrefix: z.union([z.literal("inherit"), prefixSchema]),
 });
 export type FolderSetting = z.infer<typeof folderSettingSchema>;
+
+/** The file holding a prefix's settings, hand-edited for now: `.specquer/shared/<prefix>/prefix.config.yaml`. */
+export const PREFIX_CONFIG_FILE = "prefix.config.yaml";
+
+/** A status: text, not blank, without `"` (it is written in an attribute). */
+export const statusValueSchema = z
+  .string()
+  .trim()
+  .min(1, "A status can't be blank.")
+  .refine((value) => !value.includes('"'), 'A status can\'t hold ".');
+
+/** A prefix's settings: the allowed statuses, in order, the first being the default. */
+export const prefixConfigSchema = z.object({
+  statusValues: z
+    .array(statusValueSchema)
+    .min(1, "The list of statuses is empty.")
+    .refine((values) => new Set(values.map((value) => value.toLowerCase())).size === values.length, "A status is listed twice."),
+});
+export type PrefixConfig = z.infer<typeof prefixConfigSchema>;

@@ -49,8 +49,14 @@ export interface FoundAnchor extends Range {
   uid?: string;
   /** The whole `data-uid="…"` attribute. */
   uidAttribute?: Range;
+  /** The `data-status` attribute's value as written (not trimmed), if any. */
+  status?: string;
+  /** The whole `data-status="…"` attribute. */
+  statusAttribute?: Range;
   /** The offset of the open tag's closing `>`. */
   openTagEnd: number;
+  /** The line the anchor starts on, from 1, counted in the body (set by `analyzeBody`). */
+  line?: number;
 }
 
 /**
@@ -97,6 +103,8 @@ export interface AnchorPlan {
    * missing or must change. The root section's UID is the document ID.
    */
   uids: ReadonlyMap<number, string>;
+  /** Statuses to write in place of an anchor's `data-status` value (corrected spelling). */
+  statuses?: ReadonlyMap<number, string>;
 }
 
 /** An anchor with a section ID that isn't in a section's place. */
@@ -135,31 +143,100 @@ function end(node: Nodes): number {
   return node.position?.end.offset ?? 0;
 }
 
+interface TagAttribute {
+  value: string;
+  range: Range;
+}
+
+/** The section anchor attributes of an open tag (`<a …>`), the first of each name, with ranges from `offset`. */
+interface TagAttributes {
+  id?: TagAttribute;
+  uid?: TagAttribute;
+  status?: TagAttribute;
+}
+
+function tagAttributes(tag: string, offset: number): TagAttributes | undefined {
+  const match = OPEN_TAG.exec(tag);
+  if (match === null) return undefined;
+  const found: TagAttributes = {};
+  const attributesStart = offset + 2;
+  for (const attribute of (match[1] ?? "").matchAll(ATTRIBUTE)) {
+    const name = attribute[1]!.toLowerCase();
+    const key = name === "id" ? "id" : name === "data-uid" ? "uid" : name === "data-status" ? "status" : undefined;
+    if (key === undefined || found[key] !== undefined) continue;
+    const value = attribute[2] ?? attribute[3] ?? attribute[4] ?? "";
+    found[key] = { value, range: { from: attributesStart + attribute.index, to: attributesStart + attribute.index + attribute[0].length } };
+  }
+  return found;
+}
+
 /** An anchor made of two inline HTML nodes starting at `children[index]`, or `undefined`. */
 function anchorAt(children: PhrasingContent[], index: number): FoundAnchor | undefined {
   const open = children[index];
   const close = children[index + 1];
   if (open?.type !== "html" || close?.type !== "html" || !CLOSE_TAG.test(close.value)) return undefined;
-  const match = OPEN_TAG.exec(open.value);
-  if (match === null) return undefined;
   const from = start(open);
-  const attributes = match[1] ?? "";
-  const attributesStart = from + 2;
-  let anchor: FoundAnchor | undefined;
-  let uid: { value: string; range: Range } | undefined;
-  for (const attribute of attributes.matchAll(ATTRIBUTE)) {
-    const name = attribute[1]!.toLowerCase();
-    const value = attribute[2] ?? attribute[3] ?? attribute[4] ?? "";
-    const range = { from: attributesStart + attribute.index, to: attributesStart + attribute.index + attribute[0].length };
-    if (name === "id" && anchor === undefined) {
-      anchor = { from, to: end(close), rawId: value, idAttribute: range, openTagEnd: end(open) - 1 };
-    } else if (name === "data-uid" && uid === undefined) uid = { value, range };
+  const attributes = tagAttributes(open.value, from);
+  if (attributes?.id === undefined) return undefined;
+  const { id, uid, status } = attributes;
+  return {
+    from,
+    to: end(close),
+    rawId: id.value,
+    idAttribute: id.range,
+    ...(uid === undefined ? {} : { uid: uid.value, uidAttribute: uid.range }),
+    ...(status === undefined ? {} : { status: status.value, statusAttribute: status.range }),
+    openTagEnd: end(open) - 1,
+  };
+}
+
+/**
+ * The edit that gives an anchor's open tag a status, or removes it (`null`): the attribute
+ * replaced, or written directly after `data-uid` (or `id`), as Specquer writes it; removed with
+ * the space before it. `undefined` when nothing changes. `text` holds the tag at the ranges' offsets.
+ */
+function statusAttributeEdit(text: string, attributes: TagAttributes, status: string | null): BodyEdit | undefined {
+  const current = attributes.status;
+  if (status === null) {
+    if (current === undefined) return undefined;
+    let from = current.range.from;
+    while (from > 0 && /\s/.test(text[from - 1]!)) from--;
+    return { from, to: current.range.to, insert: "" };
   }
-  if (anchor !== undefined && uid !== undefined) {
-    anchor.uid = uid.value;
-    anchor.uidAttribute = uid.range;
+  const attribute = `data-status="${status}"`;
+  if (current !== undefined) {
+    return text.slice(current.range.from, current.range.to) === attribute ? undefined : { ...current.range, insert: attribute };
   }
-  return anchor;
+  const after = (attributes.uid ?? attributes.id)!.range.to;
+  return { from: after, to: after, insert: ` ${attribute}` };
+}
+
+/**
+ * The edit that sets a found section's status in its body (`null` removes it), or `undefined`
+ * when the section has no anchor or the status is already written that way.
+ */
+export function statusEdit(body: string, section: Pick<FoundSection, "anchor">, status: string | null): BodyEdit | undefined {
+  const anchor = section.anchor;
+  if (anchor === undefined) return undefined;
+  const attributes: TagAttributes = {
+    id: { value: anchor.rawId, range: anchor.idAttribute },
+    ...(anchor.uidAttribute === undefined ? {} : { uid: { value: anchor.uid!, range: anchor.uidAttribute } }),
+    ...(anchor.statusAttribute === undefined ? {} : { status: { value: anchor.status!, range: anchor.statusAttribute } }),
+  };
+  return statusAttributeEdit(body, attributes, status);
+}
+
+/** An anchor's open tag (`<a id="…" …>`) with its status set, or removed (`null`); unchanged if it isn't an anchor. */
+export function withStatus(openTag: string, status: string | null): string {
+  const attributes = tagAttributes(openTag, 0);
+  if (attributes?.id === undefined) return openTag;
+  const edit = statusAttributeEdit(openTag, attributes, status);
+  return edit === undefined ? openTag : applyEdits(openTag, [edit]);
+}
+
+/** The `data-status` of an anchor's open tag, as written, or `undefined`. */
+export function anchorTagStatus(openTag: string): string | undefined {
+  return tagAttributes(openTag.trim(), 0)?.status?.value;
 }
 
 /**
@@ -304,27 +381,43 @@ export function analyzeBody(body: string, options: AnalyzeOptions = {}): BodyAna
   // The parser skips a byte-order mark and counts offsets without it
   const bom = bodyStart(body);
   const found = analyzeIn(bom === 0 ? body : body.slice(bom), options);
-  const lineOf = (offset: number) => body.slice(0, offset).split("\n").length;
+  const lineOf = lineCounter(body);
   const strays = found.strays.map((stray) => ({ ...shift(stray, bom), line: lineOf(stray.from + bom) }));
-  if (bom === 0) return { sections: found.sections, strays };
   const sections = found.sections.map((section) => {
     const anchor = section.anchor;
+    const line = anchor === undefined ? undefined : lineOf(anchor.from + bom);
+    if (bom === 0) return anchor === undefined ? section : { ...section, anchor: { ...anchor, line } };
+    const shifted = { ...section, insertAt: section.insertAt + bom, ...(section.range === undefined ? {} : { range: shift(section.range, bom) }) };
+    if (anchor === undefined) return shifted;
     return {
-      ...section,
-      insertAt: section.insertAt + bom,
-      ...(section.range === undefined ? {} : { range: shift(section.range, bom) }),
-      anchor:
-        anchor === undefined
-          ? undefined
-          : {
-              ...shift(anchor, bom),
-              idAttribute: shift(anchor.idAttribute, bom),
-              uidAttribute: anchor.uidAttribute && shift(anchor.uidAttribute, bom),
-              openTagEnd: anchor.openTagEnd + bom,
-            },
+      ...shifted,
+      anchor: {
+        ...shift(anchor, bom),
+        idAttribute: shift(anchor.idAttribute, bom),
+        ...(anchor.uidAttribute === undefined ? {} : { uidAttribute: shift(anchor.uidAttribute, bom) }),
+        ...(anchor.statusAttribute === undefined ? {} : { statusAttribute: shift(anchor.statusAttribute, bom) }),
+        openTagEnd: anchor.openTagEnd + bom,
+        line,
+      },
     };
   });
   return { sections, strays };
+}
+
+/** The line (from 1) of an offset in a text, by binary search over the line starts. */
+function lineCounter(text: string): (offset: number) => number {
+  const starts = [0];
+  for (let index = text.indexOf("\n"); index >= 0; index = text.indexOf("\n", index + 1)) starts.push(index + 1);
+  return (offset) => {
+    let low = 0;
+    let high = starts.length - 1;
+    while (low < high) {
+      const middle = (low + high + 1) >> 1;
+      if (starts[middle]! <= offset) low = middle;
+      else high = middle - 1;
+    }
+    return low + 1;
+  };
 }
 
 /** Every anchor in the tree, outside code. */
@@ -445,6 +538,10 @@ export function anchorEdits(body: string, sections: readonly FoundSection[], pla
       // Directly after `id`, as Specquer writes it
       edits.push({ from: anchor.idAttribute.to, to: anchor.idAttribute.to, insert: ` data-uid="${newUid}"` });
     } else if (anchor.uid !== newUid) edits.push({ ...anchor.uidAttribute, insert: `data-uid="${newUid}"` });
+    const newStatus = plan.statuses?.get(index);
+    if (newStatus !== undefined && anchor.statusAttribute !== undefined && anchor.status !== newStatus) {
+      edits.push({ ...anchor.statusAttribute, insert: `data-status="${newStatus}"` });
+    }
   });
   // Stable: at equal positions the root anchor stays before a heading's
   return edits.sort((a, b) => a.from - b.from);

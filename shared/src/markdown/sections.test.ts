@@ -4,11 +4,14 @@ import {
   analyzeBody,
   anchorEdits,
   anchorTagSectionId,
+  anchorTagStatus,
   applyEdits,
   findSections,
   hasConflictMarkers,
   isAnchorCloseTag,
   rootAnchorText,
+  statusEdit,
+  withStatus,
 } from "./sections.ts";
 
 const DOC = "tz4a98xxat96";
@@ -306,4 +309,81 @@ test("hasConflictMarkers needs both ends of a conflict", () => {
   expect(hasConflictMarkers("Title\n=======\n")).toBe(false);
   expect(hasConflictMarkers("<<<<<<< HEAD\nonly one end\n")).toBe(false);
   expect(hasConflictMarkers("text <<<<<<< not at line start\n>>>>>>>> eight\n")).toBe(false);
+});
+
+describe("statuses in anchors", () => {
+  const U2 = "k1v2u0xwq8y8";
+
+  test("data-status is read in every anchor position, in any quoting, with the anchor's line", () => {
+    const body = [
+      `<a id="RQ-00001" data-uid="${DOC}" data-status="Draft"></a>`,
+      "",
+      `<a id="RQ-00002" data-uid="${UID}" data-status='Peer Review'></a>`,
+      "# Title",
+      "",
+      `<a id="RQ-00003" data-status=Testing></a> Setext`,
+      "======",
+      "",
+      `* <a data-status=" approved " id="RQ-00004"></a> item`,
+      "",
+      `<a id="intro"></a><a id="RQ-00005" data-status=""></a>`,
+      "## Paragraph form",
+      "",
+      `## <a id="RQ-00006"></a> No status`,
+      "",
+    ].join("\n");
+    const sections = findSections(body);
+    expect(sections.map((s) => s.anchor?.status)).toEqual(["Draft", "Peer Review", "Testing", " approved ", "", undefined]);
+    expect(sections.map((s) => s.anchor?.line)).toEqual([1, 3, 6, 9, 11, 14]);
+  });
+
+  test("lines count a byte-order mark", () => {
+    const sections = findSections(`\uFEFF<a id="RQ-00001" data-uid="${DOC}" data-status="Draft"></a>\n\n# A\n`);
+    expect(sections[0]!.anchor!.line).toBe(1);
+    expect(sections[0]!.anchor!.statusAttribute!.from).toBe(`\uFEFF<a id="RQ-00001" data-uid="${DOC}" `.length);
+  });
+
+  test("anchorEdits keeps data-status when it changes IDs and UIDs", () => {
+    const body = `<a id="RQ-00001" data-status="Draft"></a>\n\n<a id="XY-?" data-uid="${UID}" data-status="Testing"></a>\n# A\n`;
+    expect(anchor(body, [], DOC, { 1: "XY-00001" })).toBe(
+      `<a id="RQ-00001" data-uid="${DOC}" data-status="Draft"></a>\n\n<a id="XY-00001" data-uid="u1" data-status="Testing"></a>\n# A\n`,
+    );
+  });
+
+  test("anchorEdits corrects a status's spelling, replacing only its value", () => {
+    const body = `<a id="RQ-00001" data-uid="${DOC}" data-status=' peer review '></a>\n\nText\n`;
+    const sections = findSections(body);
+    const edits = anchorEdits(body, sections, { ids: new Map(), uids: new Map(), statuses: new Map([[0, "Peer Review"]]) });
+    expect(applyEdits(body, edits)).toBe(`<a id="RQ-00001" data-uid="${DOC}" data-status="Peer Review"></a>\n\nText\n`);
+    // A status already written that way needs no edit
+    const fixed = applyEdits(body, edits);
+    expect(anchorEdits(fixed, findSections(fixed), { ids: new Map(), uids: new Map(), statuses: new Map([[0, "Peer Review"]]) })).toEqual([]);
+  });
+
+  test("statusEdit adds after data-uid (or id), changes and removes the attribute", () => {
+    const set = (body: string, index: number, status: string | null) => {
+      const edit = statusEdit(body, findSections(body)[index]!, status);
+      return edit === undefined ? body : applyEdits(body, [edit]);
+    };
+    const body = `<a id="RQ-00001" data-uid="${DOC}"></a>\n\n<a class="x" id="RQ-00002" data-uid="${U2}" title="t"></a>\n# A\n\n<a id="RQ-00003"></a>\n## B\n`;
+    const added = set(body, 1, "Approved");
+    expect(added).toContain(`<a class="x" id="RQ-00002" data-uid="${U2}" data-status="Approved" title="t"></a>`);
+    expect(set(body, 2, "Testing")).toContain('<a id="RQ-00003" data-status="Testing"></a>');
+    const changed = set(added, 1, "Complete");
+    expect(changed).toContain(`data-uid="${U2}" data-status="Complete" title="t"`);
+    expect(set(changed, 1, null)).toBe(body);
+    expect(statusEdit(added, findSections(added)[1]!, "Approved")).toBeUndefined();
+    expect(statusEdit(body, findSections(body)[1]!, null)).toBeUndefined();
+    // Recognized again with the same ID and UID
+    expect(findSections(added).map((s) => [s.id, s.uid])).toEqual(findSections(body).map((s) => [s.id, s.uid]));
+  });
+
+  test("withStatus and anchorTagStatus work on an open tag", () => {
+    expect(withStatus(`<a id="RQ-00002" data-uid="${U2}">`, "Draft")).toBe(`<a id="RQ-00002" data-uid="${U2}" data-status="Draft">`);
+    expect(withStatus(`<a id="RQ-00002" data-status="Draft" data-uid="${U2}">`, null)).toBe(`<a id="RQ-00002" data-uid="${U2}">`);
+    expect(withStatus(`<a id="RQ-00002" data-status="Draft">`, "Testing")).toBe(`<a id="RQ-00002" data-status="Testing">`);
+    expect(withStatus("<b>", "Draft")).toBe("<b>");
+    expect(anchorTagStatus(`<a id="RQ-00002" data-status='Peer Review'>`)).toBe("Peer Review");
+    expect(anchorTagStatus(`<a id="RQ-00002">`)).toBeUndefined();
+  });
 });

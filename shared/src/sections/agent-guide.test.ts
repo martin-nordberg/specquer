@@ -11,3 +11,8 @@ test("the guide is appended once, after a blank line, in the file's line endings
   const crlf = withAgentGuide("# A\r\n");
   expect(crlf.replace(/\r\n/g, "").includes("\n")).toBe(false);
 });
+
+test("the guide says when agents may change a status", () => {
+  expect(withAgentGuide("")).toContain("Change a section's `data-status` only when asked to");
+  expect(withAgentGuide("")).toContain("Draft, Approved, In Development, Peer Review, Testing, Complete");
+});
