@@ -1,4 +1,4 @@
-import { contentEditor, expect, frontmatterEditor, hideTab, launch, openFile, saveStatus, test, treeItem, typeAtEnd } from "./fixtures";
+import { blurWindow, contentEditor, expect, frontmatterEditor, hideTab, launch, openFile, saveStatus, test, treeItem, typeAtEnd } from "./fixtures";
 
 test.beforeEach(async ({ page, specquer }) => {
   await launch(page, specquer);
@@ -27,6 +27,15 @@ test("edits are saved when the tab loses focus", async ({ page, specquer }) => {
   await openFile(page, "b.md");
   await typeAtEnd(contentEditor(page), "!");
   await hideTab(page);
+  await expect(saveStatus(page)).toHaveText("Saved");
+  expect(await specquer.read("b.md")).toBe("# Beta\n\nBody of beta.\n!");
+});
+
+test("edits are saved when the window loses focus", async ({ page, specquer }) => {
+  await openFile(page, "b.md");
+  await typeAtEnd(contentEditor(page), "!");
+  await expect(saveStatus(page)).toHaveText("Unsaved changes");
+  await blurWindow(page);
   await expect(saveStatus(page)).toHaveText("Saved");
   expect(await specquer.read("b.md")).toBe("# Beta\n\nBody of beta.\n!");
 });

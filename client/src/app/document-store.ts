@@ -69,6 +69,8 @@ export class DocumentStore {
   /** Whether the user has changed anything since the last save. */
   private edited = false;
   private saving: Promise<SaveResult> | null = null;
+  /** Hand pending edits to the store before a save (the WYSIWYG view reports changes late). */
+  private flushers = new Set<() => void>();
 
   constructor(private readonly api: Api) {}
 
@@ -82,6 +84,15 @@ export class DocumentStore {
   get hasUnsavedChanges(): boolean {
     return this.edited;
   }
+
+  /**
+   * Registers a function that hands an editor's pending edits to the store; every save calls it
+   * first. Returns the function that removes it.
+   */
+  addFlusher = (flush: () => void): (() => void) => {
+    this.flushers.add(flush);
+    return () => this.flushers.delete(flush);
+  };
 
   private set(update: Partial<DocumentState>) {
     this.state = { ...this.state, ...update };
@@ -187,6 +198,7 @@ export class DocumentStore {
    * changed on disk since it was read.
    */
   save(options?: { keepalive?: boolean }): Promise<SaveResult> {
+    for (const flush of this.flushers) flush();
     if (this.saving !== null) return this.saving.then(() => this.save(options));
     if (this.state.conflict !== null) return Promise.resolve("conflict");
     this.saving = this.write(this.version, options).finally(() => {

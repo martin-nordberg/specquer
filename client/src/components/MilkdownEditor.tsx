@@ -1,4 +1,4 @@
-import { Editor, defaultValueCtx, editorViewOptionsCtx, remarkStringifyOptionsCtx, rootCtx } from "@milkdown/kit/core";
+import { Editor, defaultValueCtx, editorViewCtx, editorViewOptionsCtx, remarkStringifyOptionsCtx, rootCtx, serializerCtx } from "@milkdown/kit/core";
 import { history } from "@milkdown/kit/plugin/history";
 import { listener, listenerCtx } from "@milkdown/kit/plugin/listener";
 import { commonmark, htmlSchema } from "@milkdown/kit/preset/commonmark";
@@ -161,12 +161,17 @@ export interface MilkdownEditorProps {
   statusLists?: SectionStatusLists;
   /** Called when a badge's menu opens, to load the status lists again. */
   onStatusMenu?: () => void;
+  /**
+   * Registers the function that reports pending edits at once (Milkdown reports them 200 ms after
+   * the last change), so a save holds everything typed; returns the function that removes it.
+   */
+  registerFlush?: (flush: () => void) => () => void;
   className?: string;
 }
 
 type MenuState = SectionMenuTarget & { uid: string | undefined; view: EditorView; pos: number | undefined; conflicted: boolean };
 
-export function MilkdownEditor({ value, onChange, statusLists, onStatusMenu, className }: MilkdownEditorProps) {
+export function MilkdownEditor({ value, onChange, statusLists, onStatusMenu, registerFlush, className }: MilkdownEditorProps) {
   const host = useRef<HTMLDivElement>(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -192,6 +197,9 @@ export function MilkdownEditor({ value, onChange, statusLists, onStatusMenu, cla
   useEffect(() => {
     let editor: Editor | null = null;
     let disposed = false;
+    // The document as last reported; a document equal to it has nothing to report, so a file
+    // opened here is never rewritten in Milkdown's style unless the user changes it
+    let reported: Node | null = null;
     const handlers: BadgeHandlers = {
       statusOf: (id, uid) => findSection(statusesNow(), id, uid),
       lists: () => listsRef.current,
@@ -211,7 +219,8 @@ export function MilkdownEditor({ value, onChange, statusLists, onStatusMenu, cla
         }));
         // Closer to the style most specs use
         ctx.update(remarkStringifyOptionsCtx, (options) => ({ ...options, bullet: "-" as const, rule: "-" as const }));
-        ctx.get(listenerCtx).markdownUpdated((_ctx, updated, previous) => {
+        ctx.get(listenerCtx).markdownUpdated((listenerContext, updated, previous) => {
+          reported = listenerContext.get(editorViewCtx).state.doc;
           markdown.current = updated;
           if (updated !== previous) onChangeRef.current(updated);
         });
@@ -225,10 +234,25 @@ export function MilkdownEditor({ value, onChange, statusLists, onStatusMenu, cla
       .create()
       .then((created) => {
         if (disposed) void created.destroy();
-        else editor = created;
+        else {
+          editor = created;
+          reported = created.action((ctx) => ctx.get(editorViewCtx).state.doc);
+        }
       });
+    const unregister = registerFlush?.(() => {
+      editor?.action((ctx) => {
+        const doc = ctx.get(editorViewCtx).state.doc;
+        if (reported === null || doc.eq(reported)) return;
+        reported = doc;
+        const updated = ctx.get(serializerCtx)(doc);
+        if (updated === markdown.current) return;
+        markdown.current = updated;
+        onChangeRef.current(updated);
+      });
+    });
     return () => {
       disposed = true;
+      unregister?.();
       void editor?.destroy();
     };
     // The editor is created once per document revision (the parent remounts it)

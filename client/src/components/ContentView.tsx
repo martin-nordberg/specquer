@@ -64,6 +64,8 @@ export interface ContentViewProps {
   scrollTarget?: ScrollTarget;
   /** Summaries in the preview (split and preview views). */
   summaries?: PreviewSummaries;
+  /** Registers the WYSIWYG view's flush of pending edits with the document store. */
+  registerFlush?: (flush: () => void) => () => void;
 }
 
 /** The Markdown body in the chosen view. All views edit the same in-memory text. */
@@ -84,6 +86,7 @@ export function ContentView({
   onStatusMenu,
   scrollTarget,
   summaries,
+  registerFlush,
 }: ContentViewProps) {
   const pathRef = useRef(path);
   pathRef.current = path;
@@ -144,6 +147,15 @@ export function ContentView({
     case "preview":
       return preview(0);
     case "wysiwyg":
-      return <MilkdownEditor key={externalEdits} value={body} onChange={onChange} statusLists={statusLists} onStatusMenu={onStatusMenu} />;
+      return (
+        <MilkdownEditor
+          key={externalEdits}
+          value={body}
+          onChange={onChange}
+          statusLists={statusLists}
+          onStatusMenu={onStatusMenu}
+          registerFlush={registerFlush}
+        />
+      );
   }
 }

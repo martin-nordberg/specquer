@@ -41,6 +41,20 @@ describe("DocumentStore", () => {
     expect(saveFile).not.toHaveBeenCalled();
   });
 
+  test("a save first takes the edits an editor hasn't reported yet", async () => {
+    const { api, files } = fakeApi({ "a.md": "# A\n" });
+    const store = new DocumentStore(api);
+    await store.open("a.md");
+    const remove = store.addFlusher(() => store.setBody("# A\nlate\n"));
+    expect(await store.save()).toBe("saved");
+    expect(files["a.md"]).toBe("# A\nlate\n");
+    remove();
+    const flush = mock(() => undefined);
+    store.addFlusher(flush);
+    expect(await store.save()).toBe("clean");
+    expect(flush).toHaveBeenCalledTimes(1);
+  });
+
   test("saves with the file's own line endings", async () => {
     const { api, files } = fakeApi({ "a.md": "---\r\nx: 1\r\n---\r\n# A\r\n" });
     const store = new DocumentStore(api);

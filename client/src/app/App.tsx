@@ -171,8 +171,13 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
     docStore.open(path).catch(() => uiStore.update(closeFile));
   }, [docStore, uiStore, initialUiState]);
 
-  // Autosave: when the tab loses focus or the page closes, and every minute while there are changes
+  // Autosave: when the window loses focus (switching applications often leaves the tab visible),
+  // when the tab is hidden or the page closes, and every minute while there are changes
   useEffect(() => {
+    const onBlur = () => {
+      void docStore.save();
+      void uiStore.flush();
+    };
     const onHidden = () => {
       if (document.visibilityState !== "hidden") return;
       void docStore.save({ keepalive: true });
@@ -185,10 +190,12 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
     const timer = setInterval(() => {
       if (docStore.hasUnsavedChanges) void docStore.save();
     }, AUTOSAVE_INTERVAL);
+    window.addEventListener("blur", onBlur);
     document.addEventListener("visibilitychange", onHidden);
     window.addEventListener("pagehide", onPageHide);
     return () => {
       clearInterval(timer);
+      window.removeEventListener("blur", onBlur);
       document.removeEventListener("visibilitychange", onHidden);
       window.removeEventListener("pagehide", onPageHide);
     };
@@ -503,6 +510,7 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
             onStatusMenu={loadStatusLists}
             scrollTarget={scrollTarget?.path === document_.path ? scrollTarget : undefined}
             summaries={summaries}
+            registerFlush={docStore.addFlusher}
           />
         </div>
         <ConflictDialog

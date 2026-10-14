@@ -1,5 +1,5 @@
 /// <reference lib="dom" />
-import { contentEditor, expect, hideTab, launch, openFile, saveStatus, test, typeAtEnd } from "./fixtures";
+import { blurWindow, contentEditor, expect, hideTab, launch, openFile, saveStatus, test, typeAtEnd } from "./fixtures";
 
 test.beforeEach(async ({ page, specquer }) => {
   await launch(page, specquer);
@@ -64,6 +64,19 @@ test("WYSIWYG doesn't change a file that isn't edited", async ({ page, specquer 
   expect(await specquer.read("docs/a.md")).toBe(
     '---\ntitle: Alpha\n---\n# Alpha <a name="r7k2" data-status="draft"></a>\n\nSee [beta](../b.md) and [the anchor](#r7k2).\n\n<img src="x.png" onerror="window.__xss = true">\n',
   );
+});
+
+test("WYSIWYG edits typed just before the window loses focus are saved", async ({ page, specquer }) => {
+  await openFile(page, "b.md");
+  await view(page, "WYSIWYG").click();
+  const editor = page.getByRole("textbox", { name: "Markdown content (WYSIWYG)" });
+  await editor.getByText("Body of beta.").click();
+  await page.keyboard.press("End");
+  // Typed and blurred at once, inside Milkdown's 200 ms delay before it reports a change
+  await page.keyboard.insertText(" Quick.");
+  await blurWindow(page);
+  await expect(saveStatus(page)).toHaveText("Saved");
+  expect(await specquer.read("b.md")).toContain("Body of beta. Quick.");
 });
 
 test("WYSIWYG edits are saved", async ({ page, specquer }) => {

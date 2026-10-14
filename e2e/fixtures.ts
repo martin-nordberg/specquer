@@ -136,6 +136,14 @@ export async function hideTab(page: Page) {
   });
 }
 
+/**
+ * Simulates switching to another application, which takes the focus from the window but often
+ * leaves the tab visible.
+ */
+export async function blurWindow(page: Page) {
+  await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+}
+
 /** Types at the end of a CodeMirror editor. */
 export async function typeAtEnd(editor: Locator, text: string) {
   await editor.click();
