@@ -143,6 +143,29 @@ export function ProblemsDialog({ folder, onClose, loadProblems, onOpen, onRenumb
             <span className="font-mono text-xs">{problem.path}</span>: {problem.message}, so {problem.prefix} uses the default statuses.
           </p>
         );
+      case "comment-sidecar":
+        return (
+          <p>
+            <span className="font-mono text-xs">{problem.path}</span>: {problem.message} Its comment threads aren't shown or changed until it is
+            fixed.
+          </p>
+        );
+      case "orphaned-sidecar":
+        return (
+          <p>
+            <span className="font-mono text-xs">{problem.path}</span> holds comment threads, but its document isn't beside it. Move or rename
+            it with its document, or delete it.
+          </p>
+        );
+      case "detached-thread":
+        return (
+          <p>
+            <button type="button" className={linkClass} onClick={() => open(problem.path)}>
+              {problem.path}
+            </button>
+            : the section of the thread “{problem.text}” is no longer in the document. It is listed as detached in the Comments pane.
+          </p>
+        );
     }
   };
 

@@ -22,6 +22,7 @@ import type {
   Tree,
 } from "@specquer/shared/api";
 import { type ChatEvent, type ChatRequest, type ChatTurn, chatEventSchema } from "@specquer/shared/chat";
+import type { CommentChange, CommentChangeResult, CommentsResponse } from "@specquer/shared/comments";
 import type { BodyEdit } from "@specquer/shared/markdown";
 import type { FolderSetting, ModelConfig } from "@specquer/shared/settings";
 import type { UiState, UiStatePatch } from "@specquer/shared/uistate";
@@ -131,6 +132,10 @@ export interface Api {
   clearChatHistory(): Promise<ChatTurn[]>;
   /** Puts cleared turns back; resolves to the conversation. */
   restoreChatHistory(turns: ChatTurn[]): Promise<ChatTurn[]>;
+  /** A document's comment threads (Step 012). */
+  comments(path: string): Promise<CommentsResponse>;
+  /** Applies one change to a document's threads; `keepalive` when the page is closing. */
+  changeComments(path: string, change: CommentChange, options?: { keepalive?: boolean }): Promise<CommentChangeResult>;
 }
 
 /**
@@ -294,5 +299,12 @@ export const httpApi: Api = {
   },
   async restoreChatHistory(turns) {
     return (await json<{ turns: ChatTurn[] }>(await client.api.chat.history.$put({ json: { turns } }))).turns;
+  },
+  async comments(path) {
+    return json<CommentsResponse>(await client.api.comments.$get({ query: { path } }));
+  },
+  async changeComments(path, change, options) {
+    const keepalive = options?.keepalive === true && JSON.stringify(change).length < KEEPALIVE_LIMIT;
+    return json<CommentChangeResult>(await client.api.comments.$patch({ query: { path }, json: change }, { init: { keepalive } }));
   },
 };

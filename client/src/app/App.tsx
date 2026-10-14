@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { CreateOptions, SectionStatusLists, SummaryStatus, Tree, TreeFolder, TreeNode } from "@specquer/shared/api";
 import type { Citation } from "@specquer/shared/chat";
+import { analyzeBody } from "@specquer/shared/markdown";
 import { isSameOrInside, renamedPath } from "@specquer/shared/paths";
 import {
   type UiState,
   closeFile,
   fileUiState,
   openFile,
-  setSidePane,
+  setCommentFilter,
+  setCommentsPaneFraction,
+  toggleSidePane,
   setChatPaneFraction,
   setFolderExpanded,
   setFrontmatterHeight,
@@ -19,6 +22,8 @@ import {
 import { AnchorDialog } from "@/components/AnchorDialog";
 import { ChatPane } from "@/components/chat/ChatPane";
 import { ChatToggle } from "@/components/chat/ChatToggle";
+import { CommentsPane } from "@/components/comments/CommentsPane";
+import { CommentsToggle } from "@/components/comments/CommentsToggle";
 import { ConflictDialog } from "@/components/ConflictDialog";
 import { ContentView, ViewSwitcher } from "@/components/ContentView";
 import { CreateDialog, type CreateRequest, DeleteDialog, RenameDialog } from "@/components/EntryDialogs";
@@ -37,6 +42,7 @@ import type { Api } from "@/lib/api";
 import { appIconSvg, svgDataUri } from "@/theme/logo";
 import { applyTheme, useSystemTheme } from "@/theme/theme";
 import { ChatStore } from "./chat-store";
+import { CommentStore } from "./comment-store";
 import { AUTOSAVE_INTERVAL, DocumentStore, type SaveStatus } from "./document-store";
 import { SummaryStore } from "./summaries";
 import { UiStateStore } from "./ui-state-store";
@@ -106,6 +112,8 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
   );
   const chat = useSyncExternalStore(chatStore.subscribe, chatStore.get);
   useEffect(() => () => chatStore.close(), [chatStore]);
+  const commentStore = useMemo(() => new CommentStore(api), [api]);
+  const comments = useSyncExternalStore(commentStore.subscribe, commentStore.get);
   const [openError, setOpenError] = useState<string | null>(null);
 
   const systemTheme = useSystemTheme();
@@ -177,15 +185,18 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
     const onBlur = () => {
       void docStore.save();
       void uiStore.flush();
+      void commentStore.flush();
     };
     const onHidden = () => {
       if (document.visibilityState !== "hidden") return;
       void docStore.save({ keepalive: true });
       void uiStore.flush({ keepalive: true });
+      void commentStore.flush({ keepalive: true });
     };
     const onPageHide = () => {
       void docStore.save({ keepalive: true });
       void uiStore.flush({ keepalive: true });
+      void commentStore.flush({ keepalive: true });
     };
     const timer = setInterval(() => {
       if (docStore.hasUnsavedChanges) void docStore.save();
@@ -199,7 +210,7 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
       document.removeEventListener("visibilitychange", onHidden);
       window.removeEventListener("pagehide", onPageHide);
     };
-  }, [docStore, uiStore]);
+  }, [docStore, uiStore, commentStore]);
 
   /** Creates the entry, shows it in its expanded folder, and opens a new file. */
   const create = useCallback(
@@ -386,6 +397,26 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
   useEffect(() => {
     if (currentPath !== undefined) loadStatusLists();
   }, [currentPath, doc.version, loadStatusLists]);
+  // The open file's comment threads: when it opens, after each save (sections may have just got
+  // their UIDs) and when the window regains focus (a Git pull, say)
+  useEffect(() => {
+    void commentStore.open(currentPath ?? null);
+  }, [currentPath, doc.version, commentStore]);
+  useEffect(() => {
+    const onFocus = () => void commentStore.load();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [commentStore]);
+  /** Scrolls the document to a section by its UID. */
+  const goToSection = useCallback(
+    (sectionUid: string) => {
+      const document = docStore.get().document;
+      if (document === null) return;
+      const section = analyzeBody(document.body).sections.find((found) => found.uid === sectionUid);
+      if (section?.id != null) setScrollTarget({ path: document.path, sectionId: section.id, request: Date.now() });
+    },
+    [docStore],
+  );
   useEffect(() => {
     window.addEventListener("focus", loadStatusLists);
     return () => window.removeEventListener("focus", loadStatusLists);
@@ -530,7 +561,9 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
           Specquer
         </span>
         <span className="flex items-center gap-1">
-          <ChatToggle open={ui.sidePane === "chat"} onChange={(next) => uiStore.update((s) => setSidePane(s, next ? "chat" : null))} />
+          <CommentsToggle open={ui.sidePane === "comments"} onChange={() => uiStore.update((s) => toggleSidePane(s, "comments"))} />
+          {/* Twice the space before the theme toggle (R1.1) */}
+          <ChatToggle open={ui.sidePane === "chat"} onChange={() => uiStore.update((s) => toggleSidePane(s, "chat"))} className="mr-1" />
           <ThemeToggle theme={theme} onChange={(next) => uiStore.update((s) => setTheme(s, next))} />
           <SettingsButton onClick={() => setSettingsOpen(true)} />
         </span>
@@ -538,26 +571,41 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
       <main className="min-h-0 flex-1">
         <PaneLayout
           treeFraction={ui.treePaneFraction}
-          chatFraction={ui.chatPaneFraction}
-          chatOpen={ui.sidePane === "chat"}
+          rightFraction={ui.sidePane === "comments" ? ui.commentsPaneFraction : ui.chatPaneFraction}
+          rightOpen={ui.sidePane !== null}
+          rightLabel={ui.sidePane === "comments" ? "comments" : "chat"}
           onTreeFractionChange={(fraction) => uiStore.update((s) => setTreePaneFraction(s, fraction))}
-          onChatFractionChange={(fraction) => uiStore.update((s) => setChatPaneFraction(s, fraction))}
+          onRightFractionChange={(fraction) =>
+            uiStore.update((s) => (s.sidePane === "comments" ? setCommentsPaneFraction(s, fraction) : setChatPaneFraction(s, fraction)))
+          }
           left={left}
           center={right}
           right={
-            <ChatPane
-              state={chat}
-              disabled={chatDisabled}
-              onSend={(question) => void chatStore.send(question)}
-              onStop={() => chatStore.stop()}
-              onRetry={() => void chatStore.retry()}
-              onClear={() => void chatStore.clear()}
-              onUndo={() => void chatStore.undoClear()}
-              onOpenCitation={(citation) => void openCitation(citation)}
-              isMissing={isCitationMissing}
-              onTakeDraft={() => chatStore.takeDraft()}
-              onInput={() => chatStore.dismissUnknownCommand()}
-            />
+            ui.sidePane === "comments" ? (
+              <CommentsPane
+                state={comments}
+                store={commentStore}
+                body={document_?.body ?? null}
+                lists={statusLists !== null && statusLists.path === document_?.path ? statusLists.lists : undefined}
+                filter={ui.commentFilter}
+                onFilterChange={(filter) => uiStore.update((s) => setCommentFilter(s, filter))}
+                onGoToSection={goToSection}
+              />
+            ) : (
+              <ChatPane
+                state={chat}
+                disabled={chatDisabled}
+                onSend={(question) => void chatStore.send(question)}
+                onStop={() => chatStore.stop()}
+                onRetry={() => void chatStore.retry()}
+                onClear={() => void chatStore.clear()}
+                onUndo={() => void chatStore.undoClear()}
+                onOpenCitation={(citation) => void openCitation(citation)}
+                isMissing={isCitationMissing}
+                onTakeDraft={() => chatStore.takeDraft()}
+                onInput={() => chatStore.dismissUnknownCommand()}
+              />
+            )
           }
         />
       </main>

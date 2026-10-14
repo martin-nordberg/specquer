@@ -63,6 +63,8 @@ export interface ModeColors {
   errorText: string;
   /** The fill inside folder icons, under an outline in the foreground color. */
   folderFill: string;
+  /** The tint behind a section highlighted from its comment threads, and behind their group (Step 012, R6). */
+  commentHighlight: string;
   /** Each fill with the text color chosen for it. */
   fills: Record<FillRole, { fill: string; text: string }>;
 }
@@ -125,14 +127,17 @@ function modeColors(
   const fills = Object.fromEntries(
     fillRoles.map((role) => [role, fillWithText(fillOverrides[role] ?? base[role], lightText, darkText)]),
   ) as ModeColors["fills"];
+  const mutedForeground = nudgeForContrast(mix(background, foreground, 0.6), mix(background, foreground, 0.06));
   return {
     background,
     foreground,
     muted: mix(background, foreground, 0.06),
-    mutedForeground: nudgeForContrast(mix(background, foreground, 0.6), mix(background, foreground, 0.06)),
+    mutedForeground,
     border: mix(background, foreground, 0.18),
     errorText: nudgeForContrast(base.error, background),
     folderFill: nudgeForContrast(folder, foreground, MIN_GRAPHIC_CONTRAST),
+    // Secondary text (section IDs) sits on it too, and contrasts less than the text
+    commentHighlight: nudgeForContrast(mix(background, base.secondary, 0.22), mutedForeground),
     fills,
   };
 }
@@ -168,6 +173,7 @@ export function cssVariables(colors: ModeColors): Record<string, string> {
     "--accent-foreground": colors.foreground,
     "--error-text": colors.errorText,
     "--folder": colors.folderFill,
+    "--comment-highlight": colors.commentHighlight,
     "--destructive": colors.fills.error.fill,
     "--destructive-foreground": colors.fills.error.text,
   };

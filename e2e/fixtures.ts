@@ -33,6 +33,8 @@ async function startSpecquer(files: Record<string, string>): Promise<Specquer & 
     await Bun.write(join(root, path), text);
   }
   await Bun.$`git -C ${root} init -q && git -C ${root} add -A && git -C ${root} -c user.email=e2e@example.com -c user.name=e2e commit -qm fixtures`.quiet();
+  // The name comment threads record (Step 012)
+  await Bun.$`git -C ${root} config user.name "E2E Tester"`.quiet();
 
   // Run from `server` so its bunfig.toml (the Tailwind plugin) applies. Production mode bundles
   // once at startup; development mode's file watchers run out when many servers run in parallel.

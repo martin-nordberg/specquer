@@ -9,18 +9,21 @@ import {
 } from "@specquer/shared/uistate";
 
 /**
- * The window's panes (Step 010, R1): folders | file | chat, the chat pane optional, each width a
- * fraction of the window, with a drag bar between neighbors. The file pane keeps at least 30%:
- * a drag stops there, and when both side panes are wide the chat pane gives way first
- * (`paneWidths`).
+ * The window's panes (Steps 010, 012): folders | file | right, the right pane (chat or comments)
+ * optional, each width a fraction of the window, with a drag bar between neighbors. The file pane
+ * keeps at least 30%: a drag stops there, and when both side panes are wide the right pane gives
+ * way first (`paneWidths`).
  */
 export interface PaneLayoutProps {
   treeFraction: number;
-  chatFraction: number;
-  chatOpen: boolean;
+  /** The right pane's width; each kind of right pane keeps its own. */
+  rightFraction: number;
+  rightOpen: boolean;
+  /** The right pane's name, for its drag bar ("chat", "comments"). */
+  rightLabel?: string;
   /** Called when a drag or key press ends, with the new fraction. */
   onTreeFractionChange: (fraction: number) => void;
-  onChatFractionChange: (fraction: number) => void;
+  onRightFractionChange: (fraction: number) => void;
   left: ReactNode;
   center: ReactNode;
   right: ReactNode;
@@ -29,10 +32,20 @@ export interface PaneLayoutProps {
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 const STEP = 0.02;
 
-export function PaneLayout({ treeFraction, chatFraction, chatOpen, onTreeFractionChange, onChatFractionChange, left, center, right }: PaneLayoutProps) {
+export function PaneLayout({
+  treeFraction,
+  rightFraction,
+  rightOpen,
+  rightLabel = "chat",
+  onTreeFractionChange,
+  onRightFractionChange,
+  left,
+  center,
+  right,
+}: PaneLayoutProps) {
   const container = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<{ tree?: number; chat?: number }>({});
-  const widths = paneWidths(drag.tree ?? treeFraction, drag.chat ?? chatFraction, chatOpen);
+  const widths = paneWidths(drag.tree ?? treeFraction, drag.chat ?? rightFraction, rightOpen);
   const room = 1 - MIN_FILE_PANE_FRACTION;
   // A pane can grow only as far as the file pane's minimum allows, given the other pane's width
   const treeMax = Math.min(MAX_TREE_PANE_FRACTION, room - widths.right);
@@ -63,20 +76,20 @@ export function PaneLayout({ treeFraction, chatFraction, chatOpen, onTreeFractio
         onKey={(delta) => onTreeFractionChange(clampTree(widths.tree + delta))}
       />
       <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">{center}</div>
-      {chatOpen && (
+      {rightOpen && (
         <>
           <Separator
-            label="Resize the chat pane"
+            label={`Resize the ${rightLabel} pane`}
             value={widths.right}
             min={MIN_CHAT_PANE_FRACTION}
             max={chatMax}
             // Dragging left widens the chat pane
             onDrag={(clientX) => setDrag({ chat: clampChat(1 - at(clientX)) })}
             onDrop={(clientX) => {
-              onChatFractionChange(clampChat(1 - at(clientX)));
+              onRightFractionChange(clampChat(1 - at(clientX)));
               setDrag({});
             }}
-            onKey={(delta) => onChatFractionChange(clampChat(widths.right - delta))}
+            onKey={(delta) => onRightFractionChange(clampChat(widths.right - delta))}
           />
           <div className="h-full min-w-0 overflow-hidden" style={{ width: `${widths.right * 100}%` }}>
             {right}

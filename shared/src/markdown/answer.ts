@@ -46,7 +46,7 @@ function plainText(node: MdastNodes): string {
 const BLOCK_PARENTS = new Set(["root", "blockquote", "listItem", "footnoteDefinition"]);
 
 /** A link's text, followed by its URL when the text doesn't already say it. */
-function linkText(text: string, url: string): string {
+export function linkText(text: string, url: string): string {
   const same = text === url || `mailto:${text}` === url || `http://${text}` === url;
   return text === "" ? url : same ? text : `${text} (${url})`;
 }

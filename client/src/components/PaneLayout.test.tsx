@@ -8,10 +8,10 @@ function setup(props: { treeFraction?: number; chatFraction?: number; chatOpen?:
   render(
     <PaneLayout
       treeFraction={props.treeFraction ?? 0.25}
-      chatFraction={props.chatFraction ?? 0.3}
-      chatOpen={props.chatOpen ?? true}
+      rightFraction={props.chatFraction ?? 0.3}
+      rightOpen={props.chatOpen ?? true}
       onTreeFractionChange={onTreeFractionChange}
-      onChatFractionChange={onChatFractionChange}
+      onRightFractionChange={onChatFractionChange}
       left={<div>folders</div>}
       center={<div>file</div>}
       right={<div>chat</div>}

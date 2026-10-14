@@ -18,6 +18,12 @@ describe.each(["light", "dark"] as const)("%s mode", (mode) => {
     expect(wcagContrast(colors.mutedForeground, colors.muted)).toBeGreaterThanOrEqual(MIN_CONTRAST);
     expect(wcagContrast(colors.errorText, colors.background)).toBeGreaterThanOrEqual(MIN_CONTRAST);
   });
+
+  test("text and secondary text on the comment highlight pass WCAG AA", () => {
+    expect(wcagContrast(colors.foreground, colors.commentHighlight)).toBeGreaterThanOrEqual(MIN_CONTRAST);
+    expect(wcagContrast(colors.mutedForeground, colors.commentHighlight)).toBeGreaterThanOrEqual(MIN_CONTRAST);
+    expect(colors.commentHighlight).not.toBe(colors.background);
+  });
 });
 
 test("folder icons' outline stands out against their sepia fill in both modes", () => {

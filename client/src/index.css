@@ -30,6 +30,7 @@
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
   --color-folder: var(--folder);
+  --color-comment-highlight: var(--comment-highlight);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
