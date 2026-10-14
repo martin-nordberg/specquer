@@ -102,6 +102,7 @@ export function createHandlers(
       return { files: changed, agentGuide: await hasAgentGuideFile(files) };
     },
     sectionProblems: (folder) => sections.problems(folder),
+    sectionStatuses: (path) => sections.statuses(path),
     renumberSection: (path, id, uid, baseVersion) => sections.renumber(path, id, uid, baseVersion),
     renumberDocument: (path, baseVersion) => sections.renumberDocument(path, baseVersion),
     summaryStatus: () => summaries.status(),

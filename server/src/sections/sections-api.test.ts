@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import type { SectionInfo, SectionNotice, SectionProblem } from "@specquer/shared/api";
-import { findSections } from "@specquer/shared/markdown";
+import { applyEdits, findSections } from "@specquer/shared/markdown";
 import { tempRoot, testApp } from "../test-support.ts";
 
 let cleanups: Array<() => Promise<void>> = [];
@@ -540,5 +540,103 @@ describe("whole files copied", () => {
       ["root", "REQ-00001", "docaaaaaaaa1"],
       ["heading", "REQ-00003", expect.stringMatching(/^[a-z0-9]{12}$/)],
     ]);
+  });
+});
+
+describe("statuses", () => {
+  const problemsOf = async (request: (path: string) => Response | Promise<Response>, folder = "") =>
+    ((await (await request(`/api/sections/problems?folder=${folder}`)).json()) as { problems: SectionProblem[] }).problems;
+
+  test("a save corrects a status's case and spaces, with no notice, as edits to the body sent", async () => {
+    const { save, read } = await setup({ "docs/a.md": "" });
+    await save("docs/a.md", "# A\n\n## B\n");
+    const anchored = await read("docs/a.md");
+    const sent = anchored.replace(/(<a id="REQ-00002" data-uid="\w+")/, '$1 data-status="peer review"').replace(/(<a id="REQ-00003" data-uid="\w+")/, "$1 data-status=' Draft '");
+    const result = await save("docs/a.md", sent);
+    expect(result.notices).toBeUndefined();
+    const text = await read("docs/a.md");
+    expect(text).toContain('data-status="Peer Review"');
+    expect(text).toContain('data-status="Draft"');
+    expect(result.edits?.length).toBe(2);
+    expect(applyEdits(sent, result.edits!)).toBe(text);
+  });
+
+  test("a prefix change keeps the status, and reports it when the new prefix doesn't allow it", async () => {
+    const { save, read, request } = await setup({
+      "docs/a.md": "",
+      ".specquer/shared/REQ/prefix.config.yaml": "statusValues:\n  - Proposed\n  - Done\n",
+    });
+    await save("docs/a.md", "# A\n");
+    const withStatus = (await read("docs/a.md")).replace(/(<a id="REQ-00002" data-uid="\w+")/, '$1 data-status="Done"');
+    await save("docs/a.md", withStatus);
+    expect(await problemsOf(request)).toEqual([]);
+    await save("docs/a.md", withStatus.replace('id="REQ-00002"', 'id="SPEC-?"'));
+    const text = await read("docs/a.md");
+    expect(text).toMatch(/<a id="SPEC-00001" data-uid="\w+" data-status="Done"><\/a>/);
+    expect(await problemsOf(request)).toEqual([{ kind: "invalid-status", path: "docs/a.md", id: "SPEC-00001", line: 3, value: "Done", prefix: "SPEC" }]);
+  });
+
+  test("blank and unknown statuses are problems, with their lines; a file with conflict markers is left alone", async () => {
+    const { save, read, write, request } = await setup({ "docs/a.md": "", "docs/b.md": "" });
+    await save("docs/a.md", "# A\n\n## B\n");
+    const text = (await read("docs/a.md"))
+      .replace(/(<a id="REQ-00002" data-uid="\w+")/, '$1 data-status="Revieww"')
+      .replace(/(<a id="REQ-00003" data-uid="\w+")/, '$1 data-status=""');
+    await write("docs/a.md", text);
+    expect(await problemsOf(request, "docs")).toEqual([
+      { kind: "invalid-status", path: "docs/a.md", id: "REQ-00002", line: 3, value: "Revieww", prefix: "REQ" },
+      { kind: "invalid-status", path: "docs/a.md", id: "REQ-00003", line: 6, value: "", prefix: "REQ" },
+    ]);
+    // Saving leaves invalid statuses as they are
+    await save("docs/a.md", text);
+    expect(await read("docs/a.md")).toBe(text);
+    const conflicted = `${text.replace(/data-status="Revieww"/, 'data-status="draft"')}<<<<<<< HEAD\nx\n=======\ny\n>>>>>>> other\n`;
+    await save("docs/b.md", conflicted);
+    expect(await read("docs/b.md")).toBe(conflicted);
+  });
+
+  test("Add section anchors corrects statuses as a save does", async () => {
+    const { save, read, write, request } = await setup({ "docs/a.md": "" });
+    await save("docs/a.md", "# A\n");
+    const text = (await read("docs/a.md")).replace(/(<a id="REQ-00002" data-uid="\w+")/, '$1 data-status="approved"');
+    await write("docs/a.md", text);
+    const dry = await request("/api/sections/anchor", { method: "POST", body: { folder: "docs", dryRun: true } });
+    expect(((await dry.json()) as { files: string[] }).files).toEqual(["docs/a.md"]);
+    await request("/api/sections/anchor", { method: "POST", body: { folder: "docs", dryRun: false } });
+    expect(await read("docs/a.md")).toBe(text.replace('"approved"', '"Approved"'));
+  });
+
+  test("an unusable prefix.config.yaml is reported for folders holding the prefix, which uses the defaults", async () => {
+    const { save, read, write, request } = await setup({
+      "docs/a.md": "",
+      "docs/specs/s.md": "",
+      ".specquer/shared/SPEC/prefix.config.yaml": "statusValues:\n  - Open\n  - open\n",
+    });
+    await save("docs/a.md", "# A\n");
+    await save("docs/specs/s.md", "# S\n");
+    await write("docs/specs/s.md", (await read("docs/specs/s.md")).replace(/(<a id="SPEC-00002" data-uid="\w+")/, '$1 data-status="Testing"'));
+    const problem: SectionProblem = {
+      kind: "prefix-config",
+      prefix: "SPEC",
+      path: ".specquer/shared/SPEC/prefix.config.yaml",
+      problem: "repeated-value",
+      message: '"open" is listed twice',
+    };
+    expect(await problemsOf(request, "docs/specs")).toEqual([problem]);
+    expect(await problemsOf(request, "docs")).toEqual([problem]);
+    expect(await problemsOf(request, "other")).toEqual([]);
+    expect(await problemsOf(request, "")).toEqual([problem]);
+  });
+
+  test("the status lists for a file", async () => {
+    const { request } = await setup({
+      "docs/a.md": "",
+      "other/b.md": "",
+      ".specquer/shared/REQ/prefix.config.yaml": "statusValues:\n  - Proposed\n  - Done\n",
+      ".specquer/shared/SPEC/prefix.config.yaml": "statusValues: oops\n",
+    });
+    const lists = async (path: string) => (await request(`/api/sections/statuses?path=${path}`)).json();
+    expect(await lists("docs/a.md")).toEqual({ sectioned: true, folderPrefix: "REQ", statusValues: { REQ: ["Proposed", "Done"] } });
+    expect(await lists("other/b.md")).toEqual({ sectioned: false, folderPrefix: null, statusValues: { REQ: ["Proposed", "Done"] } });
   });
 });

@@ -20,6 +20,7 @@ import {
   type SectionNotice,
   type SectionProblem,
   type SectionSearchResult,
+  type SectionStatusLists,
   type SectionSummaryLookup,
   type SettingsSaveResult,
   type SummaryRequest,
@@ -97,6 +98,8 @@ export interface ApiHandlers {
   searchSections(query: string, limit: number, path?: string): Promise<SectionSearchResult[]>;
   anchorFolder(folder: string, dryRun: boolean, addAgentGuide: boolean): Promise<AnchorFolderResult>;
   sectionProblems(folder: string): Promise<SectionProblem[]>;
+  /** The status lists for a file's sections. */
+  sectionStatuses(path: string): Promise<SectionStatusLists>;
   renumberSection(path: string, id: string, uid: string | null, baseVersion: string): Promise<SaveResult>;
   /** Renumbers every section of a file that is a copy of another document. */
   renumberDocument(path: string, baseVersion: string): Promise<SaveResult>;
@@ -228,6 +231,9 @@ export function createApiRouter(handlers: ApiHandlers) {
     })
     .get("/sections/problems", validate("query", sectionProblemsSchema), async (c) => {
       return c.json({ problems: await handlers.sectionProblems(c.req.valid("query").folder) });
+    })
+    .get("/sections/statuses", validate("query", fileQuerySchema), async (c) => {
+      return c.json(await handlers.sectionStatuses(c.req.valid("query").path));
     })
     .post("/sections/renumber", validate("json", renumberSectionSchema), async (c) => {
       const { path, id, uid, baseVersion } = c.req.valid("json");

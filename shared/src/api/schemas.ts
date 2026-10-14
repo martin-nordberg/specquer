@@ -115,7 +115,32 @@ export type SectionProblem =
   /** Files holding one document ID (a whole file copied) with no known original, left alone until the user renumbers the copy. */
   | { kind: "copied-document"; paths: string[] }
   /** A folder below the root with a `.specquer` folder of its own, whose section data is ignored. */
-  | { kind: "nested-specquer"; folder: string };
+  | { kind: "nested-specquer"; folder: string }
+  /** A section whose own status (`data-status`) is blank or not allowed for its prefix; `line` is counted in the body. */
+  | { kind: "invalid-status"; path: string; id: string; line: number; value: string; prefix: string }
+  /** A prefix's `prefix.config.yaml` that can't be used: the prefix uses the default statuses. */
+  | PrefixConfigProblem;
+
+/** A prefix's `prefix.config.yaml` that can't be used, and why. */
+export interface PrefixConfigProblem {
+  kind: "prefix-config";
+  prefix: string;
+  /** The file's workspace path. */
+  path: string;
+  problem: "unparsable" | "missing-list" | "empty-list" | "bad-value" | "repeated-value";
+  /** What is wrong, for people. */
+  message: string;
+}
+
+/** The status lists for the sections of a file. */
+export interface SectionStatusLists {
+  /** Whether the file is sectioned; a file that isn't has no statuses. */
+  sectioned: boolean;
+  /** The folder's default prefix, for a root section without an ID; `null` when the file isn't sectioned. */
+  folderPrefix: string | null;
+  /** The allowed statuses of each prefix with a usable `prefix.config.yaml`; other prefixes use the defaults. */
+  statusValues: Record<string, string[]>;
+}
 
 export interface SectionSearchResult extends SectionInfo {
   /** The document's workspace path. */

@@ -1,5 +1,5 @@
 import { init } from "@paralleldrive/cuid2";
-import type { SaveResult, SectionInfo, SectionNotice, SectionProblem, SectionSearchResult } from "@specquer/shared/api";
+import type { SaveResult, SectionInfo, SectionNotice, SectionProblem, SectionSearchResult, SectionStatusLists } from "@specquer/shared/api";
 import {
   type BodyEdit,
   type FoundSection,
@@ -16,10 +16,11 @@ import {
   toLf,
 } from "@specquer/shared/markdown";
 import { baseName, isSameOrInside, renamedPath } from "@specquer/shared/paths";
-import { UID_LENGTH, formatSectionId } from "@specquer/shared/sections";
+import { UID_LENGTH, formatSectionId, sectionStatuses } from "@specquer/shared/sections";
 import type { FileService } from "../files.ts";
 import { gitTrackedFiles } from "../git.ts";
 import { type FolderConfig, FolderConfigs } from "./folder-config.ts";
+import { PrefixConfigs, PrefixSettings } from "./prefix-config.ts";
 import { sectionPrefixes } from "./prefixes.ts";
 import { DataFiles, type SectionData, documentIds, emptyData, emptyPrefixData } from "./data.ts";
 import { type CopiedDocument, type DocumentFix, type Duplicate, type RenumberRequest, type ScannedDocument, reconcile } from "./reconcile.ts";
@@ -82,7 +83,10 @@ interface Anchored {
 export class SectionIndex {
   private readonly configFiles: FolderConfigs;
   private readonly dataFiles: DataFiles;
+  private readonly prefixConfigs: PrefixConfigs;
   private config: FolderConfig | null = null;
+  /** The prefixes' settings (allowed statuses), as last loaded. */
+  private prefixSettings = PrefixSettings.empty;
   private data: SectionData = emptyData();
   private fixes = new Map<string, DocumentFix>();
   private duplicates: Duplicate[] = [];
@@ -112,6 +116,7 @@ export class SectionIndex {
     this.warn = warn ?? ((message) => console.warn(`specquer: ${message}`));
     this.configFiles = new FolderConfigs(files.root, async () => (await files.listFiles()).configs, warn);
     this.dataFiles = new DataFiles(files.root, warn);
+    this.prefixConfigs = new PrefixConfigs(files.root, warn);
   }
 
   /** Runs updates one at a time. */
@@ -121,7 +126,10 @@ export class SectionIndex {
     return result;
   }
 
-  /** Loads the configuration, and the data files when they changed on disk since last read or written. */
+  /**
+   * Loads the configuration and the prefixes' settings, and the data files when they changed on
+   * disk since last read or written.
+   */
   private async load(): Promise<FolderConfig> {
     if (!this.loaded || (await this.dataFiles.changed())) {
       const fresh = await this.dataFiles.read();
@@ -135,7 +143,23 @@ export class SectionIndex {
       this.loaded = true;
     }
     this.config = await this.configFiles.load();
+    this.prefixSettings = await this.prefixConfigs.load();
     return this.config;
+  }
+
+  /** Each section's status, for a document in a folder with this default prefix. */
+  private statusesOf(sections: readonly FoundSection[], folderPrefix: string | undefined) {
+    const settings = this.prefixSettings;
+    return sectionStatuses(sections, { allowed: (prefix) => settings.allowed(prefix), ...(folderPrefix === undefined ? {} : { folderPrefix }) });
+  }
+
+  /** Statuses written in another spelling than the allowed value (case, surrounding spaces), by section. */
+  private statusCorrections(sections: readonly FoundSection[], folderPrefix: string): Map<number, string> {
+    const corrections = new Map<number, string>();
+    this.statusesOf(sections, folderPrefix).forEach((status, index) => {
+      if (status.own !== null && status.canonical !== undefined && status.own !== status.canonical) corrections.set(index, status.canonical);
+    });
+    return corrections;
   }
 
   private knownPrefixes(config: FolderConfig): Set<string> {
@@ -300,7 +324,7 @@ export class SectionIndex {
     const fix = reconciled.fixes.get(path)!;
     const needed = sections.flatMap((section, index) => (section.id === null || fix.renumber.has(index) ? [index] : []));
     if (dryRun) {
-      const changes = needed.length > 0 || fix.restore.size > 0 || fix.uids.size > 0;
+      const changes = needed.length > 0 || fix.restore.size > 0 || fix.uids.size > 0 || this.statusCorrections(sections, prefix).size > 0;
       return { text, edits: changes ? [{ from: 0, to: 0, insert: "" }] : [], notices: [] };
     }
     // New numbers follow the highest known, including IDs typed into this text
@@ -313,7 +337,13 @@ export class SectionIndex {
     const prefixes = sectionPrefixes(sections, prefix, this.knownPrefixes(config));
     const ids = new Map(needed.map((index) => [index, this.nextId(prefixes[index]!)]));
     for (const [index, id] of fix.restore) ids.set(index, id);
-    const edits = anchorEdits(body, sections, { ids, uids: fix.uids });
+    // Statuses are checked against each section's prefix once its new ID is given
+    const renamed = sections.map((section, index) => {
+      const id = ids.get(index);
+      return id === undefined ? section : { ...section, id, requestedPrefix: undefined };
+    });
+    const statuses = this.statusCorrections(renamed, prefix);
+    const edits = anchorEdits(body, sections, { ids, uids: fix.uids, statuses });
     const title = (index: number) => (index === 0 ? baseName(path) : sections[index]!.title);
     const notices: SectionNotice[] = [];
     for (const [index, reason] of fix.renumber) {
@@ -507,12 +537,13 @@ export class SectionIndex {
 
   /**
    * The problems in a folder's sectioned files: nested Specquer folders, whole files copied with
-   * no known original, duplicates and collisions waiting for the user, stray anchors, and files
-   * with merge conflict markers.
+   * no known original, duplicates and collisions waiting for the user, unusable prefix settings
+   * for the prefixes the folder holds, stray anchors, files with merge conflict markers, and
+   * statuses that aren't allowed.
    */
   problems(folder: string): Promise<SectionProblem[]> {
     return this.run(async () => {
-      await this.scanFiles();
+      const config = await this.scanFiles();
       const problems: SectionProblem[] = [];
       for (const nested of this.nested) {
         if (isSameOrInside(nested, folder)) problems.push({ kind: "nested-specquer", folder: nested });
@@ -531,10 +562,19 @@ export class SectionIndex {
           }),
         });
       }
-      for (const doc of [...this.documents.values()].sort((a, b) => (a.path < b.path ? -1 : 1))) {
-        if (!isSameOrInside(doc.path, folder)) continue;
+      const docs = [...this.documents.values()].filter((doc) => isSameOrInside(doc.path, folder)).sort((a, b) => (a.path < b.path ? -1 : 1));
+      const statuses = new Map(docs.map((doc) => [doc.path, this.statusesOf(doc.sections, config.prefixFor(doc.path))]));
+      const held = new Set([...statuses.values()].flatMap((list) => list.flatMap((status) => (status.prefix === undefined ? [] : [status.prefix]))));
+      for (const problem of this.prefixSettings.problems()) if (held.has(problem.prefix)) problems.push(problem);
+      for (const doc of docs) {
         if (doc.frozen) problems.push({ kind: "conflict-markers", path: doc.path });
         for (const stray of doc.strays) problems.push({ kind: "stray", path: doc.path, id: stray.id, line: stray.line });
+        statuses.get(doc.path)!.forEach((status, index) => {
+          const section = doc.sections[index]!;
+          // A placeholder is reported once it has its ID
+          if (status.valid || section.id === null || status.prefix === undefined) return;
+          problems.push({ kind: "invalid-status", path: doc.path, id: section.id, line: section.anchor?.line ?? 1, value: status.own ?? "", prefix: status.prefix });
+        });
       }
       return problems;
     });
@@ -561,6 +601,14 @@ export class SectionIndex {
         return section === undefined ? undefined : { path: doc.path, body, section };
       }
       return undefined;
+    });
+  }
+
+  /** The status lists for a file's sections: whether it is sectioned, its folder's prefix and the allowed values. */
+  statuses(path: string): Promise<SectionStatusLists> {
+    return this.run(async () => {
+      const config = await this.load();
+      return { sectioned: config.isSectioned(path), folderPrefix: config.prefixFor(path) ?? null, statusValues: this.prefixSettings.statusValues() };
     });
   }
 
