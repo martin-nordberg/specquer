@@ -142,3 +142,8 @@ export async function typeAtEnd(editor: Locator, text: string) {
   await editor.press("ControlOrMeta+End");
   await editor.pressSequentially(text);
 }
+
+/** A prefix's `prefix.config.yaml`, as a path and text for `specquer.write` or the `files` option. */
+export function prefixConfig(prefix: string, statusValues: readonly string[]): [string, string] {
+  return [`.specquer/shared/${prefix}/prefix.config.yaml`, `statusValues:\n${statusValues.map((value) => `  - ${value}\n`).join("")}`];
+}

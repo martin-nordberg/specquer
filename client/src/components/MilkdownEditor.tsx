@@ -18,6 +18,9 @@ import { faviconSvg, svgDataUri } from "@/theme/logo";
 
 const badgeUri = svgDataUri(faviconSvg);
 
+/** Events on a badge that ProseMirror leaves alone. */
+const BADGE_EVENTS = new Set(["contextmenu", "mousedown", "mouseup", "pointerdown", "pointerup", "click", "dblclick"]);
+
 /** What the badges need from the editor: the section's status now, and opening the menu. */
 interface BadgeHandlers {
   /** The status of the section with this ID and UID in the Markdown as it is now, if known. */
@@ -77,8 +80,9 @@ function sectionAnchorView(handlers: BadgeHandlers) {
       return {
         dom,
         ignoreMutation: () => true,
-        // The badge's own events aren't editing
-        stopEvent: (event: Event) => event.type === "contextmenu" || (event.type === "keydown" && isMenuKey(event as KeyboardEvent)),
+        // The badge's own events aren't editing: ProseMirror would select the node and take the
+        // focus back from the menu
+        stopEvent: (event: Event) => BADGE_EVENTS.has(event.type) || (event.type === "keydown" && isMenuKey(event as KeyboardEvent)),
       };
     }
     const position = getPos();

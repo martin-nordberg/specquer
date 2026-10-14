@@ -272,58 +272,70 @@ export function Preview({
     [onStepsChange],
   );
 
-  const content = useMemo(() => {
-    if (shownTree === null) return null;
-    const Link = ({ href, children, ...props }: ComponentProps<"a"> & { node?: unknown; "data-section-anchor"?: string; "data-uid"?: string }) => {
-      delete props.node;
-      if (props["data-section-anchor"] !== undefined && typeof props.id === "string") {
-        // The anchor stays (invisible) as the scroll target; the badge stands for it
-        const id = props.id.slice(CLOBBER_PREFIX.length);
-        const uid = props["data-uid"];
-        const info = sections.find((section) => section.id === id && (uid === undefined || section.uid === uid));
-        const status = findSection(statuses, id, uid)?.status;
-        const editable = statusLists?.sectioned === true && onSetStatus !== undefined;
+  // The link component keeps its identity, so badges (and their open menus) aren't remounted
+  // when statuses or problems change; it reads what changes from here when it renders
+  const current = { sections, statuses, statusLists, onSetStatus, conflicted, currentFile, loadSections, onRenumber, openAttributes, onStatusMenu, onOpenFile };
+  const linkData = useRef(current);
+  linkData.current = current;
+  const Link = useMemo(
+    () =>
+      function Link({ href, children, ...props }: ComponentProps<"a"> & { node?: unknown; "data-section-anchor"?: string; "data-uid"?: string }) {
+        const { sections, statuses, statusLists, onSetStatus, conflicted, currentFile, loadSections, onRenumber, openAttributes, onStatusMenu, onOpenFile } =
+          linkData.current;
+        delete props.node;
+        if (props["data-section-anchor"] !== undefined && typeof props.id === "string") {
+          // The anchor stays (invisible) as the scroll target; the badge stands for it
+          const id = props.id.slice(CLOBBER_PREFIX.length);
+          const uid = props["data-uid"];
+          const info = sections.find((section) => section.id === id && (uid === undefined || section.uid === uid));
+          const status = findSection(statuses, id, uid)?.status;
+          const editable = statusLists?.sectioned === true && onSetStatus !== undefined;
+          return (
+            <>
+              <a {...props} />
+              <SectionBadge
+                sectionId={id}
+                {...(uid === undefined ? {} : { uid })}
+                path={currentFile}
+                {...(status === undefined ? {} : { status: badgeStatus(status) })}
+                loadSections={loadSections}
+                problem={info?.problem}
+                {...(onRenumber === undefined ? {} : { onRenumber: () => onRenumber(id, uid ?? null) })}
+                {...(editable ? { onAttributes: () => openAttributes(id, uid ?? null) } : {})}
+                {...(editable && conflicted ? { attributesDisabled: CONFLICT_MARKERS_REASON } : {})}
+                {...(onStatusMenu === undefined ? {} : { onMenuOpen: onStatusMenu })}
+              />
+            </>
+          );
+        }
+        if (href === undefined) return <a {...props}>{children}</a>;
+        if (href.startsWith("#")) return <a href={href} {...props}>{children}</a>;
+        const target = resolveDocumentLink(href, currentFile);
+        if (target !== undefined) {
+          return (
+            <a
+              href={href}
+              {...props}
+              onClick={(event) => {
+                event.preventDefault();
+                onOpenFile(target.path, target.hash === "" ? undefined : decodeURIComponent(target.hash));
+              }}
+            >
+              {children}
+            </a>
+          );
+        }
         return (
-          <>
-            <a {...props} />
-            <SectionBadge
-              sectionId={id}
-              {...(uid === undefined ? {} : { uid })}
-              path={currentFile}
-              {...(status === undefined ? {} : { status: badgeStatus(status) })}
-              loadSections={loadSections}
-              problem={info?.problem}
-              {...(onRenumber === undefined ? {} : { onRenumber: () => onRenumber(id, uid ?? null) })}
-              {...(editable ? { onAttributes: () => openAttributes(id, uid ?? null) } : {})}
-              {...(editable && conflicted ? { attributesDisabled: CONFLICT_MARKERS_REASON } : {})}
-              {...(onStatusMenu === undefined ? {} : { onMenuOpen: onStatusMenu })}
-            />
-          </>
-        );
-      }
-      if (href === undefined) return <a {...props}>{children}</a>;
-      if (href.startsWith("#")) return <a href={href} {...props}>{children}</a>;
-      const target = resolveDocumentLink(href, currentFile);
-      if (target !== undefined) {
-        return (
-          <a
-            href={href}
-            {...props}
-            onClick={(event) => {
-              event.preventDefault();
-              onOpenFile(target.path, target.hash === "" ? undefined : decodeURIComponent(target.hash));
-            }}
-          >
+          <a href={href} target="_blank" rel="noopener noreferrer" {...props}>
             {children}
           </a>
         );
-      }
-      return (
-        <a href={href} target="_blank" rel="noopener noreferrer" {...props}>
-          {children}
-        </a>
-      );
-    };
+      },
+    [],
+  );
+
+  const content = useMemo(() => {
+    if (shownTree === null) return null;
     const Summary = (props: { "data-path"?: string }) => {
       const path = props["data-path"] ?? "";
       const info = shown.get(path);
@@ -340,6 +352,7 @@ export function Preview({
     const components = { a: Link, [SUMMARY_TAG]: Summary } as unknown as Partial<Components>;
     return toJsxRuntime(shownTree, { Fragment, jsx, jsxs, components }) as ReactNode;
   }, [
+    Link,
     shownTree,
     shown,
     entries,
