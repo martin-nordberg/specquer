@@ -3,7 +3,10 @@ import {
   MAX_RECENT_FILES,
   MIN_FILE_PANE_FRACTION,
   paneWidths,
-  setChatOpen,
+  setSidePane,
+  toggleSidePane,
+  setCommentsPaneFraction,
+  setCommentFilter,
   setChatPaneFraction,
   applyUiStatePatch,
   defaultUiState,
@@ -126,22 +129,41 @@ describe("summaryStop", () => {
   });
 });
 
-describe("the chat pane (Step 010)", () => {
+describe("the side pane: chat or comments (Steps 010, 012)", () => {
   test("is closed at 0.3 by default, and invalid values fall back alone", () => {
-    expect(defaultUiState()).toMatchObject({ chatOpen: false, chatPaneFraction: 0.3 });
-    const state = parseUiState({ chatOpen: "yes", chatPaneFraction: 0.9, treePaneFraction: 0.4 });
-    expect(state).toMatchObject({ chatOpen: false, chatPaneFraction: 0.3, treePaneFraction: 0.4 });
-    expect(parseUiState({ chatOpen: true, chatPaneFraction: 0.2 })).toMatchObject({ chatOpen: true, chatPaneFraction: 0.2 });
+    expect(defaultUiState()).toMatchObject({ sidePane: null, chatPaneFraction: 0.3, commentsPaneFraction: 0.3, commentFilter: "open" });
+    const state = parseUiState({ sidePane: "yes", chatPaneFraction: 0.9, commentFilter: "mine", treePaneFraction: 0.4 });
+    expect(state).toMatchObject({ sidePane: null, chatPaneFraction: 0.3, commentFilter: "open", treePaneFraction: 0.4 });
+    expect(parseUiState({ sidePane: "comments", commentsPaneFraction: 0.2, commentFilter: "all" })).toMatchObject({
+      sidePane: "comments",
+      commentsPaneFraction: 0.2,
+      commentFilter: "all",
+    });
+  });
+
+  test("an open chat from before Step 012 stays open", () => {
+    expect(parseUiState({ chatOpen: true })).toMatchObject({ sidePane: "chat" });
+    expect(parseUiState({ chatOpen: false })).toMatchObject({ sidePane: null });
+    expect(parseUiState({ chatOpen: true, sidePane: "comments" })).toMatchObject({ sidePane: "comments" });
+    expect(parseUiState({ chatOpen: true })).not.toHaveProperty("chatOpen");
+  });
+
+  test("the icons toggle three ways: chat, comments, neither", () => {
+    const chat = toggleSidePane(defaultUiState(), "chat");
+    expect(chat.sidePane).toBe("chat");
+    expect(toggleSidePane(chat, "comments").sidePane).toBe("comments");
+    expect(toggleSidePane(chat, "chat").sidePane).toBeNull();
   });
 
   test("setters clamp, and patches carry the fields", () => {
-    const open = setChatOpen(defaultUiState(), true);
-    expect(open.chatOpen).toBe(true);
+    const open = setSidePane(defaultUiState(), "chat");
     expect(setChatPaneFraction(open, 0.9).chatPaneFraction).toBe(0.5);
     expect(setChatPaneFraction(open, 0.01).chatPaneFraction).toBe(0.15);
-    const patch = diffUiState(defaultUiState(), setChatPaneFraction(open, 0.4));
-    expect(patch).toEqual({ chatOpen: true, chatPaneFraction: 0.4 });
-    expect(applyUiStatePatch(defaultUiState(), patch)).toMatchObject({ chatOpen: true, chatPaneFraction: 0.4 });
+    expect(setCommentsPaneFraction(open, 0.9).commentsPaneFraction).toBe(0.5);
+    const patch = diffUiState(defaultUiState(), setCommentFilter(setChatPaneFraction(open, 0.4), "resolved"));
+    expect(patch).toEqual({ sidePane: "chat", chatPaneFraction: 0.4, commentFilter: "resolved" });
+    expect(applyUiStatePatch(defaultUiState(), patch)).toMatchObject({ sidePane: "chat", chatPaneFraction: 0.4, commentFilter: "resolved" });
+    expect(applyUiStatePatch(open, { sidePane: null }).sidePane).toBeNull();
   });
 
   test("paneWidths keeps the file pane at 30% or more, the chat pane giving way first", () => {
@@ -149,7 +171,7 @@ describe("the chat pane (Step 010)", () => {
     const check = (tree: number, chat: number, open: boolean, expected: [number, number]) => {
       const widths = paneWidths(tree, chat, open);
       close(widths.tree, expected[0]);
-      close(widths.chat, expected[1]);
+      close(widths.right, expected[1]);
       close(widths.file, 1 - expected[0] - expected[1]);
     };
     check(0.25, 0.3, true, [0.25, 0.3]);

@@ -63,7 +63,7 @@ test("a citation opens its section's current file in Preview; one found nowhere 
     { n: 2, path: "gone.md", outlinePath: "0", title: "Gone" },
   ];
   const api = {
-    getUiState: async () => ({ ...defaultUiState(), currentFile: "a.md", chatOpen: true }),
+    getUiState: async () => ({ ...defaultUiState(), currentFile: "a.md", sidePane: "chat" }),
     getTree: async () => tree,
     readFile,
     saveFile: async () => ({ kind: "saved" as const, version: "v2" }),

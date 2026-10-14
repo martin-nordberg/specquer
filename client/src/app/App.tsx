@@ -7,7 +7,7 @@ import {
   closeFile,
   fileUiState,
   openFile,
-  setChatOpen,
+  setSidePane,
   setChatPaneFraction,
   setFolderExpanded,
   setFrontmatterHeight,
@@ -130,12 +130,12 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
   }, [summaryStatus]);
   // The conversation: loaded when the pane opens, and again when the tab gets focus
   useEffect(() => {
-    if (!ui.chatOpen) return;
+    if (ui.sidePane !== "chat") return;
     void chatStore.load();
     const onFocus = () => void chatStore.load();
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
-  }, [ui.chatOpen, chatStore]);
+  }, [ui.sidePane, chatStore]);
   useEffect(() => {
     loadSummaryStatus();
     window.addEventListener("focus", loadSummaryStatus);
@@ -530,7 +530,7 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
           Specquer
         </span>
         <span className="flex items-center gap-1">
-          <ChatToggle open={ui.chatOpen} onChange={(next) => uiStore.update((s) => setChatOpen(s, next))} />
+          <ChatToggle open={ui.sidePane === "chat"} onChange={(next) => uiStore.update((s) => setSidePane(s, next ? "chat" : null))} />
           <ThemeToggle theme={theme} onChange={(next) => uiStore.update((s) => setTheme(s, next))} />
           <SettingsButton onClick={() => setSettingsOpen(true)} />
         </span>
@@ -539,7 +539,7 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
         <PaneLayout
           treeFraction={ui.treePaneFraction}
           chatFraction={ui.chatPaneFraction}
-          chatOpen={ui.chatOpen}
+          chatOpen={ui.sidePane === "chat"}
           onTreeFractionChange={(fraction) => uiStore.update((s) => setTreePaneFraction(s, fraction))}
           onChatFractionChange={(fraction) => uiStore.update((s) => setChatPaneFraction(s, fraction))}
           left={left}

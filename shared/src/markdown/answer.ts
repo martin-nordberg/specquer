@@ -45,13 +45,41 @@ function plainText(node: MdastNodes): string {
 /** Parents whose children are blocks. */
 const BLOCK_PARENTS = new Set(["root", "blockquote", "listItem", "footnoteDefinition"]);
 
+/** A link's text, followed by its URL when the text doesn't already say it. */
+function linkText(text: string, url: string): string {
+  const same = text === url || `mailto:${text}` === url || `http://${text}` === url;
+  return text === "" ? url : same ? text : `${text} (${url})`;
+}
+
+export interface RestrictOptions {
+  /**
+   * Comments (Step 012): images and reference links become their text (or alt text) and URL, the
+   * URL looked up in the definitions, which then show nothing. Otherwise (answers) they show as
+   * their source text, and so do definitions.
+   */
+  resolveReferences?: boolean;
+}
+
+/** The URLs of a tree's link and image definitions, by normalized label. */
+function definitionsOf(tree: MdastRoot): Map<string, string> {
+  const urls = new Map<string, string>();
+  const visit = (node: MdastNodes) => {
+    if (node.type === "definition" && !urls.has(node.identifier)) urls.set(node.identifier, node.url);
+    if ("children" in node) for (const child of node.children as MdastNodes[]) visit(child);
+  };
+  visit(tree);
+  return urls;
+}
+
 /**
- * Restricts the syntax tree to the answer subset: headings become bold paragraphs; HTML, images,
- * footnotes and definitions become their source text; links become their text and URL.
+ * Restricts the syntax tree to a subset without links or images: headings become bold
+ * paragraphs; HTML, footnotes and (for answers) images and definitions become their source text;
+ * links become their text and URL.
  */
-function remarkRestrict() {
+export function remarkRestrict(options: RestrictOptions = {}) {
   return (tree: MdastRoot, file: { value: unknown }) => {
     const source = String(file.value);
+    const definitions = options.resolveReferences === true ? definitionsOf(tree) : null;
     const visit = (parent: MdastParent) => {
       const children: MdastNodes[] = [];
       for (const child of parent.children as MdastNodes[]) {
@@ -67,22 +95,30 @@ function remarkRestrict() {
             break;
           }
           case "image":
-          case "imageReference":
+            children.push(textNode(definitions === null ? sourceOf(child, source) : linkText(child.alt ?? "", child.url)));
+            break;
+          case "imageReference": {
+            const url = definitions?.get(child.identifier);
+            children.push(textNode(url === undefined ? sourceOf(child, source) : linkText(child.alt ?? "", url)));
+            break;
+          }
           case "footnoteReference":
             children.push(textNode(sourceOf(child, source)));
             break;
           case "definition":
+            if (definitions === null) children.push({ type: "paragraph", children: [textNode(sourceOf(child, source))] });
+            break;
           case "footnoteDefinition":
             children.push({ type: "paragraph", children: [textNode(sourceOf(child, source))] });
             break;
-          case "link": {
-            const text = plainText(child);
-            children.push(textNode(text === child.url || `mailto:${text}` === child.url ? text : `${text} (${child.url})`));
+          case "link":
+            children.push(textNode(linkText(plainText(child), child.url)));
+            break;
+          case "linkReference": {
+            const url = definitions?.get(child.identifier);
+            children.push(textNode(url === undefined ? sourceOf(child, source) || plainText(child) : linkText(plainText(child), url)));
             break;
           }
-          case "linkReference":
-            children.push(textNode(sourceOf(child, source) || plainText(child)));
-            break;
           default:
             if ("children" in child) visit(child);
             children.push(child);

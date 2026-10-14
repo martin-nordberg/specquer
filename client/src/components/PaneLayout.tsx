@@ -35,7 +35,7 @@ export function PaneLayout({ treeFraction, chatFraction, chatOpen, onTreeFractio
   const widths = paneWidths(drag.tree ?? treeFraction, drag.chat ?? chatFraction, chatOpen);
   const room = 1 - MIN_FILE_PANE_FRACTION;
   // A pane can grow only as far as the file pane's minimum allows, given the other pane's width
-  const treeMax = Math.min(MAX_TREE_PANE_FRACTION, room - widths.chat);
+  const treeMax = Math.min(MAX_TREE_PANE_FRACTION, room - widths.right);
   const chatMax = Math.min(MAX_CHAT_PANE_FRACTION, room - widths.tree);
   const clampTree = (value: number) => clamp(value, MIN_TREE_PANE_FRACTION, Math.max(MIN_TREE_PANE_FRACTION, treeMax));
   const clampChat = (value: number) => clamp(value, MIN_CHAT_PANE_FRACTION, Math.max(MIN_CHAT_PANE_FRACTION, chatMax));
@@ -67,7 +67,7 @@ export function PaneLayout({ treeFraction, chatFraction, chatOpen, onTreeFractio
         <>
           <Separator
             label="Resize the chat pane"
-            value={widths.chat}
+            value={widths.right}
             min={MIN_CHAT_PANE_FRACTION}
             max={chatMax}
             // Dragging left widens the chat pane
@@ -76,9 +76,9 @@ export function PaneLayout({ treeFraction, chatFraction, chatOpen, onTreeFractio
               onChatFractionChange(clampChat(1 - at(clientX)));
               setDrag({});
             }}
-            onKey={(delta) => onChatFractionChange(clampChat(widths.chat - delta))}
+            onKey={(delta) => onChatFractionChange(clampChat(widths.right - delta))}
           />
-          <div className="h-full min-w-0 overflow-hidden" style={{ width: `${widths.chat * 100}%` }}>
+          <div className="h-full min-w-0 overflow-hidden" style={{ width: `${widths.right * 100}%` }}>
             {right}
           </div>
         </>

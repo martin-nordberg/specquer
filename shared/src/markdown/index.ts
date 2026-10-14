@@ -4,3 +4,4 @@ export * from "./sections.ts";
 export * from "./outline.ts";
 export * from "./summary-tree.ts";
 export * from "./answer.ts";
+export * from "./comment.ts";

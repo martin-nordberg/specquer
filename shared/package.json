@@ -27,6 +27,7 @@
     "./sections": "./src/sections/index.ts",
     "./summaries": "./src/summaries/index.ts",
     "./settings": "./src/settings/index.ts",
-    "./chat": "./src/chat/index.ts"
+    "./chat": "./src/chat/index.ts",
+    "./comments": "./src/comments/index.ts"
   }
 }

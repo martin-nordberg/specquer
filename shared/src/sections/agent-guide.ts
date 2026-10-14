@@ -21,6 +21,7 @@ export const AGENT_GUIDE = [
   "- Never edit, copy or invent an `id` or a `data-uid`; when copying a section, leave its anchor out. The one exception: to give a section another prefix, replace only its `id` with `XYZ-?` (`XYZ` the prefix), keeping its `data-uid`.",
   '- For a new section, write `<a id=""></a>` before its heading (or at the start of its list item) and Specquer assigns the ID, in its parent section\'s prefix; `<a id="XYZ-?"></a>` asks for prefix `XYZ`.',
   `- Change a section's \`data-status\` only when asked to, and only to a value allowed for its prefix (\`.specquer/shared/<prefix>/prefix.config.yaml\`, or else ${DEFAULT_STATUS_VALUES.join(", ")}).`,
+  "- A document's comment threads are in `<name>.md.comments.yaml` beside it. When moving, renaming or deleting a document, move, rename or delete that file with it; otherwise leave it alone.",
 ].join("\n");
 
 /** Whether a file's text already holds the guide. */

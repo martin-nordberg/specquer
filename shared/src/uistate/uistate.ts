@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { type CommentFilter, commentFilterSchema } from "../comments/comments.ts";
 import { isSameOrInside, renamedPath } from "../paths/paths.ts";
 
 /**
@@ -26,6 +27,10 @@ export const viewTypeSchema = z.enum(viewTypes);
 export type ViewType = z.infer<typeof viewTypeSchema>;
 
 export const themeSchema = z.enum(["light", "dark"]);
+
+/** What the third pane shows: AI Chat, Comments, or nothing (`null`) (Step 012, R1.3). */
+export const sidePaneSchema = z.enum(["chat", "comments"]);
+export type SidePane = z.infer<typeof sidePaneSchema>;
 export type Theme = z.infer<typeof themeSchema>;
 
 export const fileUiStateSchema = z.object({
@@ -55,14 +60,22 @@ export const uiStateSchema = z.object({
     .min(MIN_TREE_PANE_FRACTION)
     .max(MAX_TREE_PANE_FRACTION)
     .catch(DEFAULT_TREE_PANE_FRACTION),
-  /** Whether the chat pane is open (Step 010). */
-  chatOpen: z.boolean().catch(false),
+  /** The pane open in the third pane's place, if any (Step 012; before it, `chatOpen`). */
+  sidePane: sidePaneSchema.nullable().catch(null),
   /** Width of the chat pane as a fraction of the window. */
   chatPaneFraction: z
     .number()
     .min(MIN_CHAT_PANE_FRACTION)
     .max(MAX_CHAT_PANE_FRACTION)
     .catch(DEFAULT_CHAT_PANE_FRACTION),
+  /** Width of the Comments pane, with the chat pane's limits. */
+  commentsPaneFraction: z
+    .number()
+    .min(MIN_CHAT_PANE_FRACTION)
+    .max(MAX_CHAT_PANE_FRACTION)
+    .catch(DEFAULT_CHAT_PANE_FRACTION),
+  /** Which comment threads the pane, the pips and F8 show. */
+  commentFilter: commentFilterSchema.catch("open"),
   expandedFolders: pathListSchema.catch([]),
   /** Most recent first, excluding the current file. */
   recentFiles: pathListSchema.transform((paths) => paths.slice(0, MAX_RECENT_FILES)).catch([]),
@@ -86,8 +99,10 @@ export const uiStatePatchSchema = z
   .object({
     theme: themeSchema.nullable(),
     treePaneFraction: z.number().min(MIN_TREE_PANE_FRACTION).max(MAX_TREE_PANE_FRACTION),
-    chatOpen: z.boolean(),
+    sidePane: sidePaneSchema.nullable(),
     chatPaneFraction: z.number().min(MIN_CHAT_PANE_FRACTION).max(MAX_CHAT_PANE_FRACTION),
+    commentsPaneFraction: z.number().min(MIN_CHAT_PANE_FRACTION).max(MAX_CHAT_PANE_FRACTION),
+    commentFilter: commentFilterSchema,
     expandedFolders: z.array(z.string()),
     recentFiles: z.array(z.string()).max(MAX_RECENT_FILES),
     currentFile: z.string().nullable(),
@@ -100,8 +115,10 @@ export function defaultUiState(): UiState {
   return {
     version: UI_STATE_VERSION,
     treePaneFraction: DEFAULT_TREE_PANE_FRACTION,
-    chatOpen: false,
+    sidePane: null,
     chatPaneFraction: DEFAULT_CHAT_PANE_FRACTION,
+    commentsPaneFraction: DEFAULT_CHAT_PANE_FRACTION,
+    commentFilter: "open",
     expandedFolders: [],
     recentFiles: [],
     files: {},
@@ -110,6 +127,10 @@ export function defaultUiState(): UiState {
 
 /** Parses stored content, replacing anything invalid with defaults. */
 export function parseUiState(value: unknown): UiState {
+  // Before Step 012, an open chat pane was `chatOpen: true`
+  if (typeof value === "object" && value !== null && !("sidePane" in value) && (value as { chatOpen?: unknown }).chatOpen === true) {
+    value = { ...value, sidePane: "chat" };
+  }
   const parsed = uiStateSchema.safeParse(value ?? {});
   return parsed.success ? parsed.data : defaultUiState();
 }
@@ -129,8 +150,10 @@ export function diffUiState(from: UiState, to: UiState): UiStatePatch {
   const patch: UiStatePatch = {};
   if (from.theme !== to.theme) patch.theme = to.theme ?? null;
   if (from.treePaneFraction !== to.treePaneFraction) patch.treePaneFraction = to.treePaneFraction;
-  if (from.chatOpen !== to.chatOpen) patch.chatOpen = to.chatOpen;
+  if (from.sidePane !== to.sidePane) patch.sidePane = to.sidePane;
   if (from.chatPaneFraction !== to.chatPaneFraction) patch.chatPaneFraction = to.chatPaneFraction;
+  if (from.commentsPaneFraction !== to.commentsPaneFraction) patch.commentsPaneFraction = to.commentsPaneFraction;
+  if (from.commentFilter !== to.commentFilter) patch.commentFilter = to.commentFilter;
   if (!same(from.expandedFolders, to.expandedFolders)) patch.expandedFolders = to.expandedFolders;
   if (!same(from.recentFiles, to.recentFiles)) patch.recentFiles = to.recentFiles;
   if (from.currentFile !== to.currentFile) patch.currentFile = to.currentFile ?? null;
@@ -203,27 +226,41 @@ export function clampChatPaneFraction(fraction: number): number {
   return Math.min(MAX_CHAT_PANE_FRACTION, Math.max(MIN_CHAT_PANE_FRACTION, fraction));
 }
 
-export function setChatOpen(state: UiState, open: boolean): UiState {
-  return state.chatOpen === open ? state : { ...state, chatOpen: open };
+/** Opens a pane in the third pane's place (closing the other), or closes it (`null`). */
+export function setSidePane(state: UiState, pane: SidePane | null): UiState {
+  return state.sidePane === pane ? state : { ...state, sidePane: pane };
+}
+
+/** The icons' three-way toggle: an icon opens its pane, or closes it when it is open. */
+export function toggleSidePane(state: UiState, pane: SidePane): UiState {
+  return setSidePane(state, state.sidePane === pane ? null : pane);
 }
 
 export function setChatPaneFraction(state: UiState, fraction: number): UiState {
   return { ...state, chatPaneFraction: clampChatPaneFraction(fraction) };
 }
 
+export function setCommentsPaneFraction(state: UiState, fraction: number): UiState {
+  return { ...state, commentsPaneFraction: clampChatPaneFraction(fraction) };
+}
+
+export function setCommentFilter(state: UiState, filter: CommentFilter): UiState {
+  return state.commentFilter === filter ? state : { ...state, commentFilter: filter };
+}
+
 /**
  * The widths shown, as fractions of the window: the file pane keeps at least
- * `MIN_FILE_PANE_FRACTION`, the chat pane giving way first (down to its minimum), then the folder
- * pane (Step 010, R1.4). The stored fractions aren't changed, so closing the chat restores the
- * folder pane's own width.
+ * `MIN_FILE_PANE_FRACTION`, the right pane (chat or comments) giving way first (down to its
+ * minimum), then the folder pane (Step 010, R1.4). The stored fractions aren't changed, so
+ * closing the right pane restores the folder pane's own width.
  */
-export function paneWidths(tree: number, chat: number, chatOpen: boolean): { tree: number; chat: number; file: number } {
+export function paneWidths(tree: number, right: number, rightOpen: boolean): { tree: number; right: number; file: number } {
   let shownTree = clampTreePaneFraction(tree);
-  let shownChat = chatOpen ? clampChatPaneFraction(chat) : 0;
+  let shownRight = rightOpen ? clampChatPaneFraction(right) : 0;
   const room = 1 - MIN_FILE_PANE_FRACTION;
-  if (shownTree + shownChat > room && chatOpen) shownChat = Math.max(MIN_CHAT_PANE_FRACTION, room - shownTree);
-  if (shownTree + shownChat > room) shownTree = Math.max(MIN_TREE_PANE_FRACTION, room - shownChat);
-  return { tree: shownTree, chat: shownChat, file: 1 - shownTree - shownChat };
+  if (shownTree + shownRight > room && rightOpen) shownRight = Math.max(MIN_CHAT_PANE_FRACTION, room - shownTree);
+  if (shownTree + shownRight > room) shownTree = Math.max(MIN_TREE_PANE_FRACTION, room - shownRight);
+  return { tree: shownTree, right: shownRight, file: 1 - shownTree - shownRight };
 }
 
 export function setFolderExpanded(state: UiState, folder: string, expanded: boolean): UiState {
