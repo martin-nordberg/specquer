@@ -1,5 +1,5 @@
 # Specquer's sections for one prefix, by unique ID; written by Specquer. Commit this file.
-lastSequence: 484
+lastSequence: 505
 sections:
   n8w0w4eq2ka6: { id: WORK-00001, documentId: n8w0w4eq2ka6 }
   o2v741k9khzq: { id: WORK-00002, documentId: n8w0w4eq2ka6 }
@@ -447,6 +447,25 @@ sections:
   xc7hhgpkn9pd: { id: WORK-00482, documentId: hpgwi7vvuexp }
   u9v74ddil2fl: { id: WORK-00483, documentId: hpgwi7vvuexp }
   p917yzd90g2b: { id: WORK-00484, documentId: hpgwi7vvuexp }
+  iemnotj3mhqx: { id: WORK-00485, documentId: iemnotj3mhqx }
+  l0zeqoo9kfrg: { id: WORK-00486, documentId: iemnotj3mhqx }
+  wyrvj9kz262k: { id: WORK-00487, documentId: iemnotj3mhqx }
+  wh27872709l9: { id: WORK-00488, documentId: iemnotj3mhqx }
+  stks3gc0z4s0: { id: WORK-00489, documentId: iemnotj3mhqx }
+  fhywxavlgwr6: { id: WORK-00490, documentId: iemnotj3mhqx }
+  ki3skgvt2kbx: { id: WORK-00491, documentId: iemnotj3mhqx }
+  w1kjbl05n88w: { id: WORK-00492, documentId: iemnotj3mhqx }
+  ghst0sg7mr4n: { id: WORK-00493, documentId: iemnotj3mhqx }
+  gia0haa8um3j: { id: WORK-00496, documentId: iemnotj3mhqx }
+  jb725c4t7w1o: { id: WORK-00497, documentId: iemnotj3mhqx }
+  g7qgvxzwu9bb: { id: WORK-00498, documentId: iemnotj3mhqx }
+  ho6ossa45cqe: { id: WORK-00499, documentId: iemnotj3mhqx }
+  lw752h8eptdg: { id: WORK-00500, documentId: iemnotj3mhqx }
+  uxa7en1n887s: { id: WORK-00501, documentId: iemnotj3mhqx }
+  e6ggo7zf3nf4: { id: WORK-00502, documentId: iemnotj3mhqx }
+  ecvso74955w3: { id: WORK-00503, documentId: iemnotj3mhqx }
+  sbe6n7thcmev: { id: WORK-00504, documentId: iemnotj3mhqx }
+  ykpaf28k3d98: { id: WORK-00505, documentId: iemnotj3mhqx }
 retired:
   xr6chk1oivmk: { id: WORK-00230 }
   cf99s3al8ng9: { id: WORK-00232 }
@@ -458,3 +477,5 @@ retired:
   pb1xdme80f3s: { id: WORK-00442 }
   f66z4q1ufk0o: { id: WORK-00443 }
   qwf2pvy020q2: { id: WORK-00444 }
+  flstqnbj3ob7: { id: WORK-00494 }
+  wai42eackn4w: { id: WORK-00495 }
