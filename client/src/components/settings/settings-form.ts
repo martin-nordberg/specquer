@@ -114,6 +114,7 @@ export const CHAT_LIMITS: Record<ChatSettingKey, string> = {
   contextTokens: "Enter a whole number from 1,000 to 100,000.",
   historyTurns: "Enter a whole number from 0 to 50.",
   historyTokens: "Enter a whole number from 0 to 100,000.",
+  answerTokens: "Enter a whole number from 256 to 32,000.",
 };
 
 /** A chat number as typed, or `undefined` when it isn't valid for the setting. */

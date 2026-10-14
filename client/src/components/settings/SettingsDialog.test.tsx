@@ -7,8 +7,8 @@ import { buildUpdates, emptyModelDraft, emptySummaryDraft } from "./settings-for
 
 const MODEL = { provider: "nvidia" as const, name: "google/gemma-4-31b-it", baseUrl: "https://integrate.api.nvidia.com/v1", apiKeyEnv: "NVIDIA_API_KEY" };
 
-const CHAT_DEFAULTS = { units: 8, contextTokens: 12_000, historyTurns: 10, historyTokens: 8_000 };
-const CHAT_SOURCES = { units: "default", contextTokens: "default", historyTurns: "default", historyTokens: "default" } as const;
+const CHAT_DEFAULTS = { units: 8, contextTokens: 12_000, historyTurns: 10, historyTokens: 8_000, answerTokens: 4_000 };
+const CHAT_SOURCES = { units: "default", contextTokens: "default", historyTurns: "default", historyTokens: "default", answerTokens: "default" } as const;
 
 const SETTINGS: AgentSettings = {
   shared: { version: "v-shared", model: MODEL, summaries: { concurrency: 2 }, chat: {}, warnings: [] },

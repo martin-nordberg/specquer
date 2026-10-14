@@ -92,7 +92,7 @@ export class ChatService {
    * and the text so far is kept as a stopped answer.
    */
   async ask(request: ChatRequest, signal: AbortSignal): Promise<AsyncIterable<ChatEvent>> {
-    const { config, model } = await this.runtime.current();
+    const { config, chatModel: model } = await this.runtime.current();
     if (!model.ok) throw new ApiError(503, "not_configured", model.problem);
     const started = this.now();
     return this.answer(request, signal, started, config.chat, model);
@@ -102,7 +102,7 @@ export class ChatService {
     request: ChatRequest,
     signal: AbortSignal,
     started: number,
-    settings: { units: number; contextTokens: number; historyTurns: number; historyTokens: number },
+    settings: { units: number; contextTokens: number; historyTurns: number; historyTokens: number; answerTokens: number },
     model: Extract<Awaited<ReturnType<ModelRuntime["current"]>>["model"], { ok: true }>,
   ): AsyncGenerator<ChatEvent> {
     yield { type: "status", phase: "searching" };

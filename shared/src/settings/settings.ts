@@ -60,6 +60,8 @@ export const chatSettingSchemas = {
   historyTurns: z.number().int().min(0).max(50),
   /** Their budget, in estimated tokens. */
   historyTokens: z.number().int().min(0).max(100_000),
+  /** The longest answer, in tokens: the model stops there. */
+  answerTokens: z.number().int().min(256).max(32_000),
 };
 
 export const chatConfigSchema = z.object({
@@ -67,10 +69,11 @@ export const chatConfigSchema = z.object({
   contextTokens: chatSettingSchemas.contextTokens.default(12_000),
   historyTurns: chatSettingSchemas.historyTurns.default(10),
   historyTokens: chatSettingSchemas.historyTokens.default(8_000),
+  answerTokens: chatSettingSchemas.answerTokens.default(4_000),
 });
 export type ChatConfig = z.infer<typeof chatConfigSchema>;
 
-export const CHAT_SETTING_KEYS = ["units", "contextTokens", "historyTurns", "historyTokens"] as const;
+export const CHAT_SETTING_KEYS = ["units", "contextTokens", "historyTurns", "historyTokens", "answerTokens"] as const;
 export type ChatSettingKey = (typeof CHAT_SETTING_KEYS)[number];
 
 export const DEFAULT_CHAT: ChatConfig = chatConfigSchema.parse({});

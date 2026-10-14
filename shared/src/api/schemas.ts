@@ -298,6 +298,7 @@ export const agentSettingsUpdateSchema = z.object({
       contextTokens: chatSettingSchemas.contextTokens.nullable().optional(),
       historyTurns: chatSettingSchemas.historyTurns.nullable().optional(),
       historyTokens: chatSettingSchemas.historyTokens.nullable().optional(),
+      answerTokens: chatSettingSchemas.answerTokens.nullable().optional(),
     })
     .default({}),
 });

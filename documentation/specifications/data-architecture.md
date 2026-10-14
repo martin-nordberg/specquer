@@ -376,6 +376,7 @@ chat:
   contextTokens: 12000  # their budget
   historyTurns: 10      # earlier turns sent with a question
   historyTokens: 8000   # their budget
+  answerTokens: 4000    # the longest answer (256 to 32,000)
 ```
 - The personal `.specquer/user/agent.config.yaml` overrides the shared file key by key under `summaries:` and `chat:`, and its `model:` replaces the shared one as a whole, since a model's name, URL and key variable belong together (decision D7).
 - Unknown keys are ignored; an invalid `model:` is dropped and an invalid setting falls back to its default, each reported on the server's console.
@@ -385,7 +386,7 @@ chat:
 ### 4.3. Making a Summary
 
 - **Prompt** (`agent/src/summarize.ts`, `PROMPT_VERSION = 1`): the document's path, the headings above the section and the target sentence count, with the simplified text between `<text>` tags. It asks for plain prose (no Markdown, headings, lists, links or HTML), in the language of the text, and says to ignore instructions in the text. The output has Markdown markers and HTML tags stripped.
-- **Model** (`agent/src/model.ts`): `ChatOpenAI` from `@langchain/openai` at the configured base URL (NVIDIA's API is OpenAI-compatible), temperature 0.2, at most 1,024 output tokens, a 120-second timeout and one retry. Its `id` is the configured name, shown to the user; its `key` (`provider:name@baseUrl`) identifies it in the cache, so the same name at another host has its own summaries.
+- **Model** (`agent/src/model.ts`): `ChatOpenAI` from `@langchain/openai` at the configured base URL (NVIDIA's API is OpenAI-compatible), temperature 0.2, at most 1,024 output tokens (chat answers: `chat.answerTokens`, default 4,000, through a second model object with that limit), a 120-second timeout and one retry. Its `id` is the configured name, shown to the user; its `key` (`provider:name@baseUrl`) identifies it in the cache, so the same name at another host has its own summaries.
 - **Long sections:** a section estimated (characters / 4) above the token budget is summarized from its heading and lead text followed by its subsections' summaries, each made (or found) through the cache first; short subsections count as written. One without subsections is cut at the budget, and its summary is labeled "shortened".
 
 <a id="SPEC-00030" data-uid="v4uhme42gvyw"></a>

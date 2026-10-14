@@ -6,7 +6,8 @@ import { CallQueue } from "./summaries/queue.ts";
  * What the agent features share (Step 010, decision D1): the agent configuration (read again when
  * it changes), the model it names (resolved again when the configuration or the key changes), and
  * the call queue, so `summaries.concurrency` limits summaries and chat together, and with them the
- * calls to the provider.
+ * calls to the provider. Chat answers get their own model object, the same model with the longer
+ * output limit `chat.answerTokens`.
  */
 
 export interface ModelRuntimeOptions {
@@ -23,6 +24,7 @@ export class ModelRuntime {
   private readonly config: AgentConfigFiles;
   private concurrencySetting = 2;
   private resolved: { signature: string; model: ResolvedModel } | null = null;
+  private resolvedChat: { signature: string; model: ResolvedModel } | null = null;
 
   constructor(root: string, options: ModelRuntimeOptions = {}) {
     this.env = options.env ?? process.env;
@@ -36,14 +38,18 @@ export class ModelRuntime {
     return this.concurrencySetting;
   }
 
-  /** The configuration in effect and its model. */
-  async current(): Promise<{ config: AgentConfig; model: ResolvedModel }> {
+  /** The configuration in effect, its model, and the model for chat answers. */
+  async current(): Promise<{ config: AgentConfig; model: ResolvedModel; chatModel: ResolvedModel }> {
     const config = await this.config.load();
     this.concurrencySetting = config.summaries.concurrency;
     const key = config.model === undefined ? undefined : this.env[config.model.apiKeyEnv];
     const signature = JSON.stringify([config.model, key]);
     if (this.resolved?.signature !== signature) this.resolved = { signature, model: this.createModel(config.model, this.env) };
-    return { config, model: this.resolved.model };
+    const chatSignature = JSON.stringify([config.model, key, config.chat.answerTokens]);
+    if (this.resolvedChat?.signature !== chatSignature) {
+      this.resolvedChat = { signature: chatSignature, model: this.createModel(config.model, this.env, { maxTokens: config.chat.answerTokens }) };
+    }
+    return { config, model: this.resolved.model, chatModel: this.resolvedChat.model };
   }
 
   /** Whether an environment variable is set (for the settings dialog; never its value). */

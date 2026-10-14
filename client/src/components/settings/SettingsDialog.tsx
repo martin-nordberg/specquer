@@ -566,6 +566,7 @@ const CHAT_FIELDS: Record<ChatSettingKey, { label: string; help: string }> = {
   contextTokens: { label: "Sections' token budget", help: "At most this many tokens of those sections; longer ones are cut (1,000 to 100,000)." },
   historyTurns: { label: "Earlier questions sent", help: "How many earlier questions and answers are sent with a new question (0 to 50)." },
   historyTokens: { label: "Earlier questions' token budget", help: "At most this many tokens of them, newest first (0 to 100,000)." },
+  answerTokens: { label: "Longest answer", help: "The most tokens an answer can have; the model stops there (256 to 32,000)." },
 };
 
 function ChatTab({

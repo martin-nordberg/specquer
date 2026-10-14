@@ -26,9 +26,13 @@ export function modelKey(config: ModelConfig): string {
 /** How long one call may take. */
 export const MODEL_TIMEOUT = 120_000;
 
-/** Overrides for one use, such as the model test's shorter timeout. */
+/** The most output tokens a call may produce, unless the use sets its own (chat answers do). */
+export const MAX_OUTPUT_TOKENS = 1024;
+
+/** Overrides for one use, such as the model test's shorter timeout or the chat's longer answers. */
 export interface ChatModelOptions {
   timeout?: number;
+  maxTokens?: number;
   maxRetries?: number;
 }
 
@@ -47,7 +51,7 @@ export function createChatModel(
     apiKey,
     configuration: { baseURL: config.baseUrl },
     temperature: 0.2,
-    maxTokens: 1024,
+    maxTokens: options.maxTokens ?? MAX_OUTPUT_TOKENS,
     timeout: options.timeout ?? MODEL_TIMEOUT,
     // Rate limits are reported to the user, who can retry, rather than retried for minutes
     maxRetries: options.maxRetries ?? 1,

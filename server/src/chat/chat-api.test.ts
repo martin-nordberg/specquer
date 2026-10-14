@@ -52,10 +52,13 @@ async function setup(files: Record<string, string>, stub: StubOptions = {}) {
   const temp = await tempRoot({ [SHARED]: CONFIG, ...files }, { git: true });
   cleanups.push(temp.cleanup);
   const fake = stubModel(stub);
+  /** The output limits models were created with. */
+  const maxTokens: Array<number | undefined> = [];
   const app = testApp(temp.root, undefined, {
     env: { TEST_KEY: "secret" },
-    createModel: (config, env) => {
-      const real = createChatModel(config, env);
+    createModel: (config, env, options) => {
+      maxTokens.push(options?.maxTokens);
+      const real = createChatModel(config, env, options);
       return real.ok ? { ...real, model: fake.model } : real;
     },
     warn: () => {},
@@ -76,7 +79,7 @@ async function setup(files: Record<string, string>, stub: StubOptions = {}) {
       body: JSON.stringify({ question, ...(openFile === undefined ? {} : { openFile }) }),
       ...(init.signal === undefined ? {} : { signal: init.signal }),
     });
-  return { root: temp.root, ...app, ...fake, ask };
+  return { root: temp.root, ...app, ...fake, ask, maxTokens };
 }
 
 /** The events of a stream's body. */
@@ -114,6 +117,16 @@ test("a question streams status, citations, the answer and done, and is kept in 
   const history = (await (await request("/api/chat/history")).json()) as { turns: ChatTurn[] };
   expect(history.turns).toHaveLength(1);
   expect(history.turns[0]!.answer).toMatchObject({ text: "The answer is in the specs [1].", stopped: false, citations });
+});
+
+test("answers get their own output limit, chat.answerTokens", async () => {
+  const { ask, maxTokens, root } = await setup(SPECS);
+  await events(await ask("copies?"));
+  expect(maxTokens).toContain(4_000);
+  await Bun.write(join(root, SHARED), `${CONFIG}chat:\n  answerTokens: 8000\n`);
+  await Bun.sleep(20);
+  await events(await ask("copies?"));
+  expect(maxTokens).toContain(8_000);
 });
 
 test("a citation keeps its section ID only where the section index holds it", async () => {

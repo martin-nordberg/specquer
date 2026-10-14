@@ -326,7 +326,7 @@ The requirements' Precedence table applies. This plan adds:
     The question and the earlier turns go in their own messages, not inside a tag, and aren't escaped.
 - **`streamAnswer(model, messages, signal): AsyncIterable<string>`:** `model.stream(messages, { signal })`, yielding each chunk's text. It uses `messageText` from `summarize.ts`, moved to a shared helper.
 - **Configuration:**
-  - `chatConfigSchema` in `shared/src/settings/settings.ts`: `units` 1–20 (8), `contextTokens` 1,000–100,000 (12,000), `historyTurns` 0–50 (10), `historyTokens` 0–100,000 (8,000);
+  - `chatConfigSchema` in `shared/src/settings/settings.ts`: `units` 1–20 (8), `contextTokens` 1,000–100,000 (12,000), `historyTurns` 0–50 (10), `historyTokens` 0–100,000 (8,000), `answerTokens` 256–32,000 (4,000, added after Phase 7);
   - `CHAT_SETTING_KEYS`;
   - `parseAgentConfig` and `mergeAgentConfig` handle `chat:` key by key, like `summaries:`.
 - **Tests:** `FakeListChatModel` with `responses` streams them, so `streamAnswer` is tested for order, abort and errors. `chatMessages` is tested with a unit whose text holds `</source>` and instructions after it, and a path holding `"`: the output has exactly one closing tag per source.
@@ -510,7 +510,7 @@ Implemented October 2026, one commit per phase. Differences from the plan:
 - **Cited files that no longer exist** (§4.10): checked when an answer is shown only for citations without a section ID (their file must be in the tree). A citation with an ID is looked up when it is clicked, falling back to the stored path; it isn't marked in advance.
 - **Keep-alive every 5 seconds, not 15** (§4.6): Bun closes a started response that sends nothing for its idle timeout, 10 seconds by default, so a model thinking longer than that before its first words cut the stream, and the browser showed "network error". Found in use; `e2e/chat.spec.ts` now covers a model that takes 12 seconds to start.
 - **The settings API's `chat:` block** was done in Phase 4, with the server, and the dialog's tab in Phase 5. `AgentSettingsUpdate` is now the schema's input type, so callers may leave blocks out.
-- **Chat answers share the model's settings with summaries**, including its 1,024-token output limit (`createChatModel`). Long answers are cut there; a separate limit for chat can follow if needed.
+- **Chat answers have their own output limit**, `chat.answerTokens` (default 4,000; 256 to 32,000, on the **Chat** tab). At first they shared the summaries' 1,024 tokens and long answers were cut, so the model runtime now resolves a second model object for chat with `maxTokens` set (`createChatModel`'s `maxTokens` option); summaries keep 1,024.
 
 Still to check:
 

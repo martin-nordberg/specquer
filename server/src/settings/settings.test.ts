@@ -60,7 +60,7 @@ describe("agent settings", () => {
     expect(settings.sources).toEqual({
       model: "shared",
       summaries: { concurrency: "personal", tokenBudget: "default", prefill: "shared" },
-      chat: { units: "default", contextTokens: "default", historyTurns: "default", historyTokens: "default" },
+      chat: { units: "default", contextTokens: "default", historyTurns: "default", historyTokens: "default", answerTokens: "default" },
     });
     expect(settings.keys).toEqual({ NVIDIA_API_KEY: true });
     expect(settings.personal.version).not.toBe("");
@@ -73,8 +73,8 @@ describe("agent settings", () => {
     expect(await read(SHARED)).toContain("chat:\n  units: 5\n  historyTurns: 2\n");
     const settings = await agent.read(environment);
     expect(settings.shared.chat).toEqual({ units: 5, historyTurns: 2 });
-    expect(settings.effective.chat).toEqual({ units: 5, contextTokens: 12_000, historyTurns: 2, historyTokens: 8_000 });
-    expect(settings.sources.chat).toEqual({ units: "shared", contextTokens: "default", historyTurns: "shared", historyTokens: "default" });
+    expect(settings.effective.chat).toEqual({ units: 5, contextTokens: 12_000, historyTurns: 2, historyTokens: 8_000, answerTokens: 4_000 });
+    expect(settings.sources.chat).toEqual({ units: "shared", contextTokens: "default", historyTurns: "shared", historyTokens: "default", answerTokens: "default" });
     const removed = await agent.write({ scope: "shared", baseVersion: settings.shared.version, chat: { units: null, historyTurns: null } });
     expect(removed.ok).toBe(true);
     expect(await read(SHARED)).not.toContain("chat:");
@@ -115,7 +115,7 @@ describe("agent settings", () => {
     expect((await agent.read(environment)).sources).toEqual({
       model: "shared",
       summaries: { concurrency: "shared", tokenBudget: "default", prefill: "shared" },
-      chat: { units: "default", contextTokens: "default", historyTurns: "default", historyTokens: "default" },
+      chat: { units: "default", contextTokens: "default", historyTurns: "default", historyTokens: "default", answerTokens: "default" },
     });
   });
 

@@ -20,4 +20,8 @@ test("an OpenAI-compatible model at the configured URL", () => {
   const chat = resolved.model as ChatOpenAI;
   expect(chat.model).toBe("google/gemma-4-31b-it");
   expect(chat.clientConfig.baseURL).toBe(NVIDIA_BASE_URL);
+  expect(chat.maxTokens).toBe(1024);
+  // Chat answers ask for their own output limit
+  const longer = createChatModel(config, { TEST_KEY: "secret" }, { maxTokens: 4000 });
+  expect(longer.ok && (longer.model as ChatOpenAI).maxTokens).toBe(4000);
 });

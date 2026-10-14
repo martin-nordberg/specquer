@@ -147,6 +147,7 @@ Step 010 takes precedence over the specifications and earlier steps where they c
      contextTokens: 12000  # their budget
      historyTurns: 10      # earlier turns sent with a question
      historyTokens: 8000   # their budget
+     answerTokens: 4000    # the longest answer
    ```
 
 5. **Settings dialog:** a **Chat** tab next to **Model** and **Summarization**, with the same **Personal** / **Shared** choice (Client Requirements §10).
