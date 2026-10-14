@@ -70,7 +70,7 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 ### 3.5 Section Problems
 
 1. The open file is saved first.
-2. A modal dialog lists the problems in the folder's sectioned files: folders below the root with a `.specquer/` of their own (another Specquer's data, ignored here, to check and delete), whole files copied when Specquer can't tell the original from the copy, IDs used by copies of one section in several documents, IDs used by different sections (two branches issued one number), stray anchors (with their line), and files with merge conflict markers.
+2. A modal dialog lists the problems in the folder's sectioned files: folders below the root with a `.specquer/` of their own (another Specquer's data, ignored here, to check and delete), whole files copied when Specquer can't tell the original from the copy, IDs used by copies of one section in several documents, IDs used by different sections (two branches issued one number), stray anchors (with their line), files with merge conflict markers, statuses that aren't allowed for their section's prefix (with their line), and unusable `prefix.config.yaml` files of the prefixes the folder holds (the prefix then uses the default statuses).
 3. Each occurrence opens its file, at the section. Each occurrence of a duplicate or colliding ID that doesn't keep the ID has **Renumber**, which gives it a new number; each file of a copied document has **Renumber this copy**, which renumbers all its sections (the open file is saved first and reloaded after). The list then reloads.
 
 <a id="SPEC-00108" data-uid="szimo5b2q5wk"></a>
@@ -115,12 +115,13 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 ### 6.1 Sections
 
 1. In the preview and split views, a badge stands for each section anchor: at the start of a heading, between a list item's marker and its content, and at the top for the root section. The anchor itself stays invisible. The badge is the favicon (§9).
-2. Hovering or focusing a badge shows a tooltip with the section ID, the document path and the section's UID. Badges can be reached with the keyboard. Clicking one copies the section ID to the clipboard and confirms it in the tooltip.
-3. The WYSIWYG view shows anchors as badges too (a heading's badge on the line above it) and saves them unchanged.
+2. Hovering or focusing a badge shows a tooltip with the section ID and its status ("SPEC-00012 - Peer Review"; an inherited status is followed by "(inherited)", and a status of its own that isn't allowed by "(not allowed)", see §6.3), the document path and the section's UID. Badges can be reached with the keyboard. Clicking one does nothing.
+3. The WYSIWYG view shows anchors as badges too (a heading's badge on the line above it) and saves them unchanged. Its badges can be focused; their tooltip (the browser's) holds the section ID and status.
 4. In the text editor, typing `#` in a Markdown link target (`](#` or `](path#`) offers completion of section IDs, each with its heading text and document. Choosing one inserts the path to its document relative to the open file (nothing for the same file) and the ID.
-5. A badge whose ID is also used elsewhere has a warning ring. Its tooltip names the other occurrences, says whether this one keeps the ID, and offers **Renumber this one** (saving the open file first).
+5. A badge whose ID is also used elsewhere, or whose own status isn't allowed, has a warning ring. For an ID used elsewhere, the badge's tooltip names the other occurrences, says whether this one keeps the ID, and offers **Renumber this one** (saving the open file first).
 6. Pasting a section anchor whose ID still exists elsewhere (in the open document, or, in the text editor, in another document) turns it into a placeholder, so the copy gets a new ID on save. A cut followed by a paste keeps the ID.
 7. In the text editor, section anchors (and placeholders, `<a id=""></a>`) are faded: shown in the muted color, made lighter still, so the eye skips them. They aren't folded or hidden, and stay editable as text.
+8. Right-clicking a badge (in the preview, split and WYSIWYG views), or pressing the context-menu key or Shift+F10 on a focused one, opens a menu with **Copy this section ID** (which copies it and, in the preview, confirms it in the tooltip) and **Section attributes…** (§6.3). **Section attributes…** is left out in a file that isn't sectioned, and disabled, with a tooltip saying why, in a file with merge conflict markers.
 
 <a id="SPEC-00053" data-uid="t3nnmebbri6x"></a>
 ### 6.2 Summaries
@@ -136,6 +137,14 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 9. Clicking a summary, or its **Show full text**, moves the slider to the full text and scrolls to its section. A link to a section hidden by a summary (`other.md#SPEC-00012`) does the same.
 10. Summaries are kept in memory while Specquer is open, so moving the slider back and forth asks for nothing new. At most three summary requests are in flight at once, in document order, so they never take all of the browser's connections to the server and saves and file loads don't wait behind them. Requests no longer needed (the slider moved, another file opened, another view chosen) are aborted, or dropped before they are sent.
 11. A summary another model made (or an older prompt) is shown at once, labeled "older model", while the configured model's is made; it is asked for after the summaries the preview still needs, and replaces the older one in place. If it can't be made, the older summary stays, with the error and **Retry**.
+
+<a id=""></a>
+### 6.3 Section Status
+
+1. Each section has a status: its anchor's `data-status`, or, without one, the status it inherits: its parent section's within the same prefix, and the first allowed value of its prefix at the root or where the prefix changes (see [Data Architecture](data-architecture.md) §2.9). The badges show it (§6.1). Statuses are worked out from the text being edited, so they follow unsaved changes.
+2. **Section attributes…** opens a modal dialog, **Section attributes**, naming the section by its ID and title, with a **Status** drop-down: **Inherited - `<status>`** (what the section would inherit), then the allowed values of its prefix, in order. It starts on the section's own status, or **Inherited** when it has none; an own status that isn't allowed is shown as a disabled choice, "Revieww (not allowed)".
+3. **OK** sets the status in the editor's buffer: it adds, changes or removes (for **Inherited**) the anchor's `data-status`, written after `data-uid`. The dialog never writes to disk: the change is an ordinary unsaved edit, saved like any other. In the text editor (split view) and the WYSIWYG view it is undone with Ctrl+Z like typing. OK without a change, or with the invalid status still chosen, changes nothing.
+4. A status that isn't allowed, and a prefix's unusable `prefix.config.yaml`, are section problems (§3.5).
 
 <a id="SPEC-00054" data-uid="r7go3dfjt7wm"></a>
 ## 7. Saving

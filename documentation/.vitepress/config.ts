@@ -121,6 +121,14 @@ export default defineConfig({
                       {text: 'Requirements', link: '/work-items/step-010-document-chat/requirements'},
                       {text: 'Implementation Plan', link: '/work-items/step-010-document-chat/implementation-plan'},
                     ]
+                  },
+                  {
+                    text: '011-Section Status',
+                    collapsed: false,
+                    items: [
+                      {text: 'Requirements', link: '/work-items/step-011-section-status/requirements'},
+                      {text: 'Implementation Plan', link: '/work-items/step-011-section-status/implementation-plan'},
+                    ]
                   }
                 ]
               }

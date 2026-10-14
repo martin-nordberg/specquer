@@ -304,3 +304,19 @@ _Proposed_; the work proceeds on them unless they are changed:
 | An undoable outside change in `CodeEditor` | Anchor edits from saves could end up undoable by mistake | The counter marks only the dialog's change; a test checks a save's edits stay out of the history |
 | Duplicate IDs within one file | The preview's `id/uid` key could find the wrong section's status | Such files already have a problem and a ring; the dialog finds the section again by ID and UID when it opens and on OK |
 | Hand-edited `prefix.config.yaml` | A typo marks every status of a prefix invalid | The defaults apply and the file is reported (D6), so a typo can't remove values |
+
+<a id=""></a>
+## 8. Implementation Status
+
+Phases 1 to 5 were carried out in October 2026. What differs from the plan, or was learned doing it:
+
+1. **`sectionParents` lives in `shared/src/sections/tree.ts`** (§4.1), not in `markdown/sections.ts`. `status.ts` then needs only types from the Markdown module, so `@specquer/shared/sections` doesn't pull in the parser.
+2. **The preview's link component keeps its identity** (§4.6). The end-to-end tests found that opening a badge's menu loads the status lists again, and new lists rebuilt the preview's components, remounting every badge and closing the menu. The link component is now created once per preview and reads what changes from a ref, so new statuses re-render the badges. `App` also keeps the same lists object when a reload brings nothing new.
+3. **ProseMirror leaves the WYSIWYG badge's mouse events alone** (§4.8). On `pointerup` it took the focus back from the menu, which closed it. The badge's node view now stops `mousedown`, `mouseup`, the pointer events, clicks and `contextmenu`, so a click on the badge selects nothing.
+4. **The WYSIWYG badge's ring** is worked out from its own tag when the node view is built (its status against its ID's prefix). Its `title` is worked out when shown, as planned; the ring follows a change of lists when the view is rebuilt.
+5. **Copying in the WYSIWYG view** copies without a confirmation; the preview's tooltip still says "Copied".
+6. **A disabled Section attributes… item** carries its reason in a wrapper's `title` (and `aria-description`), since a disabled Radix item takes no pointer events.
+7. **The dialog** lists an invalid own status right after **Inherited**, as a disabled choice.
+8. **`anchorTagStatus` and `anchorTagUid`** read an open tag's attributes for the WYSIWYG view. `FoundAnchor.line` is counted by a binary search over line starts, so long files aren't sliced per anchor.
+9. **`AGENTS.md`** holds the guide only once (between marker comments), so **Add section anchors** doesn't update it. Its block was regenerated from `AGENT_GUIDE` with a script.
+10. **Tests**: `bun run typecheck` and `bun test` (583) pass. The end-to-end suite passes on Chrome and WebKit (142), including the new `e2e/section-status.spec.ts`. The three tests in `e2e/sections.spec.ts` that found a badge by its old name, or copied with a click, now use the menu.
