@@ -137,6 +137,7 @@ export default defineConfig({
                         {text: 'LangChain or AI SDK (historical)', link: '/notes/langchain-vs-ai-sdk'},
                         {text: 'Specification Gaps', link: '/notes/specification-gaps'},
                         {text: 'Server Restart Options', link: '/notes/server-restart-options'},
+                        {text: 'Specquer, Kiro and Spec Kit', link: '/notes/spec-driven-tools'},
                     ]
                 },
             ],
