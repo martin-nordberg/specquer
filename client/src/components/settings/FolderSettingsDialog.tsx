@@ -116,7 +116,7 @@ export function FolderSettingsDialog({ folder, onClose, api, onAddAnchors }: Fol
               </p>
               <FolderFields id={id} values={values} inherited={settings.inherited} {...(problem === undefined ? {} : { problem })} onChange={setValues} />
               <div className="flex items-center gap-2">
-                <Button type="button" variant="outline" size="sm" disabled={!sectioned} onClick={addAnchors}>
+                <Button type="button" variant="secondary" size="sm" disabled={!sectioned} onClick={addAnchors}>
                   Add section anchors…
                 </Button>
                 <span className="text-xs text-muted-foreground">

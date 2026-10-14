@@ -38,7 +38,7 @@ export function SectionSummary({ entry, outOfDate, onRetry, onShowFullText }: Se
       ) : entry.state === "error" ? (
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-error-text">Couldn't summarize: {entry.message}</p>
-          <Button variant="outline" size="sm" onClick={onRetry}>
+          <Button variant="secondary" size="sm" onClick={onRetry}>
             Retry
           </Button>
         </div>
@@ -54,7 +54,7 @@ export function SectionSummary({ entry, outOfDate, onRetry, onShowFullText }: Se
       {done?.refreshError !== undefined && (
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <p className="text-error-text">Couldn't summarize with the configured model: {done.refreshError}</p>
-          <Button variant="outline" size="sm" onClick={onRetry}>
+          <Button variant="secondary" size="sm" onClick={onRetry}>
             Retry
           </Button>
         </div>

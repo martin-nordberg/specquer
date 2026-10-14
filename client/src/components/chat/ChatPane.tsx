@@ -80,7 +80,7 @@ export function ChatPane({ state, disabled, onSend, onStop, onRetry, onClear, on
       {state.undo !== null && (
         <div role="status" className="flex shrink-0 items-center gap-2 border-b bg-muted/40 px-3 py-1.5 text-sm">
           <span className="flex-1">Conversation cleared.</span>
-          <Button variant="outline" size="sm" onClick={onUndo}>
+          <Button variant="secondary" size="sm" onClick={onUndo}>
             Undo
           </Button>
         </div>

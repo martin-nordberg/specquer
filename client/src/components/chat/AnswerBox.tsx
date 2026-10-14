@@ -119,7 +119,7 @@ export function AnswerBox(props: AnswerBoxProps) {
             {error}
           </p>
           {onRetry !== undefined && (
-            <Button variant="outline" size="sm" onClick={onRetry}>
+            <Button variant="secondary" size="sm" onClick={onRetry}>
               Retry
             </Button>
           )}

@@ -453,7 +453,7 @@ function ModelTab({
               Cancel test
             </Button>
           ) : (
-            <Button type="button" size="sm" variant="outline" disabled={!testable} onClick={() => void runTest()}>
+            <Button type="button" size="sm" variant="secondary" disabled={!testable} onClick={() => void runTest()}>
               Test
             </Button>
           )}
