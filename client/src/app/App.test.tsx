@@ -16,6 +16,7 @@ function fakeApi() {
     saveFile,
     patchUiState: async () => defaultUiState(),
     getSections: async () => [],
+    sectionStatuses: async () => ({ sectioned: false, folderPrefix: null, statusValues: {} }),
     searchSections: async () => [],
     summaryStatus: async () => ({ enabled: false, problem: "No model is configured." }),
     summarize: async () => {
@@ -71,6 +72,7 @@ test("a citation opens its section's current file in Preview; one found nowhere 
       return defaultUiState();
     },
     getSections: async () => [],
+    sectionStatuses: async () => ({ sectioned: false, folderPrefix: null, statusValues: {} }),
     searchSections,
     summaryStatus: async () => ({ enabled: true, model: "m/x" }),
     chatHistory: async () => [

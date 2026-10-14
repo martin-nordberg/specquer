@@ -2,13 +2,14 @@ import type { Root, RootContent } from "hast";
 import { type Components, toJsxRuntime } from "hast-util-to-jsx-runtime";
 import { type ComponentProps, type ReactNode, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
-import type { SectionInfo, SummaryRequest } from "@specquer/shared/api";
+import type { SectionInfo, SectionStatusLists, SummaryRequest } from "@specquer/shared/api";
 import {
   CLOBBER_PREFIX,
   OUTLINE_PATH_PROPERTY,
   SUMMARY_TAG,
   type SummarizedSection,
   buildOutline,
+  hasConflictMarkers,
   summarizeTree,
   summarizedAt,
   summaryStopCount,
@@ -16,8 +17,11 @@ import {
 } from "@specquer/shared/markdown";
 import { isMarkdownFile, normalizePath, parentPath } from "@specquer/shared/paths";
 import { isShortSection, simplifySectionText } from "@specquer/shared/summaries";
+import { allowedStatuses, badgeStatus, findSection, statusesOfBody } from "@/app/section-status";
 import { type SummaryEntry, type SummaryStore, summaryKey } from "@/app/summaries";
+import { SectionAttributesDialog, type SectionAttributesTarget } from "@/components/SectionAttributesDialog";
 import { SectionBadge } from "@/components/SectionBadge";
+import { CONFLICT_MARKERS_REASON } from "@/components/SectionMenu";
 import { SectionSummary } from "@/components/SectionSummary";
 import { SummaryControl } from "@/components/SummaryControl";
 import { type PreviewRenderer, createPreviewRenderer } from "@/preview/renderer";
@@ -115,6 +119,12 @@ export interface PreviewProps {
   savedVersion?: string;
   /** Renumbers one occurrence of a duplicate ID in the current file. */
   onRenumber?: (id: string, uid: string | null) => void;
+  /** The status lists for the file; without them badges show no status and offer only copying. */
+  statusLists?: SectionStatusLists;
+  /** Sets a section's status in the open file (`null`: inherited); returns an error message, or `null`. */
+  onSetStatus?: (id: string, uid: string | null, status: string | null) => string | null;
+  /** Called when a badge's menu opens, to load the status lists again. */
+  onStatusMenu?: () => void;
   scrollTarget?: ScrollTarget;
   /** Summaries; without them the preview always shows the full text. */
   summaries?: PreviewSummaries;
@@ -130,6 +140,9 @@ export function Preview({
   loadSections,
   savedVersion,
   onRenumber,
+  statusLists,
+  onSetStatus,
+  onStatusMenu,
   scrollTarget,
   summaries,
   debounce = 0,
@@ -177,6 +190,27 @@ export function Preview({
       current = false;
     };
   }, [loadSections, currentFile, anchorKey, savedVersion]);
+
+  // Statuses of the text shown, for the badges
+  const statuses = useMemo(
+    () => (rendered === null || statusLists === undefined ? [] : statusesOfBody(rendered.markdown, statusLists)),
+    [rendered, statusLists],
+  );
+  // The dialog works on the text as it is now, which may be newer than the text shown
+  const latestMarkdown = useRef(markdown);
+  latestMarkdown.current = markdown;
+  const [attributes, setAttributes] = useState<(SectionAttributesTarget & { uid: string | null }) | null>(null);
+  const openAttributes = useCallback(
+    (id: string, uid: string | null) => {
+      if (statusLists === undefined) return;
+      const entry = findSection(statusesOfBody(latestMarkdown.current, statusLists), id, uid);
+      if (entry === undefined) return;
+      const title = entry.section.kind === "root" ? currentFile : entry.section.title;
+      setAttributes({ id, uid, title, status: entry.status, allowed: allowedStatuses(statusLists, entry.status.prefix) });
+    },
+    [statusLists, currentFile],
+  );
+  const conflicted = useMemo(() => rendered !== null && hasConflictMarkers(rendered.markdown), [rendered]);
 
   // Summaries: the stops come from the text shown; the summaries from the saved text (by outline path)
   const outline = useMemo(() => (rendered === null ? null : buildOutline(rendered.markdown)), [rendered]);
@@ -247,6 +281,8 @@ export function Preview({
         const id = props.id.slice(CLOBBER_PREFIX.length);
         const uid = props["data-uid"];
         const info = sections.find((section) => section.id === id && (uid === undefined || section.uid === uid));
+        const status = findSection(statuses, id, uid)?.status;
+        const editable = statusLists?.sectioned === true && onSetStatus !== undefined;
         return (
           <>
             <a {...props} />
@@ -254,9 +290,13 @@ export function Preview({
               sectionId={id}
               {...(uid === undefined ? {} : { uid })}
               path={currentFile}
+              {...(status === undefined ? {} : { status: badgeStatus(status) })}
               loadSections={loadSections}
               problem={info?.problem}
               {...(onRenumber === undefined ? {} : { onRenumber: () => onRenumber(id, uid ?? null) })}
+              {...(editable ? { onAttributes: () => openAttributes(id, uid ?? null) } : {})}
+              {...(editable && conflicted ? { attributesDisabled: CONFLICT_MARKERS_REASON } : {})}
+              {...(onStatusMenu === undefined ? {} : { onMenuOpen: onStatusMenu })}
             />
           </>
         );
@@ -299,7 +339,24 @@ export function Preview({
     };
     const components = { a: Link, [SUMMARY_TAG]: Summary } as unknown as Partial<Components>;
     return toJsxRuntime(shownTree, { Fragment, jsx, jsxs, components }) as ReactNode;
-  }, [shownTree, shown, entries, store, showFullText, currentFile, onOpenFile, loadSections, sections, onRenumber]);
+  }, [
+    shownTree,
+    shown,
+    entries,
+    store,
+    showFullText,
+    currentFile,
+    onOpenFile,
+    loadSections,
+    sections,
+    onRenumber,
+    statuses,
+    statusLists,
+    onSetStatus,
+    onStatusMenu,
+    openAttributes,
+    conflicted,
+  ]);
 
   // Scroll to a requested section once it has been rendered; a section hidden by a summary
   // shows the full text first
@@ -355,6 +412,11 @@ export function Preview({
         {error !== null && <p className="text-error-text p-4">Preview failed: {error}</p>}
         <article className="markdown px-6 py-4">{content}</article>
       </div>
+      <SectionAttributesDialog
+        target={attributes}
+        onClose={() => setAttributes(null)}
+        onApply={(status) => (attributes === null || onSetStatus === undefined ? null : onSetStatus(attributes.id, attributes.uid, status))}
+      />
     </div>
   );
 }

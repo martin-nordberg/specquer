@@ -1,10 +1,12 @@
 import {
   type FrontmatterLayout,
+  analyzeBody,
   applyEdits,
   detectEol,
   fromLf,
   joinFrontmatter,
   splitFrontmatter,
+  statusEdit,
   toLf,
 } from "@specquer/shared/markdown";
 import type { SectionNotice } from "@specquer/shared/api";
@@ -30,6 +32,11 @@ export interface OpenDocument {
    * server added on save. The text editor applies such changes in place.
    */
   externalEdits: number;
+  /**
+   * Increases with each change made from outside the editors that should be undoable like typing:
+   * a status set in the section attributes dialog. The text editor puts it in its undo history.
+   */
+  undoableEdits: number;
 }
 
 export type SaveStatus = "saved" | "unsaved" | "saving" | "conflict" | "error";
@@ -96,6 +103,7 @@ export class DocumentStore {
         openedWithFrontmatter: split.frontmatter !== null,
         revision,
         externalEdits: 0,
+        undoableEdits: 0,
       },
       status: "saved",
       conflict: null,
@@ -128,6 +136,22 @@ export class DocumentStore {
 
   setBody(body: string): void {
     this.change({ body });
+  }
+
+  /**
+   * Sets a section's status in the body (`null` removes it), as an ordinary, undoable edit. The
+   * section is found in the body as it is now, by ID and UID (any UID when `uid` is `null`).
+   * Returns an error message when the section is gone, or `null`.
+   */
+  setStatus(id: string, uid: string | null, status: string | null): string | null {
+    const document = this.state.document;
+    if (document === null) return "No file is open.";
+    const section = analyzeBody(document.body).sections.find((found) => found.id === id && (uid === null || found.uid === uid));
+    if (section === undefined) return `${id} is no longer in the file.`;
+    const edit = statusEdit(document.body, section, status);
+    if (edit === undefined) return null;
+    this.change({ body: applyEdits(document.body, [edit]), undoableEdits: document.undoableEdits + 1 });
+    return null;
   }
 
   private change(update: Partial<OpenDocument>): void {

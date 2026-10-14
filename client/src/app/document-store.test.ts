@@ -175,4 +175,26 @@ describe("anchors added on save", () => {
     expect(store.text()).toBe(files["a.md"]!);
     expect(store.get().notices.map((n) => n.kind)).toEqual(["renumbered"]);
   });
+
+  test("sets a section's status as an undoable, unsaved edit, finding the section in the current body", async () => {
+    const body = '<a id="REQ-00001" data-uid="k1v2u0xwq8y7"></a>\n\n<a id="REQ-00002" data-uid="k1v2u0xwq8y8"></a>\n# A\n';
+    const { api } = fakeApi({ "a.md": body });
+    const store = new DocumentStore(api);
+    await store.open("a.md");
+    expect(store.setStatus("REQ-00002", "k1v2u0xwq8y8", "Approved")).toBeNull();
+    expect(store.get().document).toMatchObject({
+      body: body.replace('data-uid="k1v2u0xwq8y8"', 'data-uid="k1v2u0xwq8y8" data-status="Approved"'),
+      undoableEdits: 1,
+      externalEdits: 0,
+    });
+    expect(store.get().status).toBe("unsaved");
+    expect(store.setStatus("REQ-00002", null, null)).toBeNull();
+    expect(store.get().document?.body).toBe(body);
+    expect(store.get().document?.undoableEdits).toBe(2);
+    // Nothing to change: no edit
+    expect(store.setStatus("REQ-00002", null, null)).toBeNull();
+    expect(store.get().document?.undoableEdits).toBe(2);
+    expect(store.setStatus("REQ-00009", null, "Draft")).toBe("REQ-00009 is no longer in the file.");
+    expect(store.setStatus("REQ-00002", "otheruid0001", "Draft")).toBe("REQ-00002 is no longer in the file.");
+  });
 });

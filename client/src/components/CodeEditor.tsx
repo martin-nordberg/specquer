@@ -64,12 +64,18 @@ export interface CodeEditorProps {
   className?: string;
   /** Extra extensions, such as line wrapping. */
   extensions?: Extension[];
+  /**
+   * Increases when a `value` change from outside should be undoable like typing (a status set in
+   * a dialog); other outside changes (anchors added on save) stay out of the undo history.
+   */
+  undoableEdits?: number;
 }
 
-export function CodeEditor({ value, onChange, language, ariaLabel, placeholder, className, extensions = [] }: CodeEditorProps) {
+export function CodeEditor({ value, onChange, language, ariaLabel, placeholder, className, extensions = [], undoableEdits = 0 }: CodeEditorProps) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const reported = useRef(value);
+  const undoable = useRef(undoableEdits);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
@@ -105,13 +111,15 @@ export function CodeEditor({ value, onChange, language, ariaLabel, placeholder, 
 
   useEffect(() => {
     const current = view.current;
+    const asTyping = undoableEdits !== undoable.current;
+    undoable.current = undoableEdits;
     if (current === null || value === reported.current) return;
     reported.current = value;
     current.dispatch({
       changes: changesBetween(current.state.doc.toString(), value),
-      annotations: Transaction.addToHistory.of(false),
+      annotations: asTyping ? Transaction.userEvent.of("input.status") : Transaction.addToHistory.of(false),
     });
-  }, [value]);
+  }, [value, undoableEdits]);
 
   return <div ref={host} className={cn("h-full overflow-hidden", className)} data-language={language} />;
 }

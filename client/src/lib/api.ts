@@ -14,6 +14,7 @@ import type {
   SectionNotice,
   SectionProblem,
   SectionSearchResult,
+  SectionStatusLists,
   SectionSummaryLookup,
   SummaryRequest,
   SummaryResult,
@@ -101,6 +102,8 @@ export interface Api {
   searchSections(query: string, options?: { path?: string; limit?: number }): Promise<SectionSearchResult[]>;
   anchorFolder(folder: string, dryRun: boolean, addAgentGuide?: boolean): Promise<AnchorFolderResult>;
   sectionProblems(folder: string): Promise<SectionProblem[]>;
+  /** The status lists for a file's sections. */
+  sectionStatuses(path: string): Promise<SectionStatusLists>;
   /** Renumbers one occurrence of a duplicate ID; the edits are relative to the body on disk. */
   renumberSection(path: string, id: string, uid: string | null, baseVersion: string): Promise<SaveOutcome>;
   /** Renumbers every section of a file that is a copy of another document. */
@@ -240,6 +243,9 @@ export const httpApi: Api = {
   },
   async sectionProblems(folder) {
     return (await json<{ problems: SectionProblem[] }>(await client.api.sections.problems.$get({ query: { folder } }))).problems;
+  },
+  async sectionStatuses(path) {
+    return json<SectionStatusLists>(await client.api.sections.statuses.$get({ query: { path } }));
   },
   async renumberSection(path, id, uid, baseVersion) {
     return saveOutcome(await client.api.sections.renumber.$post({ json: { path, id, uid, baseVersion } }));

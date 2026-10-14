@@ -239,6 +239,11 @@ export function anchorTagStatus(openTag: string): string | undefined {
   return tagAttributes(openTag.trim(), 0)?.status?.value;
 }
 
+/** The `data-uid` of an anchor's open tag, or `undefined`. */
+export function anchorTagUid(openTag: string): string | undefined {
+  return tagAttributes(openTag.trim(), 0)?.uid?.value;
+}
+
 /**
  * The section ID of an anchor's open tag, as raw HTML (`<a id="REQ-00001" …>`), or `undefined`
  * when the tag isn't an anchor or its ID isn't a section ID.

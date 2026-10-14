@@ -20,8 +20,8 @@ const linkClass = "rounded-sm font-mono text-xs underline outline-none focus-vis
 
 /**
  * **Section problems**: nested Specquer folders, whole files copied with no known original, duplicate and colliding
- * section IDs waiting for the user, stray anchors, and files with merge conflict markers, in a
- * folder's sectioned files.
+ * section IDs waiting for the user, unusable prefix settings, stray anchors, files with merge
+ * conflict markers, and statuses that aren't allowed, in a folder's sectioned files.
  */
 export function ProblemsDialog({ folder, onClose, loadProblems, onOpen, onRenumber, onRenumberDocument }: ProblemsDialogProps) {
   const [problems, setProblems] = useState<SectionProblem[] | null>(null);
@@ -126,6 +126,21 @@ export function ProblemsDialog({ folder, onClose, loadProblems, onOpen, onRenumb
               {problem.path}
             </button>{" "}
             holds merge conflict markers; its anchors are left alone until they are resolved.
+          </p>
+        );
+      case "invalid-status":
+        return (
+          <p>
+            <button type="button" className={linkClass} onClick={() => open(problem.path, problem.id)}>
+              {problem.path}
+            </button>
+            , line {problem.line}: {problem.id}'s status {problem.value === "" ? "is blank" : `“${problem.value}” isn't allowed for ${problem.prefix}`}.
+          </p>
+        );
+      case "prefix-config":
+        return (
+          <p>
+            <span className="font-mono text-xs">{problem.path}</span>: {problem.message}, so {problem.prefix} uses the default statuses.
           </p>
         );
     }

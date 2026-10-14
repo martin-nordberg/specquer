@@ -55,12 +55,12 @@ test("files outside the configuration are saved as typed", async ({ page, specqu
   expect(await specquer.read("notes/n.md")).toBe("# Not sectioned\n\n## More");
 });
 
-test("the preview and split views show badges with a tooltip, and a click copies the ID", async ({ page, context, browserName }) => {
+test("the preview and split views show badges with a tooltip, and their menu copies the ID", async ({ page, context, browserName }) => {
   await openFile(page, "specs", "anchored.md");
   await view(page, "Preview").click();
   const preview = page.getByTestId("preview");
   await expect(preview.getByRole("button", { name: /^Section SPEC-/ })).toHaveCount(4);
-  const badge = preview.getByRole("button", { name: "Section SPEC-00002: copy its ID" });
+  const badge = preview.getByRole("button", { name: /^Section SPEC-00002, / });
   await expect(preview.getByRole("heading", { name: /Anchored/ }).getByRole("button")).toHaveCount(1);
   await badge.focus();
   const tooltip = page.getByRole("tooltip");
@@ -68,7 +68,8 @@ test("the preview and split views show badges with a tooltip, and a click copies
   await expect(tooltip).toContainText("specs/anchored.md");
   if (browserName === "chromium") {
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
-    await badge.click();
+    await badge.click({ button: "right" });
+    await page.getByRole("menuitem", { name: "Copy this section ID" }).click();
     await expect(tooltip).toContainText("Copied SPEC-00002");
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("SPEC-00002");
   }
@@ -193,7 +194,7 @@ test("a duplicate made outside Specquer is reported and renumbered from its badg
   await openFile(page, "specs", "plain.md");
   await view(page, "Preview").click();
   const preview = page.getByTestId("preview");
-  const badge = preview.getByRole("button", { name: "Section SPEC-00003 (ID used more than once): copy its ID" });
+  const badge = preview.getByRole("button", { name: /^Section SPEC-00003, .* \(ID used more than once\)$/ });
   await expect(badge).toBeVisible();
   await badge.focus();
   const tooltip = page.getByRole("tooltip");
@@ -201,7 +202,7 @@ test("a duplicate made outside Specquer is reported and renumbered from its badg
   await tooltip.getByRole("button", { name: "Renumber this one" }).click();
   // The heading without an anchor gets SPEC-00011 in the same write
   await expect(page.getByRole("status", { name: "Section changes" })).toContainText("SPEC-00003 in “Details” is now SPEC-00012.");
-  await expect(preview.getByRole("button", { name: "Section SPEC-00012: copy its ID" })).toBeVisible();
+  await expect(preview.getByRole("button", { name: /^Section SPEC-00012, / })).toBeVisible();
   expect(await specquer.read("specs/plain.md")).toMatch(/<a id="SPEC-00012" data-uid="[a-z0-9]{12}"><\/a>\n## Details/);
   expect(await specquer.read("specs/anchored.md")).toContain(details);
 });

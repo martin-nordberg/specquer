@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import type { CreateOptions, SummaryStatus, Tree, TreeFolder, TreeNode } from "@specquer/shared/api";
+import type { CreateOptions, SectionStatusLists, SummaryStatus, Tree, TreeFolder, TreeNode } from "@specquer/shared/api";
 import type { Citation } from "@specquer/shared/chat";
 import { isSameOrInside, renamedPath } from "@specquer/shared/paths";
 import {
@@ -361,6 +361,30 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
 
   const renumberOpen = useCallback((id: string, uid: string | null) => void docStore.renumber(id, uid), [docStore]);
 
+  // The open file's status lists: loaded when it opens, after each save, when the window regains
+  // focus (prefix.config.yaml is edited by hand, usually elsewhere) and when a badge's menu opens
+  const [statusLists, setStatusLists] = useState<{ path: string; lists: SectionStatusLists } | null>(null);
+  const loadStatusLists = useCallback(() => {
+    const path = docStore.get().document?.path;
+    if (path === undefined) return;
+    api
+      .sectionStatuses(path)
+      .then((lists) => {
+        if (docStore.get().document?.path !== path) return;
+        // The same lists keep their identity, so the badges (and an open menu) aren't rebuilt
+        setStatusLists((current) => (current?.path === path && JSON.stringify(current.lists) === JSON.stringify(lists) ? current : { path, lists }));
+      })
+      .catch(() => undefined);
+  }, [api, docStore]);
+  useEffect(() => {
+    if (currentPath !== undefined) loadStatusLists();
+  }, [currentPath, doc.version, loadStatusLists]);
+  useEffect(() => {
+    window.addEventListener("focus", loadStatusLists);
+    return () => window.removeEventListener("focus", loadStatusLists);
+  }, [loadStatusLists]);
+  const setStatus = useCallback((id: string, uid: string | null, status: string | null) => docStore.setStatus(id, uid, status), [docStore]);
+
   /** Renumbers one occurrence of a duplicate ID: through the open file's store if it is open. */
   const renumberIn = useCallback(
     async (path: string, id: string, uid: string | null): Promise<string | null> => {
@@ -473,6 +497,10 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
             searchSections={searchSections}
             savedVersion={doc.version}
             onRenumber={renumberOpen}
+            undoableEdits={document_.undoableEdits}
+            statusLists={statusLists?.path === document_.path ? statusLists.lists : undefined}
+            onSetStatus={setStatus}
+            onStatusMenu={loadStatusLists}
             scrollTarget={scrollTarget?.path === document_.path ? scrollTarget : undefined}
             summaries={summaries}
           />

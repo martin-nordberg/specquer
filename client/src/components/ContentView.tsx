@@ -1,6 +1,6 @@
 import { Columns2, Eye, FileCode, PenLine } from "lucide-react";
 import { useMemo, useRef } from "react";
-import type { SectionInfo } from "@specquer/shared/api";
+import type { SectionInfo, SectionStatusLists } from "@specquer/shared/api";
 import type { ViewType } from "@specquer/shared/uistate";
 import { cn } from "@/lib/utils";
 import { CodeEditor, lineWrapping } from "./CodeEditor";
@@ -53,6 +53,14 @@ export interface ContentViewProps {
   savedVersion?: string;
   /** Renumbers one occurrence of a duplicate ID in the open file. */
   onRenumber?: (id: string, uid: string | null) => void;
+  /** Increases when the body gets a change from outside the editors that is undoable like typing. */
+  undoableEdits?: number;
+  /** The status lists for the open file, for the badges and the section attributes dialog. */
+  statusLists?: SectionStatusLists;
+  /** Sets a section's status in the open file (`null`: inherited); returns an error message, or `null`. */
+  onSetStatus?: (id: string, uid: string | null, status: string | null) => string | null;
+  /** Called when a badge's menu opens, to load the status lists again. */
+  onStatusMenu?: () => void;
   scrollTarget?: ScrollTarget;
   /** Summaries in the preview (split and preview views). */
   summaries?: PreviewSummaries;
@@ -70,6 +78,10 @@ export function ContentView({
   searchSections,
   savedVersion,
   onRenumber,
+  undoableEdits,
+  statusLists,
+  onSetStatus,
+  onStatusMenu,
   scrollTarget,
   summaries,
 }: ContentViewProps) {
@@ -93,7 +105,16 @@ export function ContentView({
     ],
     [],
   );
-  const editor = <CodeEditor value={body} onChange={onChange} language="markdown" ariaLabel="Markdown content" extensions={extensions} />;
+  const editor = (
+    <CodeEditor
+      value={body}
+      onChange={onChange}
+      language="markdown"
+      ariaLabel="Markdown content"
+      extensions={extensions}
+      {...(undoableEdits === undefined ? {} : { undoableEdits })}
+    />
+  );
   const preview = (debounce: number) => (
     <Preview
       markdown={body}
@@ -102,6 +123,9 @@ export function ContentView({
       loadSections={loadSections}
       savedVersion={savedVersion}
       onRenumber={onRenumber}
+      statusLists={statusLists}
+      onSetStatus={onSetStatus}
+      onStatusMenu={onStatusMenu}
       scrollTarget={scrollTarget}
       summaries={summaries}
       debounce={debounce}
@@ -120,6 +144,6 @@ export function ContentView({
     case "preview":
       return preview(0);
     case "wysiwyg":
-      return <MilkdownEditor key={externalEdits} value={body} onChange={onChange} />;
+      return <MilkdownEditor key={externalEdits} value={body} onChange={onChange} statusLists={statusLists} onStatusMenu={onStatusMenu} />;
   }
 }

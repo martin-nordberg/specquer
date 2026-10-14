@@ -20,7 +20,7 @@ describe("SectionBadge", () => {
         onRenumber={onRenumber}
       />,
     );
-    const badge = screen.getByRole("button", { name: "Section REQ-00007 (ID used more than once): copy its ID" });
+    const badge = screen.getByRole("button", { name: "Section REQ-00007 (ID used more than once)" });
     expect(badge.className).toContain("section-badge-problem");
     act(() => badge.focus());
     await waitFor(() => expect(screen.getAllByText(/Also used by a copy in docs\/a\.md \(“Rules”\)/).length).toBeGreaterThan(0));
@@ -121,6 +121,24 @@ describe("ProblemsDialog", () => {
     fireEvent.click(await screen.findByRole("button", { name: "docs/b.md" }));
     expect(onOpen).toHaveBeenCalledWith("docs/b.md", "REQ-00005");
     expect(onClose).toHaveBeenCalled();
+  });
+
+  test("describes statuses that aren't allowed and unusable prefix files", async () => {
+    const problems: SectionProblem[] = [
+      { kind: "prefix-config", prefix: "SPEC", path: ".specquer/shared/SPEC/prefix.config.yaml", problem: "empty-list", message: "its list of statusValues is empty" },
+      { kind: "invalid-status", path: "docs/a.md", id: "REQ-00002", line: 3, value: "Revieww", prefix: "REQ" },
+      { kind: "invalid-status", path: "docs/a.md", id: "REQ-00003", line: 6, value: "", prefix: "REQ" },
+    ];
+    const onOpen = mock(() => {});
+    render(<ProblemsDialog folder={root} onClose={() => {}} loadProblems={async () => problems} onOpen={onOpen} onRenumber={async () => null} onRenumberDocument={async () => null} />);
+    const items = await screen.findAllByRole("listitem");
+    expect(items.map((item) => item.textContent)).toEqual([
+      ".specquer/shared/SPEC/prefix.config.yaml: its list of statusValues is empty, so SPEC uses the default statuses.",
+      "docs/a.md, line 3: REQ-00002's status “Revieww” isn't allowed for REQ.",
+      "docs/a.md, line 6: REQ-00003's status is blank.",
+    ]);
+    fireEvent.click(screen.getAllByRole("button", { name: "docs/a.md" })[0]!);
+    expect(onOpen).toHaveBeenCalledWith("docs/a.md", "REQ-00002");
   });
 });
 
