@@ -111,7 +111,7 @@ The badges are those of the preview and split views and the WYSIWYG view (Client
 ### R5. The Section Attributes Dialog
 
 1. **Dialog:** a modal dialog, **Section attributes**, names the section by its ID and title, and holds a **Status** drop-down.
-2. **Choices:** the first choice is **Inherited - `<status>`**, with the status the section would inherit (R3, steps 2 and 3). Then come the allowed values for the section's prefix, in order (R2.4). **Inherited** is offered whether or not the section has a status of its own.
+2. **Choices:** the first choice is **Inherited (`<status>`)**, with the status the section would inherit (R3, steps 2 and 3). Then come the allowed values for the section's prefix, in order (R2.4). **Inherited** is offered whether or not the section has a status of its own.
 3. **Initial choice:** the section's own status, or **Inherited** when it has none. An invalid status of its own is shown as an extra, disabled choice, "Revieww (not allowed)", selected at first, so the user sees it and picks a valid one; confirming while it is still selected changes nothing.
 4. **Applying:** confirming the dialog edits the anchor in the editor's buffer. It adds, changes or removes `data-status` (removes it when **Inherited** is chosen). The dialog never writes to disk: the change is an ordinary unsaved edit, which can be undone and is saved like any other (autosave included). Cancelling changes nothing.
 5. **Unchanged choice:** confirming without changing the choice edits nothing.

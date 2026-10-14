@@ -19,8 +19,8 @@ test("the choices: Inherited with what it resolves to, then the allowed values i
   const onApply = mock((_status: string | null) => null);
   render(<SectionAttributesDialog target={target(status(null))} onClose={() => {}} onApply={onApply} />);
   expect(screen.getByText("REQ-00002 – Design")).toBeDefined();
-  expect(options()).toEqual(["Inherited - Testing", ...DEFAULT_STATUS_VALUES]);
-  expect(select().selectedOptions[0]!.text).toBe("Inherited - Testing");
+  expect(options()).toEqual(["Inherited (Testing)", ...DEFAULT_STATUS_VALUES]);
+  expect(select().selectedOptions[0]!.text).toBe("Inherited (Testing)");
   fireEvent.change(select(), { target: { value: "Approved" } });
   fireEvent.click(screen.getByRole("button", { name: "OK" }));
   expect(onApply).toHaveBeenCalledWith("Approved");
@@ -43,7 +43,7 @@ test("an own status starts selected; Inherited removes it; OK without a change e
 test("an invalid status shows as a disabled choice, selected at first; confirming it changes nothing", () => {
   const onApply = mock((_status: string | null) => null);
   render(<SectionAttributesDialog target={target(status("Revieww"))} onClose={() => {}} onApply={onApply} />);
-  expect(options()).toEqual(["Inherited - Testing", "Revieww (not allowed) [disabled]", ...DEFAULT_STATUS_VALUES]);
+  expect(options()).toEqual(["Inherited (Testing)", "Revieww (not allowed) [disabled]", ...DEFAULT_STATUS_VALUES]);
   expect(select().selectedOptions[0]!.text).toBe("Revieww (not allowed)");
   fireEvent.click(screen.getByRole("button", { name: "OK" }));
   expect(onApply).not.toHaveBeenCalled();

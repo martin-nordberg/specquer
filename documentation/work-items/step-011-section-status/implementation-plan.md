@@ -161,7 +161,7 @@ The requirements' Precedence table applies. This plan adds:
 ### 4.7 The Dialog and the Edit (`SectionAttributesDialog.tsx`, `document-store.ts`, `CodeEditor.tsx`)
 
 - **Dialog** (R5): a shadcn `Dialog` titled **Section attributes**, with the ID and title, and a native `<select>` labeled **Status**. The choices are:
-  - `Inherited - {inherited}`;
+  - `Inherited ({inherited})`;
   - the prefix's allowed values;
   - for an invalid own status, a disabled `{value} (not allowed)` choice, selected at first (R5.3).
 

@@ -47,7 +47,7 @@ test("a status set from the preview's badge is an unsaved edit that subsections 
   await page.reload();
   await expect(page.getByTestId("preview").getByRole("button", { name: "Section SPEC-00003, Approved (inherited)" })).toBeVisible();
   // Inherited removes it again
-  await chooseStatus(page, page.getByTestId("preview").getByRole("button", { name: /^Section SPEC-00002,/ }), "Inherited - Draft");
+  await chooseStatus(page, page.getByTestId("preview").getByRole("button", { name: /^Section SPEC-00002,/ }), "Inherited (Draft)");
   await hideTab(page);
   await expect(saveStatus(page)).toHaveText("Saved");
   expect(await specquer.read("specs/design.md")).toBe(doc());
@@ -127,7 +127,7 @@ test("a prefix's own statuses are offered; an unusable prefix.config.yaml falls 
   await preview.getByRole("button", { name: /^Section SPEC-00002,/ }).click({ button: "right" });
   await page.getByRole("menuitem", { name: "Section attributes…" }).click();
   const dialog = page.getByRole("dialog", { name: "Section attributes" });
-  await expect(dialog.getByRole("combobox", { name: "Status" }).locator("option")).toHaveText(["Inherited - Proposed", "Proposed", "Accepted"]);
+  await expect(dialog.getByRole("combobox", { name: "Status" }).locator("option")).toHaveText(["Inherited (Proposed)", "Proposed", "Accepted"]);
   await dialog.getByRole("button", { name: "Cancel" }).click();
 
   await specquer.write(...prefixConfig("SPEC", ["Open", "open"]));
@@ -139,5 +139,5 @@ test("a prefix's own statuses are offered; an unusable prefix.config.yaml falls 
   // Opening the menu loads the lists again: back to the defaults
   await preview.getByRole("button", { name: /^Section SPEC-00002,/ }).click({ button: "right" });
   await page.getByRole("menuitem", { name: "Section attributes…" }).click();
-  await expect(dialog.getByRole("combobox", { name: "Status" }).locator("option")).toHaveText(["Inherited - Draft", "Draft", "Approved", "In Development", "Peer Review", "Testing", "Complete"]);
+  await expect(dialog.getByRole("combobox", { name: "Status" }).locator("option")).toHaveText(["Inherited (Draft)", "Draft", "Approved", "In Development", "Peer Review", "Testing", "Complete"]);
 });

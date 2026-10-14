@@ -97,7 +97,7 @@ describe("statuses in the preview", () => {
     fireEvent.contextMenu(detail);
     fireEvent.click(await screen.findByRole("menuitem", { name: "Section attributes…" }));
     const select = (await screen.findByRole("combobox", { name: "Status" })) as HTMLSelectElement;
-    expect([...select.options].map((option) => option.text)).toEqual(["Inherited - Testing", "Draft", "Testing", "Done"]);
+    expect([...select.options].map((option) => option.text)).toEqual(["Inherited (Testing)", "Draft", "Testing", "Done"]);
     fireEvent.change(select, { target: { value: "Done" } });
     fireEvent.click(screen.getByRole("button", { name: "OK" }));
     expect(onSetStatus).toHaveBeenCalledWith("REQ-00003", "k1v2u0xwq8y9", "Done");

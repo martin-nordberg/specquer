@@ -79,7 +79,7 @@ export function SectionAttributesDialog({ target, onClose, onApply }: SectionAtt
               value={choice}
               onChange={(event) => setChoice(event.target.value)}
             >
-              <option value={INHERITED}>Inherited - {target.status.inherited}</option>
+              <option value={INHERITED}>Inherited ({target.status.inherited})</option>
               {!target.status.valid && (
                 <option value={INVALID} disabled>
                   {target.status.own === "" ? "(blank)" : target.status.own} (not allowed)
