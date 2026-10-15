@@ -9,6 +9,8 @@ _Notes from October 2026, after Step 012 (commit `e197bee`)._
 
 Findings are ordered by severity. "Verified" means the behavior was reproduced with a short script; the others come from reading the code.
 
+**Status:** H1, M1 to M4 and L1 to L4 are fixed, one commit each. Each finding below names its commit. L5, P1, P2 and the maintainability notes are still open.
+
 <a id="WORK-00536" data-uid="e36ws9k2gleg"></a>
 ## Scope and Method
 
@@ -44,6 +46,13 @@ Suggested fix, in order of value:
 2. Likewise, honor `summaries.prefill: true` from the shared file only after a local confirmation.
 3. Allow `http:` only for loopback hosts.
 
+**Fixed** in `25dac8c`, as suggested.
+
+- The shared file's model endpoint, unless it is the default (NVIDIA's URL with `NVIDIA_API_KEY`), takes effect only once this user approves it. The same goes for its `summaries.prefill: true`. Approvals are kept in `.specquer/user/approvals.yaml` (`server/src/settings/approvals.ts`). Until then, the model is disabled and the slider and chat say why.
+- The settings dialog names what waits for approval and offers **Approve this model** and **Approve pre-filling**. Saving to the shared file through the dialog approves what is saved.
+- `http:` is allowed only to loopback hosts (`isAllowedModelUrl`).
+- [Security](/specifications/security) §9 is updated.
+
 <a id="WORK-00539" data-uid="wqfr67ac3ufx"></a>
 ## Medium
 
@@ -56,12 +65,16 @@ Related: `FileService` checks that real paths stay inside the root, but not that
 
 Fix: compare names case-insensitively in `checkPath` and `checkName`, and in `FileService` reject real paths that have a protected segment relative to the root.
 
+**Fixed** in `2c218ca`. `isProtectedName` compares in lower case, and `FileService.assertAllowed` rejects real paths that reach into a protected folder, including through symbolic links.
+
 <a id="WORK-00541" data-uid="o99yldwcsiap"></a>
 ### M2. Saving on leaving the page fails for medium-sized documents
 
 Verified. `httpApi.saveFile` (`client/src/lib/api.ts`) uses `keepalive` when `text.length < 60_000`. That counts UTF-16 code units of the text, but the browser's limit applies to the request body in bytes: the JSON-escaped, UTF-8-encoded body. A document of 50,000 characters made of `é` and line breaks gives a 100,092-byte body. Chrome rejects a `keepalive` fetch over the limit with a `TypeError` instead of sending it, so the save is lost. Also, Chrome's 64 KiB applies to all of a page's `keepalive` requests in flight together, and `onPageHide` sends three at once: the document, the UI state and the comment draft. A 40 KB document with a long comment draft fails the same way. `changeComments` has the same `.length` check.
 
 Fix: measure `new TextEncoder().encode(body).length`, keep one budget shared by the three requests with the document first, and leave out `keepalive` (accepting the risk) for anything over budget, rather than sending a request that is certain to be refused. A test in `api.test.ts` with non-ASCII text would cover it.
+
+**Fixed** in `9827c5b`. `KeepaliveBudget` (`client/src/lib/api.ts`) measures each request's JSON body in UTF-8 bytes against one budget of 60,000 bytes. The budget is shared by `saveFile`, `patchUiState` and `changeComments` while their requests are in flight. A request that doesn't fit is sent without `keepalive`.
 
 <a id="WORK-00542" data-uid="qjd7jwxl0taf"></a>
 ### M3. An example of a merge conflict freezes its document
@@ -70,12 +83,16 @@ Verified. `hasConflictMarkers` (`shared/src/markdown/sections.ts`) matches lines
 
 Fix: ignore lines inside fenced and indented code (the outline code already knows where these are), or require the full `<<<<<<<` / `=======` / `>>>>>>>` sequence in order outside code.
 
+**Fixed** in `5f15317`. Conflict markers now count only as the full `<<<<<<<`, `=======`, `>>>>>>>` sequence, in that order, with at least one of the three outside fenced code. One limitation is accepted: a real conflict entirely inside a code block isn't detected. That code holds no sections, so nothing is anchored wrongly.
+
 <a id="WORK-00543" data-uid="k8w5krc4q6gy"></a>
 ### M4. A comment sidecar is deleted before the new name is validated
 
 In `createHandlers` (`server/src/app.ts`), `create` and `rename` call `comments.beforeCreate(newPath)`, which deletes `<newPath>.comments.yaml` when nothing exists at `newPath`. The `.md` extension rule is only checked afterwards, in `FileService.create` and `FileService.rename`. A request to create a file named `notes`, or to rename `a.md` to `b.txt`, first deletes `notes.comments.yaml` or `b.txt.comments.yaml`, which may be someone's unrelated file, and is then refused with `400`. The client doesn't send such names, so this takes a hand-made request, but the deletion is permanent.
 
 Fix: validate the name (`isMarkdownFile`, the kept extension) before `beforeCreate`, ideally in the schema or at the top of the handler, and call `beforeCreate` only for Markdown paths.
+
+**Fixed** in `aa40bdd`. `create` and `rename` check the new name (`checkNewFileName`, `checkRenamedFileName` in `server/src/files.ts`) before `beforeCreate`, and `beforeCreate` ignores paths that aren't Markdown files.
 
 <a id="WORK-00544" data-uid="agpf7ppzt23x"></a>
 ## Low
@@ -85,20 +102,28 @@ Fix: validate the name (`isMarkdownFile`, the kept extension) before `beforeCrea
 
 Verified. The sanitizer allows `data*` attributes on `<a>` (`shared/src/markdown/preview.ts`), and the preview's `Link` treats any `<a>` with `data-section-anchor` and an `id` as a section anchor (`client/src/components/Preview.tsx`). `<a id="SPEC-00001" data-section-anchor="heading"></a>` written in a blockquote, table cell or paragraph therefore renders a badge, and its menu (**Renumber**, attributes, comments) acts on the real `SPEC-00001`. Fix: drop `dataSectionAnchor` in the sanitize schema (`strip`, or a small plugin before `rehypeSectionAnchors`), so only the pipeline sets it.
 
+**Fixed** in `0607746`. A small plugin, `rehypeDropSectionAnchorMarks`, removes `data-section-anchor` from the spec's own HTML before `rehypeSectionAnchors` runs. [Security](/specifications/security) is updated.
+
 <a id="WORK-00546" data-uid="q35ilmyk6qmm"></a>
 ### L2. The summary prompt doesn't escape its delimiter
 
 The chat escapes `&`, `<` and `>` inside each `<source>` (`agent/src/chat.ts`). The summary prompt puts the section text between `<text>` and `</text>` unescaped (`agent/src/summarize.ts`), so a spec containing `</text>` can speak outside the material. Output is reduced to plain text and rendered as text, so the effect is limited to a misleading summary. Escaping it the same way costs one line, but it changes the prompt, so raise `PROMPT_VERSION`.
+
+**Fixed** in `3edc0bd`. The section text, each heading and the path are escaped with `escapeSourceText`, as the chat does. `PROMPT_VERSION` is now 2, so cached summaries are made again.
 
 <a id="WORK-00547" data-uid="tf3y880c7lld"></a>
 ### L3. A save that finishes after a rename is ignored
 
 `DocumentStore.write` (`client/src/app/document-store.ts`) returns early, without recording the new version, when the open document's path changed while the request was under way. `moved()` changes the path after a rename, so a save started by a window blur during the rename request leaves the store with the old version and `edited` still set. The next save then shows the conflict dialog for a conflict that doesn't exist. Compare against a document identity that survives `moved()` (a counter set in `load()`) rather than the path.
 
+**Fixed** in `5c5643b`. `DocumentStore` keeps an `opened` counter. It increases on `load()` and `close()` but not on `moved()`, and a save or renumbering compares it in place of the path.
+
 <a id="WORK-00548" data-uid="u1owobuis3fn"></a>
 ### L4. The `.gitignore` files are written only when their folders are created
 
 `ensureUserFolder` (`server/src/user-folder.ts`) and the caches' `ensureFolder` write `.gitignore` only when `mkdir` created the folder. If `.specquer/user/` or `.specquer/cache/` exists without one (deleted by hand, or the folder came from elsewhere), it is never restored. A `git add -A` then commits `instance.json` (the session URL with its token), the chat history, or the search index with the specs' text. Write the file whenever it is missing, not only on creation.
+
+**Fixed** in `518dbe8`. `ensureUserFolder` writes `.gitignore` whenever it is missing, and the summary cache and the search index use the same helper for `.specquer/cache/`.
 
 <a id="WORK-00549" data-uid="by2yfiovp02y"></a>
 ### L5. Smaller points
@@ -139,3 +164,5 @@ The chat escapes `&`, `<` and `>` inside each `<source>` (`agent/src/chat.ts`). 
 2. M1 and M4: small changes with tests, and both stop permanent deletions.
 3. M2 and M3, which lose or block user work in normal use.
 4. L1 to L4 as they are touched; P1 before trying a large repository.
+
+Steps 1 to 4 are done, apart from P1. What remains: L5, P1 before trying a large repository, P2, and the maintainability notes.
