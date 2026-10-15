@@ -152,7 +152,7 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 1. Edits are saved automatically:
    - before another file is opened,
    - when the browser window loses focus (switching to another application often leaves the tab visible; [Step 012](/work-items/step-012-comment-threads/requirements) R9),
-   - when the browser tab is hidden or the page closes (with `keepalive` requests, for bodies under 60 KB), and
+   - when the browser tab is hidden or the page closes (with `keepalive` requests while their JSON bodies, measured in UTF-8 bytes, fit in 60,000 bytes together: browsers count the keepalive requests in flight together and refuse one over 64 KiB, so the document goes first, then the UI state and a comment draft, and a body that doesn't fit is sent without `keepalive`), and
    - every 60 seconds while there are unsaved changes.
 2. Every save first takes the edits the WYSIWYG view hasn't reported yet (Milkdown reports them 200 ms after the last change), so a quick switch away doesn't leave them out. A file is only written if its text differs from what was last read or saved. Line endings (LF or CRLF), a byte-order mark and the front matter layout are preserved.
 3. The save status shows "Saved", "Unsaved changes", "Saving…", "Not saved: changed on disk" or "Save failed" (with the reason as a tooltip). "Unsaved changes" is a button (accessible name "Unsaved changes: save now") that saves at once, which also brings summaries up to date (§6.2); in the other states the status is plain text.

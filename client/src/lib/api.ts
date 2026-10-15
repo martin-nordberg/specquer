@@ -35,8 +35,47 @@ import type { UiState, UiStatePatch } from "@specquer/shared/uistate";
 
 export const client = hc<ApiRouter>("/");
 
-/** Browsers cap keepalive request bodies at 64 KiB. */
-const KEEPALIVE_LIMIT = 60_000;
+/** Browsers cap the bodies of a page's keepalive requests at 64 KiB in all; this leaves a margin. */
+export const KEEPALIVE_LIMIT = 60_000;
+
+/**
+ * The room left for keepalive request bodies. Browsers count the bodies of all of a page's
+ * keepalive requests in flight together, in bytes, and refuse a request over the cap outright
+ * (`fetch` rejects), rather than send it without keepalive. Leaving the page sends the document,
+ * the UI state and a comment draft at once, in that order, so they share one budget, measured in
+ * UTF-8 bytes of the JSON body. A body that doesn't fit is sent without keepalive: it may not
+ * arrive if the page closes, but it isn't certain to fail.
+ */
+export class KeepaliveBudget {
+  private inFlight = 0;
+
+  constructor(private readonly limit = KEEPALIVE_LIMIT) {}
+
+  /** Reserves room for a JSON body; returns its release, or `null` when it doesn't fit. */
+  reserve(body: unknown): (() => void) | null {
+    const bytes = new TextEncoder().encode(JSON.stringify(body)).length;
+    if (this.inFlight + bytes > this.limit) return null;
+    this.inFlight += bytes;
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      this.inFlight -= bytes;
+    };
+  }
+}
+
+const keepaliveBudget = new KeepaliveBudget();
+
+/** Sends a request with keepalive when it is wanted and its body fits the budget. */
+async function withKeepalive<T>(wanted: boolean | undefined, body: unknown, send: (keepalive: boolean) => Promise<T>): Promise<T> {
+  const release = wanted === true ? keepaliveBudget.reserve(body) : null;
+  try {
+    return await send(release !== null);
+  } finally {
+    release?.();
+  }
+}
 
 export class ApiRequestError extends Error {
   constructor(
@@ -205,8 +244,8 @@ export const httpApi: Api = {
     return json<FileContent>(await client.api.file.$get({ query: { path } }));
   },
   async saveFile(path, text, baseVersion, options) {
-    const keepalive = options?.keepalive === true && text.length < KEEPALIVE_LIMIT;
-    return saveOutcome(await client.api.file.$put({ query: { path }, json: { text, baseVersion } }, { init: { keepalive } }));
+    const body = { text, baseVersion };
+    return withKeepalive(options?.keepalive, body, async (keepalive) => saveOutcome(await client.api.file.$put({ query: { path }, json: body }, { init: { keepalive } })));
   },
   async create(parent, name, kind, options = {}) {
     const res = await client.api.create.$post({ json: { parent, name, kind, ...options } });
@@ -236,7 +275,7 @@ export const httpApi: Api = {
     return json<UiState>(await client.api.uistate.$get());
   },
   async patchUiState(patch, options) {
-    return json<UiState>(await client.api.uistate.$patch({ json: patch }, { init: { keepalive: options?.keepalive === true } }));
+    return withKeepalive(options?.keepalive, patch, async (keepalive) => json<UiState>(await client.api.uistate.$patch({ json: patch }, { init: { keepalive } })));
   },
   async getSections(path) {
     return (await json<{ sections: SectionInfo[] }>(await client.api.sections.$get({ query: { path } }))).sections;
@@ -309,7 +348,8 @@ export const httpApi: Api = {
     return json<CommentsResponse>(await client.api.comments.$get({ query: { path } }));
   },
   async changeComments(path, change, options) {
-    const keepalive = options?.keepalive === true && JSON.stringify(change).length < KEEPALIVE_LIMIT;
-    return json<CommentChangeResult>(await client.api.comments.$patch({ query: { path }, json: change }, { init: { keepalive } }));
+    return withKeepalive(options?.keepalive, change, async (keepalive) =>
+      json<CommentChangeResult>(await client.api.comments.$patch({ query: { path }, json: change }, { init: { keepalive } })),
+    );
   },
 };
