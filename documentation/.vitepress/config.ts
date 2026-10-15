@@ -160,7 +160,10 @@ export default defineConfig({
                         {text: 'LangChain or AI SDK (historical)', link: '/notes/langchain-vs-ai-sdk'},
                         {text: 'Specification Gaps', link: '/notes/specification-gaps'},
                         {text: 'Server Restart Options', link: '/notes/server-restart-options'},
+                        {text: 'Minor Issues', link: '/notes/issue-backlog'},
                         {text: 'Specquer, Kiro and Spec Kit', link: '/notes/spec-driven-tools'},
+                        {text: 'Coding Agents in Comment Threads', link: '/notes/agent-comments'},
+                        {text: 'Specquer Driving Coding Agents', link: '/notes/agent-workflows'},
                     ]
                 },
             ],
