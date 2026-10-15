@@ -24,6 +24,7 @@ See [Specquer Documentation on GitHub I/O](https://martin-nordberg.github.io/spe
 * Document-focused chat - interactive Q&A about the specifications in a repository, with answers
   citing the sections they come from
 * Section status
+* Sidecar mechanism for tracking review comments
 
 ## Planned
 
@@ -33,7 +34,6 @@ See [Specquer Documentation on GitHub I/O](https://martin-nordberg.github.io/spe
   - "Auxiliary" - specifications that are notes, reference materials, ideas, etc. not tied
                   to the whole system nor to specific tasks
   - "Nonsectioned" - specifications not managed by Specquer
-* Sidecar mechanism for tracking review comments
 * Other views for sections
   - Tree of requirements by prefix
   - Filtering by properties like implementation status
