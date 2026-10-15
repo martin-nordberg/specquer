@@ -1,6 +1,6 @@
 /// <reference lib="dom" />
 import type { Page } from "@playwright/test";
-import { type FakeModel, fakeModelConfig, startFakeModel } from "./fake-model";
+import { type FakeModel, fakeModelApproval, fakeModelConfig, startFakeModel } from "./fake-model";
 import { test as base, expect, launch } from "./fixtures";
 
 /** Specquer with a fake model and a sectioned spec to ask about. */
@@ -28,6 +28,7 @@ const test = base.extend<{ model: FakeModel }>({
       ].join("\n"),
       "docs/other.md": "# Other\n\nUnrelated text.\n",
       ".specquer/shared/agent.config.yaml": fakeModelConfig(model),
+      ...fakeModelApproval(model),
     });
   },
 });

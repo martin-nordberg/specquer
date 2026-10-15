@@ -409,6 +409,7 @@ chat:
   answerTokens: 4000    # the longest answer (256 to 32,000)
 ```
 - The personal `.specquer/user/agent.config.yaml` overrides the shared file key by key under `summaries:` and `chat:`, and its `model:` replaces the shared one as a whole, since a model's name, URL and key variable belong together (decision D7).
+- The shared file's model is used only when its endpoint (`baseUrl` with `apiKeyEnv`) is the default one (NVIDIA's URL with `NVIDIA_API_KEY`) or this user has approved it, and its `summaries.prefill: true` only once approved (Security §9). Approvals are in `.specquer/user/approvals.yaml` (`models:`, a list of `{ baseUrl, apiKeyEnv }`, and `prefill:`), written through `server/src/settings/approvals.ts`. A `baseUrl` must be `https`, or `http` to this machine.
 - Unknown keys are ignored; an invalid `model:` is dropped and an invalid setting falls back to its default, each reported on the server's console.
 - The schemas are in `shared/src/settings/` (re-exported by `agent`), so the settings dialog (client §10) validates with them too. The dialog writes either file through `server/src/settings/agent-settings.ts` with the `yaml` package's document API: only the settings it changes, keeping comments, order and unknown keys, never writing the default base URL into a file that leaves it out. `null` in a save removes a setting. A personal file is created with `.specquer/user/.gitignore`.
 

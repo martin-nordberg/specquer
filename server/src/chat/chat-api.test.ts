@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { join } from "node:path";
 import { type ChatModel, createChatModel } from "@specquer/agent";
 import { type ChatEvent, type ChatTurn, chatEventSchema } from "@specquer/shared/chat";
-import { tempRoot, testApp } from "../test-support.ts";
+import { TEST_APPROVALS, tempRoot, testApp } from "../test-support.ts";
 import { CHAT_HISTORY_FILE } from "./history.ts";
 
 let cleanups: Array<() => Promise<void> | void> = [];
@@ -49,7 +49,7 @@ function stubModel(options: StubOptions = {}) {
 }
 
 async function setup(files: Record<string, string>, stub: StubOptions = {}) {
-  const temp = await tempRoot({ [SHARED]: CONFIG, ...files }, { git: true });
+  const temp = await tempRoot({ [SHARED]: CONFIG, ...TEST_APPROVALS, ...files }, { git: true });
   cleanups.push(temp.cleanup);
   const fake = stubModel(stub);
   /** The output limits models were created with. */

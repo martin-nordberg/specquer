@@ -24,7 +24,7 @@ import type {
 import { type ChatEvent, type ChatRequest, type ChatTurn, chatEventSchema } from "@specquer/shared/chat";
 import type { CommentChange, CommentChangeResult, CommentsResponse } from "@specquer/shared/comments";
 import type { BodyEdit } from "@specquer/shared/markdown";
-import type { FolderSetting, ModelConfig } from "@specquer/shared/settings";
+import type { AgentApproval, FolderSetting, ModelConfig } from "@specquer/shared/settings";
 import type { UiState, UiStatePatch } from "@specquer/shared/uistate";
 
 /**
@@ -116,6 +116,8 @@ export interface Api {
   sectionSummary(id: string): Promise<SectionSummaryLookup>;
   agentSettings(): Promise<AgentSettings>;
   saveAgentSettings(update: AgentSettingsUpdate): Promise<SettingsSaveOutcome>;
+  /** Approves shared agent settings that wait for this user (a model endpoint, pre-filling). */
+  approveAgentSettings(approval: AgentApproval): Promise<void>;
   /** Whether an environment variable is set on the server. */
   envSet(name: string): Promise<boolean>;
   /** One small call to the model with these settings, saved or not. */
@@ -272,6 +274,9 @@ export const httpApi: Api = {
   },
   async saveAgentSettings(update) {
     return settingsOutcome<{ version: string }>(await client.api.settings.agent.$put({ json: update }));
+  },
+  async approveAgentSettings(approval) {
+    await json<{ ok: true }>(await client.api.settings.agent.approve.$post({ json: approval }));
   },
   async envSet(name) {
     return (await json<{ set: boolean }>(await client.api.settings.env.$get({ query: { name } }))).set;

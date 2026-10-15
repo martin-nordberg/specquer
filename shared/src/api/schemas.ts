@@ -8,6 +8,7 @@ import {
   type FolderSetting,
   type FolderType,
   type ModelConfig,
+  type PendingApproval,
   type SettingSource,
   type SummariesConfig,
   type SummarySettingKey,
@@ -309,6 +310,8 @@ export interface AgentSettings {
   /** Whether the environment variable each file names in `apiKeyEnv` is set (never its value). */
   keys: Record<string, boolean>;
   status: SummaryStatus;
+  /** Shared settings in effect that wait for this user's approval before they are used. */
+  approval: PendingApproval;
 }
 
 /**

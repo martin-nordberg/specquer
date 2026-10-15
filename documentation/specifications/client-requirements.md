@@ -204,6 +204,7 @@ The logo is a section sign (§), for specifications, drawn as two S-shaped strok
 7. **Chat** tab: sections per question (1 to 20), their token budget (1,000 to 100,000), earlier questions sent (0 to 50), their token budget (0 to 100,000) and the longest answer in tokens (256 to 32,000), each with its source badge and **Reset** as on the other tabs.
 8. Invalid values are reported under their field and keep **Save** disabled. **Save** writes the changes of all tabs, one save per file, and closes the dialog; **Cancel** discards them. A file that changed on disk since the dialog read it is not overwritten: the dialog reloads the values and says so. Values a file holds that are invalid are listed at the top of the tab, and a file that isn't valid YAML can't be saved to until it is fixed by hand.
 9. Saved settings take effect without a restart, except a key variable that wasn't set when Specquer started (item 4).
+10. **Approval.** Shared settings that wait for this user's approval ([Security](security.md) §9) are named at the top of the dialog, above the tabs: a shared model sending its key to an endpoint other than the default (the variable and the URL, with **Approve this model**) and shared pre-filling (with **Approve pre-filling**). Approving takes effect at once, and the dialog reloads its values. Saving to the shared file approves what is saved. The base URL must be `https`, or `http` to this machine only.
 
 <a id="SPEC-00114" data-uid="z8y8hs5v3kss"></a>
 ## 11. Chat

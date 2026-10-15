@@ -12,6 +12,7 @@ import {
   summarizeWithFallback,
   testModel,
 } from "@specquer/agent";
+import type { AgentApproval, PendingApproval } from "@specquer/shared/settings";
 import { ApiError, type SectionSummaryLookup, type SummaryRequest, type SummaryResult, type SummaryStatus } from "@specquer/shared/api";
 import { isShortSection } from "@specquer/shared/summaries";
 import type { FileService } from "../files.ts";
@@ -220,6 +221,17 @@ export class SummaryService {
   /** Reads the agent configuration again on the next call, after Specquer wrote it. */
   configChanged(): void {
     this.runtime.configChanged();
+  }
+
+  /** Shared settings waiting for this user's approval. */
+  async pendingApproval(): Promise<PendingApproval> {
+    return (await this.runtime.current()).pending;
+  }
+
+  /** Records shared settings this user approves; pre-filling starts again if it now may. */
+  async approve(approval: AgentApproval): Promise<void> {
+    await this.runtime.approve(approval);
+    await this.current();
   }
 
   /** One small call to check a model configuration; a test running already is aborted. */

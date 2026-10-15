@@ -1,6 +1,6 @@
 /// <reference lib="dom" />
 import type { Page } from "@playwright/test";
-import { type FakeModel, fakeModelConfig, startFakeModel } from "./fake-model";
+import { type FakeModel, fakeModelApproval, fakeModelConfig, startFakeModel } from "./fake-model";
 import { contentEditor, test as base, expect, launch, openFile, saveStatus, typeAtEnd } from "./fixtures";
 
 const words = (n: number, word: string) => Array(n).fill(word).join(" ");
@@ -39,6 +39,7 @@ const test = base.extend<{ model: FakeModel }>({
       "docs/spec.md": SPEC,
       "docs/links.md": "# Links\n\nSee [the detail](spec.md#REQ-00007).\n",
       ".specquer/shared/agent.config.yaml": fakeModelConfig(model),
+      ...fakeModelApproval(model),
     });
   },
 });
@@ -192,6 +193,7 @@ test.describe("pre-filling", () => {
       await use({
         "docs/spec.md": SPEC,
         ".specquer/shared/agent.config.yaml": `${fakeModelConfig(model)}  prefill: true\n`,
+        ...fakeModelApproval(model, { prefill: true }),
       });
     },
   });

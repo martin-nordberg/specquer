@@ -154,7 +154,7 @@ export function modelErrors(values: ModelValues): Partial<Record<ModelField, str
   const errors: Partial<Record<ModelField, string>> = {};
   if (values.name.trim() === "") errors.name = "Enter the provider's model ID.";
   const url = firstIssue(modelConfigSchema.shape.baseUrl.safeParse(values.baseUrl));
-  if (url !== undefined) errors.baseUrl = "Enter an http or https URL.";
+  if (url !== undefined) errors.baseUrl = "Enter an https URL (http only to this machine).";
   const env = firstIssue(modelConfigSchema.shape.apiKeyEnv.safeParse(values.apiKeyEnv));
   if (env !== undefined) errors.apiKeyEnv = "Enter an environment variable name (letters, digits and _).";
   return errors;

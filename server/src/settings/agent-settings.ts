@@ -1,7 +1,14 @@
 import { join } from "node:path";
 import { type AgentConfigFile, mergeAgentConfig, parseAgentConfig } from "@specquer/agent";
 import type { AgentConfigFileSettings, AgentSettings, AgentSettingsUpdate, SettingsSaveResult, SummaryStatus } from "@specquer/shared/api";
-import { CHAT_SETTING_KEYS, NVIDIA_BASE_URL, SUMMARY_SETTING_KEYS, type SettingsScope, type SettingSource } from "@specquer/shared/settings";
+import {
+  CHAT_SETTING_KEYS,
+  NVIDIA_BASE_URL,
+  type PendingApproval,
+  SUMMARY_SETTING_KEYS,
+  type SettingsScope,
+  type SettingSource,
+} from "@specquer/shared/settings";
 import { type Document, isMap } from "yaml";
 import { SHARED_AGENT_CONFIG, USER_AGENT_CONFIG } from "../summaries/config.ts";
 import { ensureUserFolder } from "../user-folder.ts";
@@ -24,6 +31,8 @@ export interface AgentSettingsEnvironment {
   /** Whether an environment variable is set. */
   keySet(name: string): boolean;
   status(): Promise<SummaryStatus>;
+  /** Shared settings waiting for this user's approval. */
+  pending(): Promise<PendingApproval>;
 }
 
 export class AgentSettingsFiles {
@@ -71,6 +80,7 @@ export class AgentSettingsFiles {
       sources: { model: source(personal.model !== undefined, shared.model !== undefined), summaries, chat },
       keys,
       status: await environment.status(),
+      approval: await environment.pending(),
     };
   }
 

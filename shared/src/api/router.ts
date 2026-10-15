@@ -6,7 +6,7 @@ import type { ZodType } from "zod";
 import { type ChatEvent, type ChatRequest, type ChatTurn, chatRequestSchema, chatRestoreSchema } from "../chat/chat.ts";
 import { type CommentChange, type CommentChangeResult, type CommentsResponse, commentChangeSchema } from "../comments/comments.ts";
 import type { BodyEdit } from "../markdown/sections.ts";
-import type { FolderSetting, FolderType, ModelConfig } from "../settings/settings.ts";
+import { type AgentApproval, type FolderSetting, type FolderType, type ModelConfig, agentApprovalSchema } from "../settings/settings.ts";
 import { type UiState, type UiStatePatch, uiStatePatchSchema } from "../uistate/uistate.ts";
 import {
   type AgentSettings,
@@ -111,6 +111,8 @@ export interface ApiHandlers {
   sectionSummary(id: string): Promise<SectionSummaryLookup>;
   agentSettings(): Promise<AgentSettings>;
   saveAgentSettings(update: AgentSettingsUpdate): Promise<SettingsSaveResult>;
+  /** Records shared agent settings this user approves (a model endpoint, pre-filling). */
+  approveAgentSettings(approval: AgentApproval): Promise<void>;
   /** Whether an environment variable is set; never its value. */
   envSet(name: string): Promise<boolean>;
   /** One small model call with the settings as entered; `signal` aborts it. */
@@ -267,6 +269,10 @@ export function createApiRouter(handlers: ApiHandlers) {
         return c.json(failure.body, failure.status);
       }
       return c.json({ version: result.version }, 200);
+    })
+    .post("/settings/agent/approve", validate("json", agentApprovalSchema), async (c) => {
+      await handlers.approveAgentSettings(c.req.valid("json"));
+      return c.json({ ok: true }, 200);
     })
     .get("/settings/env", validate("query", envQuerySchema), async (c) => {
       return c.json({ set: await handlers.envSet(c.req.valid("query").name) });

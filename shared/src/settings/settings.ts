@@ -14,16 +14,68 @@ export const API_KEY_ENV_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 export const apiKeyEnvSchema = z.string().regex(API_KEY_ENV_PATTERN, "must be an environment variable name");
 
+/** The environment variable the default configuration takes NVIDIA's key from. */
+export const NVIDIA_API_KEY_ENV = "NVIDIA_API_KEY";
+
+/** Whether a URL may receive an API key: `https`, or `http` to this machine only (a local model). */
+export function isAllowedModelUrl(url: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol === "https:") return true;
+  if (parsed.protocol !== "http:") return false;
+  const host = parsed.hostname.replace(/^\[|\]$/g, "");
+  return host === "localhost" || host === "::1" || /^127(\.\d{1,3}){3}$/.test(host);
+}
+
 export const modelConfigSchema = z.object({
   /** Only NVIDIA's hosted models (OpenAI-compatible API) in this version. */
   provider: z.literal("nvidia"),
   /** The provider's model ID. */
   name: z.string().trim().min(1),
-  baseUrl: z.url({ protocol: /^https?$/ }).default(NVIDIA_BASE_URL),
+  baseUrl: z
+    .url({ protocol: /^https?$/ })
+    .refine(isAllowedModelUrl, "must use https (http only to this machine)")
+    .default(NVIDIA_BASE_URL),
   /** The environment variable holding the API key. */
   apiKeyEnv: apiKeyEnvSchema,
 });
 export type ModelConfig = z.infer<typeof modelConfigSchema>;
+
+/**
+ * Where a model configuration sends its key: the URL and the environment variable. The shared
+ * file is committed, so one that arrives through Git could send any variable anywhere; its
+ * endpoint is used only once this user approves it, unless it is the default one.
+ */
+export const modelEndpointSchema = z.object({ baseUrl: z.string(), apiKeyEnv: apiKeyEnvSchema });
+export type ModelEndpoint = z.infer<typeof modelEndpointSchema>;
+
+/** Whether an endpoint is the default one (NVIDIA's URL with `NVIDIA_API_KEY`), which needs no approval. */
+export function isDefaultEndpoint(endpoint: ModelEndpoint): boolean {
+  return endpoint.baseUrl === NVIDIA_BASE_URL && endpoint.apiKeyEnv === NVIDIA_API_KEY_ENV;
+}
+
+export function sameEndpoint(a: ModelEndpoint, b: ModelEndpoint): boolean {
+  return a.baseUrl === b.baseUrl && a.apiKeyEnv === b.apiKeyEnv;
+}
+
+/** Shared settings waiting for this user's approval before they take effect. */
+export interface PendingApproval {
+  /** The shared model's endpoint, when it is in effect and not approved. */
+  model?: ModelEndpoint;
+  /** Whether the shared `summaries.prefill: true` is in effect and not approved. */
+  prefill: boolean;
+}
+
+/** `POST /api/settings/agent/approve`: shared settings this user approves. */
+export const agentApprovalSchema = z.object({
+  model: modelEndpointSchema.optional(),
+  prefill: z.literal(true).optional(),
+});
+export type AgentApproval = z.infer<typeof agentApprovalSchema>;
 
 /** Each summaries setting alone, without its default, for validating one value. */
 export const summarySettingSchemas = {

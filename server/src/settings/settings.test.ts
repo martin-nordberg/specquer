@@ -45,7 +45,7 @@ async function setup(files: Record<string, string>) {
   const queue = new WriteQueue();
   const read = (path: string) => Bun.file(join(temp.root, path)).text();
   const exists = (path: string) => Bun.file(join(temp.root, path)).exists();
-  const environment = { keySet: (name: string) => name === "NVIDIA_API_KEY", status: async () => ({ enabled: false }) };
+  const environment = { keySet: (name: string) => name === "NVIDIA_API_KEY", status: async () => ({ enabled: false }), pending: async () => ({ prefill: false }) };
   return { root: temp.root, agent: new AgentSettingsFiles(temp.root, queue), folders: new FolderSettingsFile(new FileService(temp.root), queue), read, exists, environment };
 }
 

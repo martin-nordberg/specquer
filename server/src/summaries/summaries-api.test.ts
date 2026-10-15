@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { join } from "node:path";
 import { type ChatModel, createChatModel } from "@specquer/agent";
-import { tempRoot, testApp } from "../test-support.ts";
+import { TEST_APPROVALS, tempRoot, testApp } from "../test-support.ts";
 import { summaryBody, summaryTargets } from "@specquer/shared/summaries";
 import { CACHE_FILE, MAX_UNUSED } from "./cache.ts";
 import type { SummaryServiceOptions } from "./service.ts";
@@ -39,6 +39,7 @@ async function setup(files: Record<string, string> = { [SHARED]: CONFIG }, optio
 
 /** The app on an existing root folder, with a fake model. */
 async function setupIn(root: string, options: SetupOptions = {}) {
+  for (const [path, text] of Object.entries(TEST_APPROVALS)) if (!(await Bun.file(join(root, path)).exists())) await Bun.write(join(root, path), text);
   const fake = fakeModel(options.reply);
   const app = testApp(root, undefined, {
     env: { TEST_KEY: "secret" },
@@ -147,9 +148,10 @@ describe("summarizing", () => {
   });
 
   test("the same model name at another URL has its own summaries", async () => {
-    const { summarize, prompts, root } = await setup();
+    const { summarize, prompts, root, ...app } = await setup();
     await summarize(SECTION);
     await Bun.write(join(root, SHARED), CONFIG.replace("apiKeyEnv", "baseUrl: http://127.0.0.1:9/v1\n  apiKeyEnv"));
+    await app.request("/api/settings/agent/approve", { method: "POST", body: { model: { baseUrl: "http://127.0.0.1:9/v1", apiKeyEnv: "TEST_KEY" } } });
     expect(await (await summarize(SECTION)).json()).toMatchObject({ model: "test/model", cached: false });
     expect(prompts).toHaveLength(2);
   });
@@ -322,6 +324,8 @@ async function until(check: () => boolean | Promise<boolean>, timeout = 3000) {
 
 describe("pre-filling", () => {
   const PREFILL = CONFIG + "  prefill: true\n";
+  /** The shared pre-filling approved by this user. */
+  const APPROVED = { ".specquer/user/approvals.yaml": TEST_APPROVALS[".specquer/user/approvals.yaml"].replace("prefill: false", "prefill: true") };
   const BIG = `# Big\n\n${words(70, "lead")}\n\n## One\n\n${words(300, "alpha")}\n\n### Deep\n\n${words(200, "deep")}\n\n## Two\n\n${words(300, "beta")}\n`;
   // Targets: Deep, One, Two, Big, and the document (the same text as Big, so one call)
   const BIG_CALLS = 4;
@@ -331,15 +335,26 @@ describe("pre-filling", () => {
   test("nothing happens when it is off, or without a key", async () => {
     const off = await setup({ [SHARED]: CONFIG, "docs/big.md": BIG }, options);
     off.summaries.filesChanged();
-    const noKey = await setup({ [SHARED]: PREFILL, "docs/big.md": BIG }, { ...options, env: {} });
+    const noKey = await setup({ [SHARED]: PREFILL, ...APPROVED, "docs/big.md": BIG }, { ...options, env: {} });
     noKey.summaries.filesChanged();
     await Bun.sleep(100);
     expect(off.prompts).toHaveLength(0);
     expect(noKey.prompts).toHaveLength(0);
   });
 
+  test("shared pre-filling waits for the user's approval", async () => {
+    const { summaries, prompts, request } = await setup({ [SHARED]: PREFILL, "docs/big.md": BIG }, { ...options, reply });
+    summaries.filesChanged();
+    await Bun.sleep(100);
+    expect(prompts).toHaveLength(0);
+    expect(((await (await request("/api/summaries/status")).json()) as { prefill: unknown }).prefill).toEqual({ enabled: false, pending: 0 });
+    expect(((await (await request("/api/settings/agent")).json()) as { approval: unknown }).approval).toEqual({ prefill: true });
+    expect((await request("/api/settings/agent/approve", { method: "POST", body: { prefill: true } })).status).toBe(200);
+    await until(() => prompts.length === BIG_CALLS);
+  });
+
   test("a pass summarizes deeper sections first and skips what is cached", async () => {
-    const { summaries, summarize, prompts, request } = await setup({ [SHARED]: PREFILL, "docs/big.md": BIG }, { ...options, reply });
+    const { summaries, summarize, prompts, request } = await setup({ [SHARED]: PREFILL, ...APPROVED, "docs/big.md": BIG }, { ...options, reply });
     // Made by the slider first: not summarized again
     const body = summaryBody(BIG);
     const two = summaryTargets(body).find((target) => target.path === "0.1")!;
@@ -358,7 +373,7 @@ describe("pre-filling", () => {
 
   test("an interactive request overtakes the background backlog", async () => {
     const { summaries, summarize, prompts } = await setup(
-      { [SHARED]: PREFILL, "docs/big.md": BIG },
+      { [SHARED]: PREFILL, ...APPROVED, "docs/big.md": BIG },
       {
         ...options,
         reply: async (prompt) => {
@@ -380,7 +395,7 @@ describe("pre-filling", () => {
   test("a rate limit pauses pre-filling, which then carries on", async () => {
     let failures = 2;
     const { summaries, prompts, request } = await setup(
-      { [SHARED]: PREFILL, "docs/big.md": BIG },
+      { [SHARED]: PREFILL, ...APPROVED, "docs/big.md": BIG },
       {
         ...options,
         reply: (prompt) => {
@@ -404,7 +419,7 @@ describe("pre-filling", () => {
   });
 
   test("a save starts another pass over the changed file", async () => {
-    const { summaries, prompts, request } = await setup({ [SHARED]: PREFILL, "docs/big.md": BIG }, { ...options, reply });
+    const { summaries, prompts, request } = await setup({ [SHARED]: PREFILL, ...APPROVED, "docs/big.md": BIG }, { ...options, reply });
     summaries.filesChanged();
     await until(() => prompts.length === BIG_CALLS);
     const file = (await (await request("/api/file?path=docs/big.md")).json()) as { version: string };
@@ -417,7 +432,7 @@ describe("pre-filling", () => {
 
   test("turning it off stops the calls still waiting", async () => {
     const { summaries, prompts, root, request } = await setup(
-      { [SHARED]: PREFILL, "docs/big.md": BIG },
+      { [SHARED]: PREFILL, ...APPROVED, "docs/big.md": BIG },
       {
         ...options,
         reply: async (prompt) => {

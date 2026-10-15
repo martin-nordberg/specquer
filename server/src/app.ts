@@ -24,6 +24,7 @@ import {
 } from "./security.ts";
 import { SummaryService, type SummaryServiceOptions } from "./summaries/service.ts";
 import { UiStateStore } from "./uistate-store.ts";
+import { NVIDIA_BASE_URL } from "@specquer/shared/settings";
 
 export interface AppConfig extends SecurityConfig {
   root: string;
@@ -123,12 +124,24 @@ export function createHandlers(
     summaryStatus: () => summaries.status(),
     summarize: (request, signal) => summaries.summarize(request, signal),
     sectionSummary: (id) => summaries.sectionSummary(id),
-    agentSettings: () => agentSettings.read({ keySet: (name) => summaries.keySet(name), status: () => summaries.status() }),
+    agentSettings: () =>
+      agentSettings.read({ keySet: (name) => summaries.keySet(name), status: () => summaries.status(), pending: () => summaries.pendingApproval() }),
     async saveAgentSettings(update) {
       const result = await agentSettings.write(update);
-      if (result.ok) summaries.configChanged();
+      if (!result.ok) return result;
+      // What this user saves to the shared file is approved: its model endpoint, and pre-filling,
+      // which the dialog confirmed a second time
+      if (update.scope === "shared") {
+        const model = update.model ?? undefined;
+        await summaries.approve({
+          ...(model === undefined ? {} : { model: { baseUrl: model.baseUrl ?? NVIDIA_BASE_URL, apiKeyEnv: model.apiKeyEnv } }),
+          ...(update.summaries?.prefill === true ? { prefill: true as const } : {}),
+        });
+      }
+      summaries.configChanged();
       return result;
     },
+    approveAgentSettings: (approval) => summaries.approve(approval),
     envSet: async (name) => summaries.keySet(name),
     testModel: (config, signal) => summaries.testModel(config, signal),
     chat: (request, signal) => chat.ask(request, signal),

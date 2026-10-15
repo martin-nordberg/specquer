@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { describe, expect, mock, test } from "bun:test";
 import type { AgentSettings, AgentSettingsUpdate, ModelTestResult } from "@specquer/shared/api";
 import type { SettingsSaveOutcome } from "@/lib/api";
+import type { AgentApproval } from "@specquer/shared/settings";
 import { SettingsDialog } from "./SettingsDialog";
 import { buildUpdates, emptyModelDraft, emptySummaryDraft } from "./settings-form";
 
@@ -17,12 +18,14 @@ const SETTINGS: AgentSettings = {
   sources: { model: "shared", summaries: { concurrency: "personal", tokenBudget: "default", prefill: "default" }, chat: CHAT_SOURCES },
   keys: { NVIDIA_API_KEY: true },
   status: { enabled: true, model: "google/gemma-4-31b-it" },
+  approval: { prefill: false },
 };
 
 function setup(options: { settings?: AgentSettings; save?: (update: AgentSettingsUpdate) => Promise<SettingsSaveOutcome>; testModel?: () => Promise<ModelTestResult> } = {}) {
   const api = {
     agentSettings: mock(async () => options.settings ?? SETTINGS),
     saveAgentSettings: mock(options.save ?? (async () => ({ kind: "saved", version: "new" }) as SettingsSaveOutcome)),
+    approveAgentSettings: mock(async (_approval: AgentApproval) => undefined),
     envSet: mock(async (name: string) => name === "OTHER_KEY"),
     testModel: mock(options.testModel ?? (async () => ({ ok: true, ms: 1234 }) as ModelTestResult)),
   };
@@ -107,7 +110,7 @@ describe("SettingsDialog", () => {
     await waitFor(() => expect(field("Model ID").value).not.toBe(""));
     fireEvent.change(field("Base URL"), { target: { value: "ftp://example.com" } });
     expect(field("Base URL").getAttribute("aria-invalid")).toBe("true");
-    expect(dialog().textContent).toContain("Enter an http or https URL.");
+    expect(dialog().textContent).toContain("Enter an https URL (http only to this machine).");
     expect(button("Save").disabled).toBe(true);
     expect(button("Test").disabled).toBe(true);
     fireEvent.change(field("Base URL"), { target: { value: "https://example.com/v1" } });
@@ -115,6 +118,29 @@ describe("SettingsDialog", () => {
     fireEvent.change(field("Concurrent model calls"), { target: { value: "17" } });
     expect(dialog().textContent).toContain("Enter a whole number from 1 to 16.");
     expect(button("Save").disabled).toBe(true);
+  });
+
+  test("http to another machine is refused; http to this machine is allowed", async () => {
+    setup();
+    await waitFor(() => expect(field("Model ID").value).not.toBe(""));
+    fireEvent.change(field("Base URL"), { target: { value: "http://example.com/v1" } });
+    expect(field("Base URL").getAttribute("aria-invalid")).toBe("true");
+    fireEvent.change(field("Base URL"), { target: { value: "http://127.0.0.1:8000/v1" } });
+    expect(field("Base URL").getAttribute("aria-invalid")).toBe("false");
+  });
+
+  test("shared settings waiting for approval are named, and approved on request", async () => {
+    const pending = { baseUrl: "https://other.example/v1", apiKeyEnv: "OTHER_KEY" };
+    const { api, onSaved } = setup({ settings: { ...SETTINGS, approval: { model: pending, prefill: true } } });
+    const notice = await screen.findByRole("alert", { name: "Model approval" });
+    expect(notice.textContent).toContain("OTHER_KEY");
+    expect(notice.textContent).toContain("https://other.example/v1");
+    expect(screen.getByRole("alert", { name: "Pre-filling approval" })).toBeTruthy();
+    fireEvent.click(within(notice).getByRole("button", { name: "Approve this model" }));
+    await waitFor(() => expect(api.approveAgentSettings).toHaveBeenCalledWith({ model: pending }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: "Approve pre-filling" }));
+    await waitFor(() => expect(api.approveAgentSettings).toHaveBeenCalledWith({ prefill: true }));
   });
 
   test("a key variable that isn't set says to restart", async () => {

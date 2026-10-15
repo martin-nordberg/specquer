@@ -1,7 +1,16 @@
 import { RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { AgentSettings, ModelTestResult } from "@specquer/shared/api";
-import { API_KEY_ENV_PATTERN, CHAT_SETTING_KEYS, type ChatSettingKey, type SettingSource, type SettingsScope, type SummarySettingKey } from "@specquer/shared/settings";
+import {
+  API_KEY_ENV_PATTERN,
+  type AgentApproval,
+  CHAT_SETTING_KEYS,
+  type ChatSettingKey,
+  type PendingApproval,
+  type SettingSource,
+  type SettingsScope,
+  type SummarySettingKey,
+} from "@specquer/shared/settings";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -36,7 +45,7 @@ import {
 export interface SettingsDialogProps {
   open: boolean;
   onClose: () => void;
-  api: Pick<Api, "agentSettings" | "saveAgentSettings" | "envSet" | "testModel">;
+  api: Pick<Api, "agentSettings" | "saveAgentSettings" | "approveAgentSettings" | "envSet" | "testModel">;
   /** Called after a save, since the summary status may have changed. */
   onSaved: () => void;
 }
@@ -155,6 +164,17 @@ export function SettingsDialog({ open, onClose, api, onSaved }: SettingsDialogPr
     }
   };
 
+  const approve = async (approval: AgentApproval) => {
+    setMessage(null);
+    try {
+      await api.approveAgentSettings(approval);
+      setSettings(await api.agentSettings());
+      onSaved();
+    } catch (err) {
+      setMessage({ kind: "error", text: (err as Error).message });
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
       <DialogContent className="sm:max-w-xl">
@@ -167,6 +187,7 @@ export function SettingsDialog({ open, onClose, api, onSaved }: SettingsDialogPr
             Couldn't load the settings: {loadError}
           </p>
         )}
+        {settings !== null && <ApprovalNotices approval={settings.approval} onApprove={(approval) => void approve(approval)} />}
         {settings !== null && modelValues !== null && (
           <Tabs value={tab} onValueChange={(value) => setTab(value as Tab)}>
             <TabsList>
@@ -246,6 +267,46 @@ export function SettingsDialog({ open, onClose, api, onSaved }: SettingsDialogPr
         </DialogContent>
       </Dialog>
     </Dialog>
+  );
+}
+
+/**
+ * Shared settings that arrived through Git and wait for this user's approval: a model endpoint
+ * other than the default (where the key goes, and which key) and pre-filling (which sends every spec).
+ */
+function ApprovalNotices({ approval, onApprove }: { approval: PendingApproval; onApprove: (approval: AgentApproval) => void }) {
+  const { model } = approval;
+  if (model === undefined && !approval.prefill) return null;
+  return (
+    <div className="grid gap-2">
+      {model !== undefined && (
+        <div role="alert" aria-label="Model approval" className="grid gap-2 rounded-md border border-warning bg-warning/10 px-3 py-2 text-sm">
+          <p>
+            The shared settings send the key in <span className="font-mono">{model.apiKeyEnv}</span> to{" "}
+            <span className="font-mono break-all">{model.baseUrl}</span>. Specquer doesn't use them until you approve: approve only a
+            provider you trust with that key and your specs.
+          </p>
+          <div>
+            <Button type="button" size="sm" onClick={() => onApprove({ model })}>
+              Approve this model
+            </Button>
+          </div>
+        </div>
+      )}
+      {approval.prefill && (
+        <div role="alert" aria-label="Pre-filling approval" className="grid gap-2 rounded-md border border-warning bg-warning/10 px-3 py-2 text-sm">
+          <p>
+            The shared settings switch on pre-filling: every section of every Markdown file would be sent to the model provider in the
+            background. It stays off until you approve.
+          </p>
+          <div>
+            <Button type="button" size="sm" onClick={() => onApprove({ prefill: true })}>
+              Approve pre-filling
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

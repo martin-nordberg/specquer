@@ -1,6 +1,6 @@
 /// <reference lib="dom" />
 import type { Page } from "@playwright/test";
-import { FAKE_MODEL_KEY_ENV, type FakeModel, startFakeModel } from "./fake-model";
+import { FAKE_MODEL_KEY_ENV, type FakeModel, fakeModelConfig, startFakeModel } from "./fake-model";
 import { test as base, contentEditor, expect, hideTab, launch, openFile, saveStatus, treeItem, typeAtEnd } from "./fixtures";
 
 const SHARED_AGENT = "# Shared agent settings\nsummaries:\n  concurrency: 2\n";
@@ -75,6 +75,22 @@ test("a model error from the test is shown", async ({ page, model }) => {
   await dialog.getByRole("textbox", { name: "API key variable" }).fill(FAKE_MODEL_KEY_ENV);
   await dialog.getByRole("button", { name: "Test" }).click();
   await expect(dialog.getByRole("alert")).toContainText("doesn't know the model fake/model");
+});
+
+test("a shared model that arrives through Git waits for the user's approval", async ({ page, specquer, model }) => {
+  // As a pull would bring it: written behind the dialog's back
+  await specquer.write(".specquer/shared/agent.config.yaml", fakeModelConfig(model));
+  await page.getByRole("button", { name: "Settings" }).click();
+  const dialog = settingsDialog(page);
+  const approval = dialog.getByRole("alert", { name: "Model approval" });
+  await expect(approval).toContainText(FAKE_MODEL_KEY_ENV);
+  await expect(approval).toContainText(model.baseUrl);
+  await expect(dialog.getByLabel("Model status")).toContainText("haven't approved");
+  expect(model.prompts).toEqual([]);
+  await approval.getByRole("button", { name: "Approve this model" }).click();
+  await expect(approval).toBeHidden();
+  await expect(dialog.getByLabel("Model status")).toContainText("Summaries are on, with fake/model.");
+  expect(await specquer.read(".specquer/user/approvals.yaml")).toContain(model.baseUrl);
 });
 
 test("a folder switched off isn't anchored, and keeps its IDs when switched back", async ({ page, specquer }) => {

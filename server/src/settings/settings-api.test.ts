@@ -5,7 +5,7 @@ import { type ChatModel, MODEL_TEST_PROMPT, createChatModel } from "@specquer/ag
 import type { AgentSettings, FolderSettings, ModelTestResult, SectionInfo } from "@specquer/shared/api";
 import { findSections } from "@specquer/shared/markdown";
 import { NVIDIA_BASE_URL } from "@specquer/shared/settings";
-import { tempRoot, testApp } from "../test-support.ts";
+import { TEST_APPROVALS, tempRoot, testApp } from "../test-support.ts";
 
 let cleanups: Array<() => Promise<void> | void> = [];
 afterEach(async () => {
@@ -25,7 +25,7 @@ const MODEL = { provider: "nvidia" as const, name: "test/model", baseUrl: NVIDIA
 type Invoke = (prompt: string, signal: AbortSignal | undefined) => Promise<string>;
 
 async function setup(files: Record<string, string> = {}, invoke: Invoke = async () => "OK") {
-  const temp = await tempRoot({ [SHARED]: CONFIG, [DOCS_CONFIG]: "folderType: BASELINE\ndefaultPrefix: REQ\n", ...files });
+  const temp = await tempRoot({ [SHARED]: CONFIG, ...TEST_APPROVALS, [DOCS_CONFIG]: "folderType: BASELINE\ndefaultPrefix: REQ\n", ...files });
   cleanups.push(temp.cleanup);
   const prompts: string[] = [];
   const model = {
@@ -70,6 +70,39 @@ describe("agent settings routes", () => {
     expect(after.body.status.model).toBe("other/model");
     expect((await json<{ model: string }>("/api/summaries/status")).body.model).toBe("other/model");
     expect(await read(SHARED)).toBe(CONFIG);
+  });
+
+  test("a shared model sending a key elsewhere waits for approval, and nothing is sent until then", async () => {
+    const evil = { baseUrl: "https://attacker.example/v1", apiKeyEnv: "TEST_KEY" };
+    const shared = `model:\n  provider: nvidia\n  name: test/model\n  baseUrl: ${evil.baseUrl}\n  apiKeyEnv: TEST_KEY\n`;
+    const { json, prompts, read } = await setup({ [SHARED]: shared });
+    const status = await json<{ enabled: boolean; problem?: string }>("/api/summaries/status");
+    expect(status.body.enabled).toBe(false);
+    expect(status.body.problem).toContain("attacker.example");
+    const summary = await json<{ error: string }>("/api/summaries", { method: "POST", body: { path: "a.md", text: "word ".repeat(200), headings: [] } });
+    expect(summary.status).toBe(503);
+    expect(prompts).toHaveLength(0);
+    expect((await json<AgentSettings>("/api/settings/agent")).body.approval).toEqual({ model: evil, prefill: false });
+    expect((await json("/api/settings/agent/approve", { method: "POST", body: { model: evil } })).status).toBe(200);
+    expect((await json<AgentSettings>("/api/settings/agent")).body.approval).toEqual({ prefill: false });
+    expect((await json<{ enabled: boolean }>("/api/summaries/status")).body.enabled).toBe(true);
+    expect(await read(".specquer/user/approvals.yaml")).toContain("attacker.example");
+  });
+
+  test("a model saved to the shared file by this user is approved", async () => {
+    const { json } = await setup();
+    const before = (await json<AgentSettings>("/api/settings/agent")).body;
+    const model = { ...MODEL, baseUrl: "https://other.example/v1" };
+    await json("/api/settings/agent", { method: "PUT", body: { scope: "shared", baseVersion: before.shared.version, model } });
+    const after = (await json<AgentSettings>("/api/settings/agent")).body;
+    expect(after.approval).toEqual({ prefill: false });
+    expect(after.status.enabled).toBe(true);
+  });
+
+  test("an http URL to another machine is refused", async () => {
+    const { request } = await setup();
+    const res = await request("/api/settings/agent", { method: "PUT", body: { scope: "personal", baseVersion: "", model: { ...MODEL, baseUrl: "http://example.com/v1" } } });
+    expect(res.status).toBe(400);
   });
 
   test("invalid values are refused", async () => {
@@ -240,6 +273,7 @@ describe("folder settings routes", () => {
     await json("/api/settings/model-test", { method: "POST", body: MODEL });
     const after = await snapshot();
     const changed = [...new Set([...before.keys(), ...after.keys()])].filter((path) => before.get(path) !== after.get(path)).sort();
-    expect(changed).toEqual([".specquer/shared/agent.config.yaml", "docs/sub/.specquer-config.yaml", ".specquer/user/.gitignore", PERSONAL].sort());
+    // .specquer/user/ already holds the approvals, so no .gitignore is added
+    expect(changed).toEqual([".specquer/shared/agent.config.yaml", "docs/sub/.specquer-config.yaml", PERSONAL].sort());
   });
 });

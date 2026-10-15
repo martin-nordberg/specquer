@@ -1,11 +1,15 @@
 import { join } from "node:path";
 import { type AgentConfig, type AgentConfigFile, mergeAgentConfig, parseAgentConfig } from "@specquer/agent";
+import type { PendingApproval } from "@specquer/shared/settings";
 import { parseDocument } from "yaml";
+import { ApprovalsFile, pendingApproval } from "../settings/approvals.ts";
 
 /**
  * The agent configuration files: `.specquer/shared/agent.config.yaml` and the personal
  * `.specquer/user/agent.config.yaml`, which overrides it. Each is read again when its
- * modification time changes, so editing them takes effect without a restart.
+ * modification time changes, so editing them takes effect without a restart. Shared settings
+ * waiting for this user's approval (`approvals.ts`) are reported, and a shared `prefill: true`
+ * waiting for it is off.
  */
 
 export const SHARED_AGENT_CONFIG = join(".specquer", "shared", "agent.config.yaml");
@@ -53,17 +57,22 @@ class ConfigFile {
 }
 
 export class AgentConfigFiles {
+  readonly approvals: ApprovalsFile;
   private readonly shared: ConfigFile;
   private readonly user: ConfigFile;
 
   constructor(root: string, warn: (message: string) => void = (message) => console.warn(`specquer: ${message}`)) {
     this.shared = new ConfigFile(root, SHARED_AGENT_CONFIG, warn);
     this.user = new ConfigFile(root, USER_AGENT_CONFIG, warn);
+    this.approvals = new ApprovalsFile(root);
   }
 
-  async load(): Promise<AgentConfig> {
-    const [shared, user] = await Promise.all([this.shared.load(), this.user.load()]);
-    return mergeAgentConfig(shared, user);
+  async load(): Promise<{ config: AgentConfig; pending: PendingApproval }> {
+    const [shared, user, approved] = await Promise.all([this.shared.load(), this.user.load(), this.approvals.load()]);
+    const config = mergeAgentConfig(shared, user);
+    const pending = pendingApproval(shared, user, approved);
+    if (pending.prefill) config.summaries = { ...config.summaries, prefill: false };
+    return { config, pending };
   }
 
   /**

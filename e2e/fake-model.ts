@@ -122,3 +122,13 @@ function chatAnswer(body: { model: string; stream?: boolean; stream_options?: { 
 export function fakeModelConfig(model: FakeModel): string {
   return `model:\n  provider: nvidia\n  name: fake/model\n  baseUrl: ${model.baseUrl}\n  apiKeyEnv: ${FAKE_MODEL_KEY_ENV}\nsummaries:\n  concurrency: 2\n`;
 }
+
+/**
+ * `.specquer/user/approvals.yaml` approving the fake model's endpoint (and, with `prefill`, the
+ * shared pre-filling): a shared model at another URL than NVIDIA's waits for the user's approval.
+ */
+export function fakeModelApproval(model: FakeModel, options: { prefill?: boolean } = {}): Record<string, string> {
+  return {
+    ".specquer/user/approvals.yaml": `models:\n  - baseUrl: ${model.baseUrl}\n    apiKeyEnv: ${FAKE_MODEL_KEY_ENV}\nprefill: ${options.prefill === true}\n`,
+  };
+}

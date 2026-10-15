@@ -14,6 +14,14 @@ export const TEST_PORT = 4999;
 export const TEST_TOKEN = "test-token-0123456789";
 export const ORIGIN = `http://127.0.0.1:${TEST_PORT}`;
 
+/**
+ * `.specquer/user/approvals.yaml` approving the tests' shared model (NVIDIA's URL with `TEST_KEY`),
+ * which would otherwise wait for the user's approval.
+ */
+export const TEST_APPROVALS = {
+  ".specquer/user/approvals.yaml": "models:\n  - baseUrl: https://integrate.api.nvidia.com/v1\n    apiKeyEnv: TEST_KEY\nprefill: false\n",
+};
+
 export async function tempRoot(files: Record<string, string> = {}, options: { git?: boolean } = {}) {
   const root = await realpath(await mkdtemp(join(tmpdir(), "specquer-test-")));
   for (const [path, text] of Object.entries(files)) {
