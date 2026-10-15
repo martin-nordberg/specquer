@@ -273,7 +273,6 @@ describe("folder settings routes", () => {
     await json("/api/settings/model-test", { method: "POST", body: MODEL });
     const after = await snapshot();
     const changed = [...new Set([...before.keys(), ...after.keys()])].filter((path) => before.get(path) !== after.get(path)).sort();
-    // .specquer/user/ already holds the approvals, so no .gitignore is added
-    expect(changed).toEqual([".specquer/shared/agent.config.yaml", "docs/sub/.specquer-config.yaml", PERSONAL].sort());
+    expect(changed).toEqual([".specquer/shared/agent.config.yaml", "docs/sub/.specquer-config.yaml", ".specquer/user/.gitignore", PERSONAL].sort());
   });
 });

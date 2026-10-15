@@ -71,7 +71,7 @@ specquer [root] [--port <n>] [--no-open]
 | `PATCH /api/uistate` | Merges the given top-level fields into the stored state (`null` clears `theme` or `currentFile`) and returns the result. |
 
 1. The state is stored in `.specquer/user/uistate.yaml` under the root, read and written with `Bun.YAML`, atomically.
-2. When the server creates `.specquer/user/`, it also writes `.specquer/user/.gitignore` containing `*`. It never overwrites an existing `.gitignore` there and never changes the repository's own `.gitignore` files.
+2. Whenever the server writes to `.specquer/user/` (or opens a cache in `.specquer/cache/`) and the folder has no `.gitignore`, it writes one containing `*`, whether it created the folder or not. It never overwrites an existing `.gitignore` there and never changes the repository's own `.gitignore` files.
 3. Invalid or unknown content falls back to defaults, field by field; it never stops the server.
 4. Entries for files and folders that no longer exist are dropped whenever the state is read or updated.
 5. Renames and deletes through the API update the stored state in the same request.

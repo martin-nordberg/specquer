@@ -1,12 +1,13 @@
 import { Database } from "bun:sqlite";
-import { mkdir, rename } from "node:fs/promises";
+import { rename } from "node:fs/promises";
 import { join } from "node:path";
+import { ensureUserFolder } from "../user-folder.ts";
 
 /**
  * The summary cache, `.specquer/cache/summaries.db` (SQLite through `bun:sqlite`). An entry is
  * keyed by its text (simplified, with the sentence count), the model and the prompt version, so
  * another model's summary of the same text can be found. Entries unused for 60 days are deleted
- * (Step 005, D2). The folder gets a `.gitignore` when it is created, so the cache is never
+ * (Step 005, D2). The folder gets a `.gitignore` whenever it has none, so the cache is never
  * committed. A damaged database is moved aside and created again, and one written by an older
  * version of Specquer is emptied; the cache never stops the server.
  */
@@ -129,11 +130,8 @@ export class SummaryCache {
   }
 
   /** Creates `.specquer/cache/` with a `.gitignore` that keeps the cache out of Git. */
-  private async ensureFolder(): Promise<void> {
-    const created = await mkdir(this.folder, { recursive: true });
-    if (created === undefined) return;
-    const gitignore = Bun.file(join(this.folder, ".gitignore"));
-    if (!(await gitignore.exists())) await Bun.write(gitignore, "*\n");
+  private ensureFolder(): Promise<void> {
+    return ensureUserFolder(this.folder);
   }
 
   /** The entry for `key`, marked as used. */

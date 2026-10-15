@@ -1,8 +1,9 @@
 import { Database } from "bun:sqlite";
-import { mkdir, rename } from "node:fs/promises";
+import { rename } from "node:fs/promises";
 import { join } from "node:path";
 import { estimateTokens } from "@specquer/agent";
 import { CACHE_FOLDER } from "../summaries/cache.ts";
+import { ensureUserFolder } from "../user-folder.ts";
 import { type SearchUnit, searchUnits } from "./units.ts";
 
 /**
@@ -192,11 +193,7 @@ export class SearchIndex {
   private async open(): Promise<Database> {
     if (this.db !== null) return this.db;
     if (!hasFts5()) throw new SearchUnavailableError("its SQLite has no FTS5");
-    const created = await mkdir(this.folder, { recursive: true });
-    if (created !== undefined) {
-      const gitignore = Bun.file(join(this.folder, ".gitignore"));
-      if (!(await gitignore.exists())) await Bun.write(gitignore, "*\n");
-    }
+    await ensureUserFolder(this.folder);
     try {
       this.db = this.connect();
     } catch (err) {

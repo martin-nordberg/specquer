@@ -304,7 +304,7 @@ The UI state is the per-user state of the Specquer interface. The client reads a
 ### 3.1. Storage
 
 - File: `.specquer/user/uistate.yaml` under the root folder, written by the server with `Bun.YAML`, atomically.
-- `.specquer/user/` gets a `.gitignore` containing `*` when Specquer creates the folder, so the state is never committed.
+- `.specquer/user/` gets a `.gitignore` containing `*` whenever Specquer writes there and it has none, so the state is never committed.
 - Several tabs or windows may change it; the last write wins.
 
 <a id="SPEC-00021" data-uid="n624876fazjz"></a>
@@ -432,7 +432,7 @@ CREATE TABLE summaries (
 );
 ```
 
-- `.specquer/cache/summaries.db`, through `bun:sqlite` in WAL mode, created on first use with `.specquer/cache/.gitignore` (`*`). `PRAGMA user_version` is 2; a database with another version (Step 004's) is emptied and created again, since its keys can't be split (Step 005 decision D4).
+- `.specquer/cache/summaries.db`, through `bun:sqlite` in WAL mode, created on first use; `.specquer/cache/.gitignore` (`*`) is written whenever it is missing. `PRAGMA user_version` is 2; a database with another version (Step 004's) is emptied and created again, since its keys can't be split (Step 005 decision D4).
 - `text_key` is the SHA-256 of the simplified text and the target sentence count; `model` is the model's key and `model_name` its name. Changing the model or the prompt makes summaries again, and the older ones can still be found for the same text (Step 005 decision D1). The headings and path are in the prompt but not the key.
 - Reading an entry, or finding it still needed while pre-filling, sets `used_at`. Entries unused for 60 days are deleted at startup (if the cache exists) and once a day while summarizing (Step 005 decision D2), so summaries survive a branch switch and back, and summaries of text no section has any more lapse.
 - **Best entry** (`best`, Step 005 decision D7): the configured model's with the current prompt version, else another model's with the same prompt version, newest first, else one from an older prompt version, newest first.
