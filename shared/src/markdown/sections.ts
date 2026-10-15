@@ -503,11 +503,41 @@ export function needsId(section: FoundSection): boolean {
 }
 
 /**
- * Whether a body holds Git merge conflict markers: a `<<<<<<<` line and a `>>>>>>>` line. A
- * `=======` line alone is a setext heading's underline, so it doesn't count.
+ * Whether a body holds Git merge conflict markers: a `<<<<<<<` line, then a `=======` line, then a
+ * `>>>>>>>` line, with at least one of the three outside fenced code. A `=======` line alone is a
+ * setext heading's underline, and a conflict shown as an example in a code block is text: neither
+ * counts. A real conflict wholly inside a code block holds no sections (anchors in code aren't
+ * sections), so anchoring can't be misled by it; one that crosses a fence has a marker outside.
  */
 export function hasConflictMarkers(body: string): boolean {
-  return /^<{7}(?: |$)/m.test(body) && /^>{7}(?: |$)/m.test(body);
+  let fence: { char: string; length: number } | null = null;
+  /** 0: no conflict open, 1: after `<<<<<<<`, 2: after `=======`. */
+  let stage = 0;
+  let outside = false;
+  for (const line of body.split(/\r?\n/)) {
+    const inCode = fence !== null;
+    const fenceLine = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+    if (fenceLine !== null) {
+      const run = fenceLine[1]!;
+      const rest = fenceLine[2]!;
+      if (fence === null) {
+        // A backtick fence's info string can't hold a backtick
+        if (!(run[0] === "`" && rest.includes("`"))) fence = { char: run[0]!, length: run.length };
+      } else if (run[0] === fence.char && run.length >= fence.length && rest.trim() === "") fence = null;
+      continue;
+    }
+    if (/^<{7}(?: |$)/.test(line)) {
+      stage = 1;
+      outside = !inCode;
+    } else if (stage === 1 && /^={7}\s*$/.test(line)) {
+      stage = 2;
+      outside ||= !inCode;
+    } else if (stage === 2 && /^>{7}(?: |$)/.test(line)) {
+      if (outside || !inCode) return true;
+      stage = 0;
+    }
+  }
+  return false;
 }
 
 function anchorTag(id: string, uid: string): string {

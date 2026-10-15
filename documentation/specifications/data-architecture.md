@@ -199,7 +199,7 @@ retired:
 <a id="SPEC-00015" data-uid="cwls8mo6j18e"></a>
 ### 2.5. Reconciliation
 
-`reconcile(data, scannedDocuments, knownPrefixes, newUid, requests, { originals, copyRequests })` is a pure function from the data files and the sections found in the documents (each with its ID and UID) to the data files as they should be, the document ID each file holds, the fixes each document's anchors need, and the duplicates and copied documents waiting for the user. A section's identity is its UID; its ID is its name. A document with merge conflict markers is **frozen**: its sections count as present (so they are neither retired nor reused, and raise `lastSequence`), but it gets no fixes and takes no part in settling duplicates.
+`reconcile(data, scannedDocuments, knownPrefixes, newUid, requests, { originals, copyRequests })` is a pure function from the data files and the sections found in the documents (each with its ID and UID) to the data files as they should be, the document ID each file holds, the fixes each document's anchors need, and the duplicates and copied documents waiting for the user. A section's identity is its UID; its ID is its name. A document with merge conflict markers (a `<<<<<<<`, `=======` and `>>>>>>>` line in that order, at least one of them outside fenced code, so a conflict shown as an example in a code block doesn't count) is **frozen**: its sections count as present (so they are neither retired nor reused, and raise `lastSequence`), but it gets no fixes and takes no part in settling duplicates.
 
 Documents (keyed by the root anchor's UID):
 

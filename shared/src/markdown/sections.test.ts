@@ -304,11 +304,31 @@ describe("stray anchors", () => {
   });
 });
 
-test("hasConflictMarkers needs both ends of a conflict", () => {
+test("hasConflictMarkers needs a whole conflict", () => {
   expect(hasConflictMarkers("a\n<<<<<<< HEAD\nx\n=======\ny\n>>>>>>> other\n")).toBe(true);
+  expect(hasConflictMarkers("a\r\n<<<<<<< HEAD\r\nx\r\n=======\r\ny\r\n>>>>>>> other\r\n")).toBe(true);
+  expect(hasConflictMarkers("<<<<<<< HEAD\nx\n||||||| base\nw\n=======\ny\n>>>>>>> other\n")).toBe(true);
   expect(hasConflictMarkers("Title\n=======\n")).toBe(false);
   expect(hasConflictMarkers("<<<<<<< HEAD\nonly one end\n")).toBe(false);
+  expect(hasConflictMarkers("<<<<<<< HEAD\nno separator\n>>>>>>> other\n")).toBe(false);
   expect(hasConflictMarkers("text <<<<<<< not at line start\n>>>>>>>> eight\n")).toBe(false);
+});
+
+test("hasConflictMarkers ignores a conflict shown in fenced code", () => {
+  const example = "<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> branch";
+  expect(hasConflictMarkers(`# Merging\n\n\`\`\`text\n${example}\n\`\`\`\n`)).toBe(false);
+  expect(hasConflictMarkers(`~~~~\n${example}\n~~~~\n`)).toBe(false);
+  // A shorter fence or one with an info string doesn't close a longer one
+  expect(hasConflictMarkers(`\`\`\`\`\n\`\`\`\n${example}\n\`\`\` x\n\`\`\`\`\n`)).toBe(false);
+  // After the code block closes, a conflict counts again
+  expect(hasConflictMarkers(`\`\`\`\ncode\n\`\`\`\n${example}\n`)).toBe(true);
+});
+
+test("hasConflictMarkers finds a conflict that crosses a fence", () => {
+  // The start marker is outside; the two sides open different code blocks
+  expect(hasConflictMarkers("<<<<<<< HEAD\n\`\`\`js\n=======\n\`\`\`ts\n>>>>>>> other\ncode\n\`\`\`\n")).toBe(true);
+  // The start marker is inside a code block one side closes; the separator is outside
+  expect(hasConflictMarkers("\`\`\`\ncode\n<<<<<<< HEAD\n\`\`\`\n## A\n=======\nmore\n\`\`\`\n## B\n>>>>>>> other\n")).toBe(true);
 });
 
 describe("statuses in anchors", () => {

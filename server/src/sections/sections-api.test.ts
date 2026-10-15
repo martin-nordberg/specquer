@@ -442,6 +442,17 @@ describe("UIDs and conflicts", () => {
     expect(((await dry.json()) as { files: string[] }).files).toEqual([]);
   });
 
+  test("a conflict shown as an example in a code block doesn't stop anchoring", async () => {
+    const { save, read, request } = await setup({ "docs/a.md": "" });
+    const text = "# Merging\n\n```text\n<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> branch\n```\n";
+    const result = await save("docs/a.md", text);
+    expect(result.notices).toBeUndefined();
+    expect(await read("docs/a.md")).toMatch(/^<a id="REQ-\d{5}" data-uid="\w+"><\/a>\n/);
+    expect(await read("docs/a.md")).toContain("```text\n<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> branch\n```\n");
+    const problems = (await (await request("/api/sections/problems")).json()) as { problems: SectionProblem[] };
+    expect(problems.problems).toEqual([]);
+  });
+
   test("stray anchors are reported", async () => {
     const { save, read, write, request } = await setup({ "docs/a.md": "" });
     await save("docs/a.md", "# A\n");
