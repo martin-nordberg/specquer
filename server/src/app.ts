@@ -4,7 +4,7 @@ import { type ApiHandlers, createApiRouter } from "@specquer/shared/api";
 import { ChatService, type ChatServiceOptions } from "./chat/service.ts";
 import { CommentService, type CommentServiceOptions } from "./comments/comment-service.ts";
 import { isMarkdownFile, joinPath, parentPath } from "@specquer/shared/paths";
-import { FileService } from "./files.ts";
+import { FileService, checkNewFileName, checkRenamedFileName } from "./files.ts";
 import { ModelRuntime } from "./model-runtime.ts";
 import { addAgentGuideFile, hasAgentGuideFile } from "./sections/agent-guide.ts";
 import { SectionIndex } from "./sections/section-index.ts";
@@ -72,8 +72,12 @@ export function createHandlers(
       return result;
     },
     async create(parent, name, kind, options = {}) {
-      // A new document starts without threads, even where a leftover sidecar is (R3.6)
-      if (kind === "file") await comments.beforeCreate(joinPath(parent, name));
+      // A new document starts without threads, even where a leftover sidecar is (R3.6); the name
+      // is checked first, so a request that is refused deletes nothing
+      if (kind === "file") {
+        checkNewFileName(name);
+        await comments.beforeCreate(joinPath(parent, name));
+      }
       const path = await sections.create(parent, name, kind, kind === "file" ? options.prefix : undefined);
       if (path === null) return { ok: false, reason: "exists" };
       if (kind === "folder" && (options.folderType !== undefined || options.prefix !== undefined)) {
@@ -87,7 +91,10 @@ export function createHandlers(
     },
     async rename(path, newName) {
       const document = isMarkdownFile(path) && (await files.kindOf(path)) === "file";
-      if (document) await comments.beforeCreate(joinPath(parentPath(path), newName));
+      if (document) {
+        checkRenamedFileName(path, newName);
+        await comments.beforeCreate(joinPath(parentPath(path), newName));
+      }
       const newPath = await files.rename(path, newName);
       if (newPath === null) return { ok: false, reason: "exists" };
       if (newPath !== path) {

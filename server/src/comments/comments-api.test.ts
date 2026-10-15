@@ -160,6 +160,16 @@ describe("the sidecar with its document", () => {
     await s.request("/api/rename", { method: "POST", body: { path: "docs/a.md", newName: "c.md" } });
     expect(await s.exists("docs/c.md.comments.yaml")).toBe(false);
   });
+
+  test("a create or rename that is refused for its name deletes nothing", async () => {
+    // Files that happen to end in .comments.yaml, but are no Markdown document's sidecar
+    const s = await setup({ "docs/notes.comments.yaml": "keep\n", "docs/b.txt.comments.yaml": "keep\n" });
+    expect((await s.request("/api/create", { method: "POST", body: { parent: "docs", name: "notes", kind: "file" } })).status).toBe(400);
+    expect((await s.request("/api/rename", { method: "POST", body: { path: "docs/a.md", newName: "b.txt" } })).status).toBe(400);
+    expect(await s.read("docs/notes.comments.yaml")).toBe("keep\n");
+    expect(await s.read("docs/b.txt.comments.yaml")).toBe("keep\n");
+    expect(await s.exists("docs/a.md")).toBe(true);
+  });
 });
 
 describe("problems", () => {

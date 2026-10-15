@@ -50,6 +50,20 @@ function isNotFound(err: unknown): boolean {
   return (err as NodeJS.ErrnoException).code === "ENOENT" || (err as NodeJS.ErrnoException).code === "ENOTDIR";
 }
 
+/** Checks a new file's name: Specquer creates only Markdown files. Throws an `ApiError` if not. */
+export function checkNewFileName(name: string): void {
+  if (!isMarkdownFile(name)) throw new ApiError(400, "invalid", `The name must end with '${MARKDOWN_EXTENSION}'.`);
+}
+
+/** Checks a file's new name: only Markdown files are renamed, and they keep their extension. */
+export function checkRenamedFileName(path: string, newName: string): void {
+  if (!isMarkdownFile(path)) throw new ApiError(400, "invalid", "Only Markdown files can be renamed.");
+  const extension = path.slice(path.lastIndexOf("."));
+  if (!newName.endsWith(extension) || newName.length <= extension.length) {
+    throw new ApiError(400, "invalid", `The name must end with '${extension}'.`);
+  }
+}
+
 export function contentVersion(bytes: Uint8Array): string {
   return new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
 }
@@ -282,9 +296,7 @@ export class FileService {
    */
   async create(parent: string, name: string, kind: "file" | "folder", content = ""): Promise<string | null> {
     const path = joinPath(parent, name);
-    if (kind === "file" && !isMarkdownFile(path)) {
-      throw new ApiError(400, "invalid", `The name must end with '${MARKDOWN_EXTENSION}'.`);
-    }
+    if (kind === "file") checkNewFileName(name);
     const target = join(await this.existingFolder(parent), name);
     try {
       if (kind === "folder") await mkdir(target);
@@ -299,13 +311,7 @@ export class FileService {
   /** Renames a file or folder within its folder. Returns the new path, or `null` if the name is taken. */
   async rename(path: string, newName: string): Promise<string | null> {
     const { absolute, isFolder } = await this.existingEntry(path);
-    if (!isFolder) {
-      if (!isMarkdownFile(path)) throw new ApiError(400, "invalid", "Only Markdown files can be renamed.");
-      const extension = path.slice(path.lastIndexOf("."));
-      if (!newName.endsWith(extension) || newName.length <= extension.length) {
-        throw new ApiError(400, "invalid", `The name must end with '${extension}'.`);
-      }
-    }
+    if (!isFolder) checkRenamedFileName(path, newName);
     const newPath = joinPath(parentPath(path), newName);
     if (newPath === path) return newPath;
     const target = join(dirname(absolute), newName);

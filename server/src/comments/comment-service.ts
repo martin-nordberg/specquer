@@ -12,7 +12,7 @@ import {
   sidecarPath,
   threadView,
 } from "@specquer/shared/comments";
-import { isSameOrInside } from "@specquer/shared/paths";
+import { isMarkdownFile, isSameOrInside } from "@specquer/shared/paths";
 import { UID_LENGTH } from "@specquer/shared/sections";
 import type { FileService } from "../files.ts";
 import { gitUserName } from "../git.ts";
@@ -180,9 +180,13 @@ export class CommentService {
     return this.queue.run(() => this.files.removeFile(sidecarPath(path)));
   }
 
-  /** A document is about to be created, or renamed, at `path`: a leftover sidecar there goes first (R3.6). */
+  /**
+   * A document is about to be created, or renamed, at `path`: a leftover sidecar there goes first
+   * (R3.6). Only a Markdown path has a sidecar; anything else is left alone.
+   */
   beforeCreate(path: string): Promise<void> {
     return this.queue.run(async () => {
+      if (!isMarkdownFile(path)) return;
       if ((await this.files.kindOf(path)) === undefined) await this.files.removeFile(sidecarPath(path));
     });
   }
