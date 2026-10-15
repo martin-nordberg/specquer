@@ -152,7 +152,7 @@ Step 012 takes precedence over the specifications and earlier steps where they c
 
 1. **F8 and Shift+F8:** move to the next and previous thread the filter shows, in document order, across the whole document, from any view or the pane. Each scrolls the document and the pane, flashes the section (R6.4) and focuses the thread in the pane, opening the pane if it is closed.
 
-<a id=""></a>
+<a id="WORK-00533" data-uid="jguchtugoh7o"></a>
 ### R9. Saving the Document When Leaving the Window
 
 Comments are saved when their editor loses focus (R2.6); the document should be saved as reliably, so a user who switches to a Git client sees both. Today the document is saved when the tab is hidden (`visibilitychange`), when the page closes (`pagehide`), before another file opens and every 60 seconds (`client/src/app/App.tsx`). Two gaps remain:

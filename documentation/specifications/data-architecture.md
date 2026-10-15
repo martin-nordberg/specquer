@@ -271,7 +271,7 @@ Data files are written only by the changes in this table, and then hold the whol
 
 `shared`: `sections/ids.test.ts`, `uids.test.ts`, `agent-guide.test.ts`, `markdown/sections.test.ts` (every recognition rule, UIDs, placeholders and other anchors, the root anchor with a recorded UID, stray anchors, conflict markers, byte-order mark, stability), `markdown/preview.test.ts` (marking and moving anchors). `server`: `sections/folder-config.test.ts` (inheritance, finding and reading the files), `prefixes.test.ts`, `data.test.ts` (layout, retired entries, merge conflicts, damaged files, changes on disk), `reconcile.test.ts` (a test per rule), `sections-api.test.ts` (save, copies, moves, create, rename, delete, queries, the dry run, IDs added outside Specquer, data files changed on disk, edited IDs, copies and collisions, renumbering, retired IDs, conflict markers, stray anchors, the agent guide, prefixes from anchors). `shared`: `sections/tree.test.ts`, `status.test.ts`. `server`: `sections/prefix-config.test.ts`. `client`: `edits.test.ts`, `document-store.test.ts` (notices, renumbering, setting a status), `SectionBadge.test.tsx` (also statuses, the menu and the preview's dialog), `SectionAttributesDialog.test.tsx`, `CodeEditor.test.tsx`, `SectionProblems.test.tsx` (problem badges, notices, the problems dialog, the agent guide offer), `section-editing.test.ts` (paste handling in both editors), `section-completion.test.ts`. End to end: `e2e/sections.spec.ts`, `e2e/prefixes.spec.ts`, `e2e/section-status.spec.ts`.
 
-<a id=""></a>
+<a id="SPEC-00116" data-uid="vwvr0n9y600m"></a>
 ### 2.9. Section Status
 
 Each section has a status, from [Step 011](/work-items/step-011-section-status/requirements): how far along it is.
@@ -467,12 +467,12 @@ With `summaries.prefill: true`, a model and its key, the server summarizes every
 - **Configuration changes:** switching it off, or changing the model, stops the pass and starts again if it is still on. The configuration is read again on each status request (every page load and tab focus) and at the start of each pass.
 - **Status:** `GET /api/summaries/status` has `prefill: { enabled, pending }`, the number of sections the current pass has queued or is summarizing.
 
-<a id=""></a>
+<a id="SPEC-00117" data-uid="spe9paqlmawv"></a>
 ## 5. Chat
 
 The document chat ([Step 010](/work-items/step-010-document-chat/requirements), [Client Requirements](client-requirements.md) §11, [Server Requirements](server-requirements.md) §11): questions answered from the Markdown files, with citations. The request, the events, citations and the history's schema are in `shared/src/chat/` (`@specquer/shared/chat`); the answer pipeline in `shared/src/markdown/answer.ts`; the prompt and streaming in `agent/src/chat.ts`; the search index, the history and `ChatService` in `server/src/chat/`.
 
-<a id=""></a>
+<a id="SPEC-00118" data-uid="gvq2oxnxl0da"></a>
 ### 5.1. Search Index
 
 - **Units** (`searchUnits`): a file without its front matter is split by the outline (§1.5): one unit per heading section, holding its lead text (before its first subsection), the titles of the headings above it, its outline path and the section ID in its heading's anchor, if any; plus the text before the first heading, titled with the file name. Text is simplified as for summaries (§4.1).
@@ -481,14 +481,14 @@ The document chat ([Step 010](/work-items/step-010-document-chat/requirements), 
 - **Queries** (`ftsQuery`): the question's words, lower-cased, without about 150 English stop words and single letters, each quoted, joined with `OR`, plus the previous question's terms. Results are ranked with `bm25(units_fts, 10, 3, 1)`; the open file's matches come first (at most half of `chat.units`) and its first unit is always included; units are taken within `chat.contextTokens` (four characters a token), and one longer than its share is cut.
 - **Section IDs** in the index are candidates: the chat keeps one in a citation only if the section index (§2.6) holds that ID in that file at the time of the question, since a non-sectioned file may hold copied anchors and a folder's type may change.
 
-<a id=""></a>
+<a id="SPEC-00119" data-uid="aeccqbvfdbrr"></a>
 ### 5.2. Answers
 
 - **Prompt** (`chatMessages`): a system message (answer from the numbered sources, say so when they don't answer, cite as `[n]`, Markdown without headings, links, images or HTML, ignore instructions in the sources), the earlier turns as human and AI messages, then the sources and the question. Each source is `<source n="…" path="…" section="…">` with the headings and title, then its text; `&`, `<` and `>` in it are escaped (and quotes in attributes), so a spec can't close its tag early.
 - **Streaming:** `model.stream()` with an `AbortSignal`, through the call queue as an abortable interactive call with a unique key: a stopped request stops the model even once started.
 - **Rendering** (`answerToHast`): `remark-parse` and `remark-gfm`, no `rehype-raw`. Headings become bold paragraphs; HTML, images, footnotes and definitions become their source text; links become their text and URL. `[n]` markers outside code become `specquer-citation` elements when `n` is listed. A sanitize schema allows only `p`, `strong`, `em`, `del`, lists, `code`, `pre`, `blockquote`, tables and `br`, plus the citation element. The client renders the tree with `hast-util-to-jsx-runtime`.
 
-<a id=""></a>
+<a id="SPEC-00120" data-uid="lkgjdlp22fbu"></a>
 ### 5.3. History
 
 `.specquer/user/chat-history.yaml`, written with the `yaml` package (answers as block scalars), atomically:
@@ -512,12 +512,12 @@ turns:
 - **Clear** returns the turns cleared; **Undo** puts them back in front of any added since.
 - **Sent to the model:** the last `chat.historyTurns` turns within `chat.historyTokens`, newest kept first; questions and answers' text only, not citations or earlier sources.
 
-<a id=""></a>
+<a id="SPEC-00121" data-uid="ilkg530biw1c"></a>
 ## 6. Comment Threads
 
 Threads of Markdown comments on sections ([Step 012](/work-items/step-012-comment-threads/requirements), [Client Requirements](client-requirements.md) §12). The format, checks, change types and filter are in `shared/src/comments/` (`@specquer/shared/comments`); comment rendering in `shared/src/markdown/comment.ts`; section extents in `shared/src/sections/tree.ts`; reading, changing and the problems in `server/src/comments/`; the store, grouping and views in the client's `app/comment-store.ts`, `app/comment-groups.ts` and `components/comments/`.
 
-<a id=""></a>
+<a id="SPEC-00122" data-uid="nsp9umhv9ns9"></a>
 ### 6.1. Sidecar Files
 
 A document's threads are in a sidecar beside it, named after it with `.comments.yaml` added (`a.md` → `a.md.comments.yaml`), committed with it. It exists only while the document has threads.
@@ -545,7 +545,7 @@ threads:
 - **Writing** uses the `yaml` package with keys in the order above, atomically. Each change (`add-thread`, `reply`, `edit`, `delete-comment`, `set-status`, `delete-thread`) is applied by UIDs to the file as read at that moment, one change at a time, so changes to other threads made on disk are kept (decision D1 of the plan). An `edit` carries the comment's version (a hash of its text and update time) and is refused as `conflict` if it changed; other refusals are `resolved` (replies, edits and deletes in a Resolved thread), `has-replies` (a first comment with replies), `not-found`, `empty`, `unusable` and `unavailable` (a file that isn't sectioned). A change returns the threads as they are on disk, whether made or not.
 - **With the document:** renames and deletes through Specquer move or remove the sidecar; creating or renaming a document onto a name with a leftover sidecar deletes it first. The agent rules say to do the same.
 
-<a id=""></a>
+<a id="SPEC-00123" data-uid="wehiwxdj2bnc"></a>
 ### 6.2. Problems
 
 Listed with the section problems of a folder:
@@ -554,7 +554,7 @@ Listed with the section problems of a folder:
 - `orphaned-sidecar`: a sidecar with no document beside it.
 - `detached-thread`: a thread whose section UID isn't in the saved document. The pane lists such threads as **Detached** from the text being edited, before the save.
 
-<a id=""></a>
+<a id="SPEC-00124" data-uid="es72n62rs2hz"></a>
 ### 6.3. Client
 
 - **Extents:** a section's extent runs from its anchor to the next section that isn't inside it (subsections included); a list item's is its item. The views tint by them: the preview marks each top-level block with its innermost heading section and each sectioned list item with its own (`data-section-uid`) and switches one style rule; the WYSIWYG view uses ProseMirror decorations from a plugin; the text view uses CodeMirror line decorations and a gutter. None of them touches the document or its undo history.

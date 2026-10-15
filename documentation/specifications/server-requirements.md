@@ -154,7 +154,7 @@ The rules for summaries are specified in [Data Architecture](data-architecture.m
 | `GET /_specquer/preview-worker.js` | The bundled preview Web Worker ([Technical Architecture](technical-architecture.md) §7.3). |
 | Bundled client assets | Served by `Bun.serve()`'s routes. |
 
-<a id=""></a>
+<a id="SPEC-00125" data-uid="gzjcc0d6hr67"></a>
 ## 11. Chat
 
 | Route | Behavior |
@@ -170,7 +170,7 @@ The rules for summaries are specified in [Data Architecture](data-architecture.m
 4. **Errors** after the stream starts are events: `rate_limited` for the provider's rate limit, `provider_error` with the provider's message otherwise.
 5. **History.** A finished answer, or one stopped with some text (marked `stopped`), is appended to `.specquer/user/chat-history.yaml` (the `yaml` package, atomically, one write at a time, at most 200 turns); a failed one isn't. A file that isn't valid YAML is moved aside (`chat-history.yaml.damaged-<time>`); invalid turns are dropped one by one.
 
-<a id=""></a>
+<a id="SPEC-00126" data-uid="p4xes0lj7wgt"></a>
 ## 12. Comment Threads
 
 | Route | Behavior |

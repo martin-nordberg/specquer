@@ -1,11 +1,11 @@
-<a id=""></a>
+<a id="WORK-00506" data-uid="f4sstg6p72xz"></a>
 
-<a id=""></a>
-# Step 012 - Implementation Plan
+<a id="WORK-00507" data-uid="hbyr9xaja5uy"></a>
+# Step 012 - Implementation Plan 
 
 _Plan for the [Comment Threads requirements](requirements.md). Drafted October 2026._
 
-<a id=""></a>
+<a id="WORK-00508" data-uid="twwh9uxgdqdb"></a>
 ## 1. Summary
 
 Step 012 adds comment threads on sections, kept in a `<name>.md.comments.yaml` sidecar beside each document, read and written in a new Comments pane that shares the third pane's place with AI Chat. Sections with threads show a pip in all three views. It also fixes the document's autosave on leaving the window (R9).
@@ -31,7 +31,7 @@ There are seven phases (§5):
 
 Decisions taken while planning are in §6, marked _Proposed_; the work proceeds on them unless they are changed.
 
-<a id=""></a>
+<a id="WORK-00509" data-uid="tglc7xdj3dbt"></a>
 ## 2. Precedence
 
 The requirements' Precedence table applies. This plan adds:
@@ -45,7 +45,7 @@ The requirements' Precedence table applies. This plan adds:
 | `CodeEditor` | Extensions read once, no outside handle | An `onView` callback, so stable extensions can be fed with effects (§4.8) |
 | Git listing (`gitMarkdownFiles`) and the walk in `files.ts` | Markdown and folder configuration files | Also `*.md.comments.yaml` (§4.4) |
 
-<a id=""></a>
+<a id="WORK-00510" data-uid="qx0yba2nmtdr"></a>
 ## 3. Starting Point
 
 - **Autosave** (`client/src/app/App.tsx`): saves on `visibilitychange` to hidden and on `pagehide` (both `keepalive`), and every 60 seconds; `DocumentStore.save` queues saves and writes only when the text differs from what was saved. The plain text editor reports each change at once (`EditorView.updateListener`). The WYSIWYG view reports through Milkdown's `listener` plugin, whose `markdownUpdated` is debounced by a hard-coded 200 ms.
@@ -64,10 +64,10 @@ The requirements' Precedence table applies. This plan adds:
 - **Summary slider**: preview only. `summarizedAt` gives the summarized ranges for a stop; `summarizeTree` replaces their top-level hast children, so anchors inside them aren't rendered.
 - **Scrolling to a section**: `ScrollTarget` (`sectionId` or `outlinePath`) is handled by the preview only.
 
-<a id=""></a>
+<a id="WORK-00511" data-uid="ef2821z2nw4u"></a>
 ## 4. Proposed Design
 
-<a id=""></a>
+<a id="WORK-00512" data-uid="qwqzorvdz1zb"></a>
 ### 4.1 Shared: Comments, Extents and Rendering
 
 - **`shared/src/comments/`** (new subpath export `@specquer/shared/comments`):
@@ -83,12 +83,12 @@ The requirements' Precedence table applies. This plan adds:
 
   `commentToHast(markdown)` is used by the pane; tests cover each kind of link and image.
 
-<a id=""></a>
+<a id="WORK-00513" data-uid="snliw8m48la2"></a>
 ### 4.2 Server: The User's Name (`server/src/git.ts`)
 
 - `gitUserName(root)`: `git -C <root> config user.name`, else `user.email`, else `os.userInfo().username` (R2.4). It is read when a change is written, at most once a minute (cached with its time), so a change of Git identity counts within a minute without a subprocess on every save.
 
-<a id=""></a>
+<a id="WORK-00514" data-uid="cz2ilsb0z4tr"></a>
 ### 4.3 Server: Sidecars (`server/src/comments/`)
 
 - **`sidecar.ts`**:
@@ -108,7 +108,7 @@ The requirements' Precedence table applies. This plan adds:
   - `renamed(from, to)`, `deleted(path)`, `beforeCreate(path)`: see §4.4.
   - `problems(folder)` (R4): unusable sidecars (`comment-sidecar`, with `problem` and `message`), sidecars without a document (`orphaned-sidecar`), and threads whose `sectionUid` isn't in the saved document (`detached-thread`, with the thread's UID and its first line).
 
-<a id=""></a>
+<a id="WORK-00515" data-uid="hhc9xgf15y3y"></a>
 ### 4.4 Server: API, Files and Problems
 
 - **Routes** (`shared/src/api/router.ts`):
@@ -123,21 +123,21 @@ The requirements' Precedence table applies. This plan adds:
 - **Problems**: `sectionProblems(folder)` returns `sections.problems(folder)` followed by `comments.problems(folder)`. `SectionProblem` gains the three kinds.
 - **Agent rule** (R3.7): `shared/src/sections/agent-guide.ts` gains "When moving, renaming or deleting a document, move, rename or delete its `.md.comments.yaml` with it, and otherwise leave it alone." `AGENTS.md`'s guide block is regenerated from it and `CLAUDE.md`'s "Section anchors" gets the line by hand.
 
-<a id=""></a>
+<a id="WORK-00516" data-uid="k7hnwlta9h1x"></a>
 ### 4.5 Saving the Document When Leaving the Window (R9)
 
 - **Window `blur`** in `App.tsx`'s autosave effect: `docStore.save()` and `uiStore.flush()`, without `keepalive` (the page stays alive). A switch that also hides the tab writes once, since the second save finds nothing changed.
 - **Pending edits**: `DocumentStore` gains `addFlusher(fn): () => void`; `save` calls each flusher before reading the text. `MilkdownEditor` registers one that serializes the editor's current document (`getMarkdown()`) and, if it differs from the last value it reported, calls `onChange` at once, so the debounced listener has nothing left to say. The flusher is removed when the editor unmounts.
 - **Comments too**: the comment store (§4.7) registers its open editor's draft with the same autosave triggers: blur of the comment editor (R2.6), window `blur`, and `pagehide` (with `keepalive`).
 
-<a id=""></a>
+<a id="WORK-00517" data-uid="g3sti8wvbp59"></a>
 ### 4.6 Client: UI State, Top Bar and Panes
 
 - **UI state** (`shared/src/uistate/uistate.ts`): `sidePane` (`"chat" | "comments" | null`) replaces `chatOpen` in both schemas. `parseUiState` reads an old `chatOpen: true` as `"chat"` when `sidePane` is absent (R1.4); the server writes only `sidePane` from then on. Also `commentsPaneFraction` (its own limits, same as chat's) and `commentFilter` (default `"open"`), with setters like `setChatPaneFraction`.
 - **`PaneLayout`**: `chatOpen`/`chatFraction` become `rightOpen`/`rightFraction`/`rightLabel`; `App` passes the open pane's fraction and setter.
 - **Icons** (R1.1, R1.2): `ChatToggle`'s icon mirrored (`scale-x-[-1]`) with a small four-point star (lucide's `Sparkle`, scaled into the bubble) as one inline SVG; a new `CommentsToggle`, an inline SVG of a hollow round bubble with its tail at the lower left (drawn to match Font Awesome's regular comment; lucide has no such shape). The header's gap before `ThemeToggle` doubles. Both are `aria-pressed` toggle buttons setting `sidePane`.
 
-<a id=""></a>
+<a id="WORK-00518" data-uid="n95bg3q2vjh4"></a>
 ### 4.7 Client: Comment Store, Pane and Editor
 
 - **`CommentStore`** (`client/src/app/comment-store.ts`), like `ChatStore`:
@@ -149,7 +149,7 @@ The requirements' Precedence table applies. This plan adds:
 - **`CommentEditor`**: a small Milkdown editor (commonmark, GFM, history, listener) without the section anchor view. Links and images are turned to text by an `appendTransaction` plugin that removes `link` marks and replaces `image` nodes with their alt text and URL, so a paste or typed `[x](y)` never stays a link (D5). Escape: a keymap entry that restores the original text (or discards a new comment) and blurs without saving (R2.7). Blur, or the Save button under it, saves (R2.6): empty new comments and unchanged text are dropped; a cleared existing comment gets its text back.
 - **Deleting**: **Delete** on replies (and on a lone first comment), **Delete thread** behind a shadcn `AlertDialog` (R2.9).
 
-<a id=""></a>
+<a id="WORK-00519" data-uid="cgqyv6431wyl"></a>
 ### 4.8 Client: Pips and Highlights in the Three Views
 
 - **One model**: `ContentView` receives `commentMarkers: { counts: Map<uid, number>, highlight: string[] | null, flash: { uids: string[], n: number } | null, hidden?: … }` and callbacks `onPip(uid)` and `onPipHover(uid | null)`. `highlight` is the section's UID plus its descendants' (from `sectionExtents`/`descendantsOf` on the current body).
@@ -163,7 +163,7 @@ The requirements' Precedence table applies. This plan adds:
 - **Text view**: a `commentGutter` extension created once per `ContentView` (stable identity, as `CodeEditor` requires): a `StateField` of counts and highlight, set by `StateEffect`s sent through the view `CodeEditor` hands back in a new `onView` prop. A `gutter` puts a `GutterMarker` (the pip) on each anchor line with a count; `Decoration.line` tints the highlighted extents. Positions map through changes, so markers follow edits until the next recount.
 - **Hover from pips** (R6.2) sets the store's highlight with `from: "pip"`; the pane tints those threads.
 
-<a id=""></a>
+<a id="WORK-00520" data-uid="yki5dggqyl6n"></a>
 ### 4.9 Following the Document (R7.7)
 
 - Each view reports the topmost visible section's UID through `onTopSection(uid)`, throttled to animation frames:
@@ -172,52 +172,52 @@ The requirements' Precedence table applies. This plan adds:
   - WYSIWYG: `posAtCoords` at the top of the scroller → the same.
 - The pane scrolls the group of that section, or of the nearest section above it with threads, into view, unless the pointer is over the pane or focus is in it (so it never moves under the user).
 
-<a id=""></a>
+<a id="WORK-00521" data-uid="t50168zt6ee5"></a>
 ### 4.10 Moving To a Section, F8 and the Badge Menu
 
 - **Scrolling to a UID**: `ScrollTarget` gains `{ sectionUid }`. The preview already scrolls to anchors; the text view scrolls to the anchor's line (`EditorView.scrollIntoView`), the WYSIWYG view to the anchor node's position. Each then flashes the section (R6.4).
 - **F8 / Shift+F8** (R8): a `keydown` listener on `window` in `App` (capture phase, neither editor binds F8) moves through the shown threads in group order, wrapping at the ends; it opens the Comments pane if needed, expands and focuses the thread, and scrolls the document.
 - **Badge menus** (R5.5): `SectionMenu` gains **Add comment…** (disabled with "Save the file first to give this section its ID" when the anchor has no UID or the file has unsaved anchor placeholders for it) and **Show comments**; both kinds of badge pass the callbacks.
 
-<a id=""></a>
+<a id="WORK-00522" data-uid="lin3lenvwb4z"></a>
 ## 5. Phases
 
-<a id=""></a>
+<a id="WORK-00523" data-uid="mw75lekr6qpb"></a>
 ### Phase 1: Saving When Leaving the Window
 
 - §4.5's window `blur` and the WYSIWYG flusher, on their own (D9).
 - Tests: `DocumentStore.save` calls flushers first; a component test types in `MilkdownEditor` and saves within 200 ms, and the save holds the text; `App` saves on `blur`.
 - *Done when* `bun run typecheck` and `bun test` pass, and an end-to-end test (Alt+Tab can't be scripted; it dispatches `blur` on the window) sees the file saved.
 
-<a id=""></a>
+<a id="WORK-00524" data-uid="ha7t7db8hck1"></a>
 ### Phase 2: Shared Foundations
 
 - §4.1, the UI state changes of §4.6, the agent rule (§4.4).
 - Unit tests: the sidecar schema and its extra checks; `sidecarPath`; `sectionExtents` and `descendantsOf` for the root, ATX and setext headings, list items and nested lists; comment Markdown with raw HTML, inline/reference links and images, autolinks and bare URLs; `parseUiState` with old `chatOpen`, and the new fields' fallbacks.
 - *Done when* `bun test` passes.
 
-<a id=""></a>
+<a id="WORK-00525" data-uid="hwuxfuccxk3v"></a>
 ### Phase 3: The Server
 
 - §4.2, §4.3, §4.4.
 - Unit and API tests: `parseSidecar` for each problem; each change, including on a file changed on disk (kept), an edit to a comment changed on disk (`conflict`), Resolved threads, a first comment with replies, the last thread (sidecar deleted); `serializeSidecar` round trips and block scalars; the user's name from Git and from the login name; rename, create over a leftover, delete and the delete preview; the three problems; sidecars from the Git listing and from the walk.
 - *Done when* `bun test` passes.
 
-<a id=""></a>
+<a id="WORK-00526" data-uid="vh5xcv682zh0"></a>
 ### Phase 4: The Client: Pane, Store and Editor
 
 - §4.6, §4.7.
 - Component tests: the three-way toggle and UI state; the pane's groups in document order, filter and hidden count, collapse, **+ New thread** collapsing the others, Resolved threads read-only, **Detached**; the editor's save on blur, Escape, a cleared comment, links and images turned to text; delete rules and the confirmation; the conflict notice.
 - *Done when* `bun run typecheck` and `bun test` pass.
 
-<a id=""></a>
+<a id="WORK-00527" data-uid="ituukk3zmg9i"></a>
 ### Phase 5: The Client: Markers, Highlighting, Following and F8
 
 - §4.8 to §4.10.
 - Component tests: pips and counts under each filter in the preview, and their tooltip and accessible name; the summary roll-up; the WYSIWYG plugin's widgets and decorations (from plugin state, without changing the document or the undo history); the text view's gutter markers and line tints following an edit; badge menu items; F8 order and wrap-around.
 - *Done when* `bun run typecheck` and `bun test` pass.
 
-<a id=""></a>
+<a id="WORK-00528" data-uid="k5pfcdgd0pu3"></a>
 ### Phase 6: End-to-End Tests
 
 - `e2e/comments.spec.ts`:
@@ -231,14 +231,14 @@ The requirements' Precedence table applies. This plan adds:
 - `e2e/fixtures.ts` gains a helper that writes a sidecar, and the fixture sets `user.name` in the temporary repository.
 - *Done when* the suite passes on Chrome and WebKit.
 
-<a id=""></a>
+<a id="WORK-00529" data-uid="n12qb8mnoeqp"></a>
 ### Phase 7: Documentation
 
 - The specifications in requirements §5; `CLAUDE.md`: `server/src/comments/`, `shared/src/comments/`, `client/src/components/comments/` and `comment-store.ts`, the sidecar files, the agent rule, Step 012 in "Project state"; `AGENTS.md` regenerated.
 - The docs sidebar gains Step 012 (requirements and plan), and an Implementation Status section is added here.
 - *Done when* `bun run typecheck`, `bun test`, `bun run test:e2e` and `docs:build` pass.
 
-<a id=""></a>
+<a id="WORK-00530" data-uid="j08z1lo849wa"></a>
 ## 6. Decisions
 
 _Proposed_; the work proceeds on them unless they are changed:
@@ -254,7 +254,7 @@ _Proposed_; the work proceeds on them unless they are changed:
 - **D9. R9 ships first, on its own** (Phase 1). It fixes a bug that exists today and touches none of the comments code.
 - **D10. The filter applies with the pane closed** (§4.6). It is in UI state, and the pips follow it (R5.1); changing it needs the pane, which a pip click opens.
 
-<a id=""></a>
+<a id="WORK-00531" data-uid="n44anl13n89r"></a>
 ## 7. Risks
 
 | Risk | Impact | Mitigation |
@@ -267,7 +267,7 @@ _Proposed_; the work proceeds on them unless they are changed:
 | Hand-edited or merged sidecars | Unusable files stop comment writes | Reported as problems (R4.1); the pane says why it shows no threads |
 | `listFiles` grows with sidecars | Slower scans in large trees | Sidecars are found by the same walk or Git listing, not a second pass |
 
-<a id=""></a>
+<a id="WORK-00532" data-uid="kwuxwvv9dhyk"></a>
 ## 8. Implementation Status
 
 Phases 1 to 7 were carried out in October 2026, one commit each. What differs from the plan, or was learned doing it:

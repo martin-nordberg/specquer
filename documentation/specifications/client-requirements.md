@@ -138,7 +138,7 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 10. Summaries are kept in memory while Specquer is open, so moving the slider back and forth asks for nothing new. At most three summary requests are in flight at once, in document order, so they never take all of the browser's connections to the server and saves and file loads don't wait behind them. Requests no longer needed (the slider moved, another file opened, another view chosen) are aborted, or dropped before they are sent.
 11. A summary another model made (or an older prompt) is shown at once, labeled "older model", while the configured model's is made; it is asked for after the summaries the preview still needs, and replaces the older one in place. If it can't be made, the older summary stays, with the error and **Retry**.
 
-<a id=""></a>
+<a id="SPEC-00113" data-uid="omkqex82dhaa"></a>
 ### 6.3 Section Status
 
 1. Each section has a status: its anchor's `data-status`, or, without one, the status it inherits: its parent section's within the same prefix, and the first allowed value of its prefix at the root or where the prefix changes (see [Data Architecture](data-architecture.md) §2.9). The badges show it (§6.1). Statuses are worked out from the text being edited, so they follow unsaved changes.
@@ -205,7 +205,7 @@ The logo is a section sign (§), for specifications, drawn as two S-shaped strok
 8. Invalid values are reported under their field and keep **Save** disabled. **Save** writes the changes of all tabs, one save per file, and closes the dialog; **Cancel** discards them. A file that changed on disk since the dialog read it is not overwritten: the dialog reloads the values and says so. Values a file holds that are invalid are listed at the top of the tab, and a file that isn't valid YAML can't be saved to until it is fixed by hand.
 9. Saved settings take effect without a restart, except a key variable that wasn't set when Specquer started (item 4).
 
-<a id=""></a>
+<a id="SPEC-00114" data-uid="z8y8hs5v3kss"></a>
 ## 11. Chat
 
 From [Step 010](/work-items/step-010-document-chat/requirements).
@@ -220,7 +220,7 @@ From [Step 010](/work-items/step-010-document-chat/requirements).
 8. **History.** The conversation is loaded when the pane opens and whenever the tab gets focus, and repainted as first shown. **Clear** (or `/clear`) empties it; for ten seconds **Undo** puts it back. Each answer has **Copy**, which copies its Markdown.
 9. **Accessibility.** A streaming answer has `aria-busy`; the finished answer is announced once through a polite live region. The list follows a streaming answer unless the user has scrolled up.
 
-<a id=""></a>
+<a id="SPEC-00115" data-uid="f877buudm67m"></a>
 ## 12. Comment Threads
 
 From [Step 012](/work-items/step-012-comment-threads/requirements).
