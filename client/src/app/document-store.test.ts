@@ -108,6 +108,40 @@ describe("DocumentStore", () => {
     expect(store.hasUnsavedChanges).toBe(false);
   });
 
+  test("a save that finishes after the file was renamed still counts", async () => {
+    const { api, saveFile } = fakeApi({ "a.md": "# A\n" });
+    const store = new DocumentStore(api);
+    await store.open("a.md");
+    let answer!: (outcome: SaveOutcome) => void;
+    saveFile.mockImplementationOnce(() => new Promise<SaveOutcome>((resolve) => (answer = resolve)));
+    store.setBody("# A\nmore\n");
+    const saving = store.save();
+    // Renamed (say, a window blur started this save during the rename request)
+    store.moved("b.md");
+    answer({ kind: "saved", version: "after" });
+    expect(await saving).toBe("saved");
+    expect(store.get()).toMatchObject({ status: "saved", version: "after", document: { path: "b.md" } });
+    expect(store.hasUnsavedChanges).toBe(false);
+    // The next save starts from that version, without a false conflict
+    store.setBody("# A\nmore\nagain\n");
+    await store.save();
+    expect(saveFile.mock.calls.at(-1)?.slice(0, 3)).toEqual(["b.md", "# A\nmore\nagain\n", "after"]);
+  });
+
+  test("a save that finishes after another file was opened is ignored", async () => {
+    const { api, saveFile } = fakeApi({ "a.md": "# A\n", "b.md": "# B\n" });
+    const store = new DocumentStore(api);
+    await store.open("a.md");
+    let answer!: (outcome: SaveOutcome) => void;
+    saveFile.mockImplementationOnce(() => new Promise<SaveOutcome>((resolve) => (answer = resolve)));
+    store.setBody("# A\nmore\n");
+    const saving = store.save();
+    await store.open("b.md");
+    answer({ kind: "saved", version: "after" });
+    await saving;
+    expect(store.get()).toMatchObject({ status: "saved", version: "0", document: { path: "b.md", body: "# B\n" } });
+  });
+
   test("a failed save is reported and can be retried", async () => {
     const { api } = fakeApi({ "a.md": "# A\n" });
     const store = new DocumentStore(api);

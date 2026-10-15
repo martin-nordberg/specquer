@@ -71,6 +71,12 @@ export class DocumentStore {
   private saving: Promise<SaveResult> | null = null;
   /** Hand pending edits to the store before a save (the WYSIWYG view reports changes late). */
   private flushers = new Set<() => void>();
+  /**
+   * Increases each time a file is loaded or closed. A save or renumbering that finishes after it
+   * changed was for another document (or an older copy of this one) and is ignored; a rename
+   * (`moved`) keeps it, so a save under way during a rename still counts.
+   */
+  private opened = 0;
 
   constructor(private readonly api: Api) {}
 
@@ -100,6 +106,7 @@ export class DocumentStore {
   }
 
   private load(path: string, text: string, version: string, revision: number) {
+    this.opened++;
     const split = splitFrontmatter(text);
     this.savedText = text;
     this.version = version;
@@ -131,6 +138,7 @@ export class DocumentStore {
   }
 
   close(): void {
+    this.opened++;
     this.edited = false;
     this.set({ document: null, status: "saved", conflict: null, error: null, notices: [] });
   }
@@ -217,9 +225,10 @@ export class DocumentStore {
       return "clean";
     }
     this.set({ status: "saving" });
+    const opened = this.opened;
     try {
       const outcome = await this.api.saveFile(document.path, text, baseVersion, options);
-      if (this.state.document?.path !== document.path) return "saved";
+      if (this.opened !== opened) return "saved";
       if (outcome.kind === "conflict") {
         this.set({ status: "conflict", conflict: { theirVersion: outcome.version } });
         return "conflict";
@@ -271,9 +280,10 @@ export class DocumentStore {
     if (document === null) return "clean";
     // What is on disk now, as the editors hold it
     const disk = splitFrontmatter(toLf(this.savedText));
+    const opened = this.opened;
     try {
       const outcome = await this.api.renumberSection(document.path, id, uid, this.version);
-      if (this.state.document?.path !== document.path) return "saved";
+      if (this.opened !== opened) return "saved";
       if (outcome.kind === "conflict") {
         this.set({ status: "conflict", conflict: { theirVersion: outcome.version } });
         return "conflict";
