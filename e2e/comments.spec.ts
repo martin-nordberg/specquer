@@ -201,6 +201,27 @@ test("a comment being written is saved when the window loses focus, and stays op
   expect((await specquer.read("specs/design.md.comments.yaml")).match(/commentUid/g)).toHaveLength(2);
 });
 
+test("the Save button saves a reply and closes the editor; Tab to it doesn't save first", async ({ page, specquer }) => {
+  await openFile(page, "specs", "design.md");
+  await openComments(page);
+  await pane(page).getByRole("button", { name: /^Is this right\?/ }).click();
+  await pane(page).getByRole("button", { name: "Reply", exact: true }).click();
+  await page.keyboard.type("Saved by button.");
+  await pane(page).getByRole("button", { name: "Save", exact: true }).click();
+  await expect(pane(page).getByRole("textbox", { name: "Reply" })).toHaveCount(0);
+  await expect(pane(page).getByText("Saved by button.")).toBeVisible();
+  await expect.poll(() => specquer.read("specs/design.md.comments.yaml")).toContain("text: Saved by button.");
+  // From the keyboard: Tab moves to Save without saving, Enter saves
+  await pane(page).getByRole("button", { name: "Reply", exact: true }).click();
+  await page.keyboard.type("By keyboard.");
+  await page.keyboard.press("Tab");
+  await expect(pane(page).getByRole("button", { name: "Save", exact: true })).toBeFocused();
+  expect(await specquer.read("specs/design.md.comments.yaml")).not.toContain("By keyboard.");
+  await page.keyboard.press("Enter");
+  await expect.poll(() => specquer.read("specs/design.md.comments.yaml")).toContain("text: By keyboard.");
+  expect((await specquer.read("specs/design.md.comments.yaml")).match(/commentUid/g)).toHaveLength(3);
+});
+
 test("the sidecar follows its document's rename and goes with its delete", async ({ page, specquer }) => {
   await openFile(page, "specs", "design.md");
   await treeItem(page, "design.md").click({ button: "right" });

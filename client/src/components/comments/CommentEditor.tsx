@@ -8,6 +8,7 @@ import { Plugin, Selection, type Transaction } from "@milkdown/kit/prose/state";
 import { $prose } from "@milkdown/kit/utils";
 import { useEffect, useRef } from "react";
 import { linkText } from "@specquer/shared/markdown";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /**
@@ -67,8 +68,9 @@ export interface CommentEditorProps {
   /** The editor's accessible name. */
   label: string;
   /**
-   * Called when the editor loses focus, with its text: `close` when the focus moved elsewhere in
-   * the page, not when the window lost it (the editor then stays open).
+   * Called with the editor's text when Save is pressed or the editor loses focus: `close` when the
+   * focus moved elsewhere in the page or Save was pressed, not when the window lost the focus (the
+   * editor then stays open).
    */
   onSave: (text: string, close: boolean) => void;
   /** Escape: closes the editor without saving. */
@@ -80,7 +82,8 @@ export interface CommentEditorProps {
 
 /**
  * A comment's WYSIWYG editor (R2.5): Milkdown with CommonMark, GFM and undo, no section anchors,
- * links or images. It takes the focus when it opens. An unchanged document reports `initial`
+ * links or images. It takes the focus when it opens. Leaving it saves; the Save button, there for
+ * those who look for one, does the same. An unchanged document reports `initial`
  * exactly, so opening a comment and leaving it never rewrites it in Milkdown's style.
  */
 export function CommentEditor({ initial, label, onSave, onCancel, registerDraft, className }: CommentEditorProps) {
@@ -153,15 +156,27 @@ export function CommentEditor({ initial, label, onSave, onCancel, registerDraft,
 
   return (
     <div
-      ref={host}
-      className={cn("milkdown rounded-md border bg-background text-sm focus-within:ring-2 focus-within:ring-ring/50", className)}
-      data-testid="comment-editor"
+      className={cn("grid gap-1", className)}
       onBlur={(event) => {
         if (cancelled.current) return;
-        // Focus moving within the editor isn't leaving it
+        // Focus moving within the editor, or to its Save button, isn't leaving it
         if (event.relatedTarget instanceof globalThis.Node && event.currentTarget.contains(event.relatedTarget)) return;
         handlers.current.onSave(text.current(), document.hasFocus());
       }}
-    />
+    >
+      <div ref={host} className="milkdown rounded-md border bg-background text-sm focus-within:ring-2 focus-within:ring-ring/50" data-testid="comment-editor" />
+      <div className="flex justify-end">
+        <Button
+          type="button"
+          size="sm"
+          className="h-7"
+          // Keeps the focus in the text, so the click saves once rather than after a blur
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => handlers.current.onSave(text.current(), true)}
+        >
+          Save
+        </Button>
+      </div>
+    </div>
   );
 }
