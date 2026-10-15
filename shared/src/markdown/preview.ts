@@ -59,6 +59,24 @@ function rehypePrefixFragmentLinks() {
 /** Set on section anchors by the preview (`data-section-anchor`), with the section's kind. */
 export const SECTION_ANCHOR_PROPERTY = "dataSectionAnchor";
 
+/**
+ * Removes `data-section-anchor` written in the Markdown's own HTML, which the sanitizer lets
+ * through with the other `data-*` attributes: only `rehypeSectionAnchors` marks section anchors,
+ * so raw HTML can't make a badge (with its menu acting on a real section) anywhere else.
+ */
+function rehypeDropSectionAnchorMarks() {
+  return (tree: Root) => {
+    const visit = (node: Root | Element) => {
+      for (const child of node.children) {
+        if (child.type !== "element") continue;
+        delete child.properties[SECTION_ANCHOR_PROPERTY];
+        visit(child);
+      }
+    };
+    visit(tree);
+  };
+}
+
 /** The section ID of an empty `<a>` carrying one in its (prefixed) `id`, or `undefined`. */
 export function sectionAnchorId(node: RootContent | undefined): string | undefined {
   if (node?.type !== "element" || node.tagName !== "a" || node.children.length > 0) return undefined;
@@ -145,6 +163,7 @@ const processor = unified()
   .use(rehypeRaw)
   .use(rehypeSanitize, sanitizeSchema)
   .use(rehypePrefixFragmentLinks)
+  .use(rehypeDropSectionAnchorMarks)
   .use(rehypeSectionAnchors)
   .freeze();
 

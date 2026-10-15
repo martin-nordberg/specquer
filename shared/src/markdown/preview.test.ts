@@ -76,6 +76,18 @@ describe("section anchors", () => {
     expect(find(tree, "p")).toHaveLength(1);
   });
 
+  test("a data-section-anchor written in the Markdown is dropped: only real anchors are marked", () => {
+    const tree = markdownToHast(
+      `<a id="RQ-00001" data-uid="${DOC}"></a>\n\n> quote <a id="RQ-00001" data-section-anchor="heading"></a> text\n\n| <a id="RQ-00002" data-section-anchor="item"></a> |\n| - |\n`,
+    );
+    expect(marked(tree)).toEqual(["root:user-content-RQ-00001"]);
+    // Other data attributes stay, as traceability anchors need them
+    expect(find(markdownToHast('<a name="r7k2" data-status="draft" data-section-anchor="root"></a>\n'), "a")[0]?.properties).toEqual({
+      name: "user-content-r7k2",
+      dataStatus: "draft",
+    });
+  });
+
   test("a first anchor directly before a heading is the heading's; with a blank line, the root's", () => {
     expect(marked(markdownToHast('<a id="RQ-00001"></a>\n# Title\n'))).toEqual(["heading:user-content-RQ-00001"]);
     expect(marked(markdownToHast('<a id="RQ-00001" data-uid="abc"></a>\n\n# Title\n'))).toEqual(["root:user-content-RQ-00001"]);

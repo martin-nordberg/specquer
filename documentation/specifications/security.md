@@ -66,7 +66,7 @@ The rules below are implemented in `server/src/security.ts`, `server/src/files.t
 
 Spec files may contain raw HTML (traceability anchors such as `<a name="r7k2" data-status="draft"></a>`). Since the page can write files, script in a spec would be able to write files too.
 
-- The preview pipeline parses raw HTML with `rehype-raw` and then sanitizes it with `rehype-sanitize`, using GitHub's list of allowed tags and attributes plus `data-*` attributes on `a` and `span`. Scripts, event handlers, `iframe`, `object`, `style` and `javascript:` URLs are removed.
+- The preview pipeline parses raw HTML with `rehype-raw` and then sanitizes it with `rehype-sanitize`, using GitHub's list of allowed tags and attributes plus `data-*` attributes on `a` and `span`, except `data-section-anchor`, which only the pipeline sets (so HTML in a spec can't make a section badge, whose menu acts on a real section). Scripts, event handlers, `iframe`, `object`, `style` and `javascript:` URLs are removed.
 - The sanitizer prefixes `id` and `name` values with `user-content-` against DOM clobbering, as GitHub does; in-page links (`#id`) are rewritten to match.
 - The preview is rendered to React elements, never with `innerHTML`.
 - Milkdown (the WYSIWYG view) shows raw HTML as text and doesn't render it. Only section anchors are shown differently, as a badge image Specquer draws itself; their attributes are never put into the page as HTML.
