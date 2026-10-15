@@ -8,6 +8,14 @@ import { z } from "zod";
 /** Folder names that are never exposed or modified through the file API. */
 export const PROTECTED_NAMES: ReadonlySet<string> = new Set([".git", ".specquer"]);
 
+/**
+ * Whether a name is a protected folder's, in any case: on case-insensitive file systems (the
+ * default on macOS and Windows) `.GIT` is `.git`.
+ */
+export function isProtectedName(name: string): boolean {
+  return PROTECTED_NAMES.has(name.toLowerCase());
+}
+
 /** Longest name accepted for a file or folder (most file systems allow 255 bytes). */
 export const MAX_NAME_LENGTH = 255;
 
@@ -28,7 +36,7 @@ export function checkName(name: string): NameCheck {
   if (name === "." || name === "..") return { ok: false, reason: "The name can't be '.' or '..'." };
   if (/[/\\]/.test(name)) return { ok: false, reason: "The name can't contain '/' or '\\'." };
   if (CONTROL_CHARS.test(name)) return { ok: false, reason: "The name can't contain control characters." };
-  if (PROTECTED_NAMES.has(name)) return { ok: false, reason: `The name '${name}' is reserved.` };
+  if (isProtectedName(name)) return { ok: false, reason: `The name '${name}' is reserved.` };
   return { ok: true };
 }
 
@@ -45,7 +53,7 @@ export function checkPath(path: string): PathCheck {
   for (const segment of segments) {
     if (segment === "..") return { ok: false, reason: "Paths can't contain '..'." };
     if (CONTROL_CHARS.test(segment)) return { ok: false, reason: "Paths can't contain control characters." };
-    if (PROTECTED_NAMES.has(segment)) return { ok: false, reason: `Paths can't include '${segment}'.` };
+    if (isProtectedName(segment)) return { ok: false, reason: `Paths can't include '${segment}'.` };
   }
   return { ok: true, path: segments.join("/") };
 }

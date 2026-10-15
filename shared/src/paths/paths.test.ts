@@ -18,7 +18,7 @@ describe("checkPath", () => {
     expect(checkPath("")).toEqual({ ok: true, path: "" });
   });
 
-  test.each(["../x.md", "a/../../x.md", "/etc/passwd", "C:/x.md", "a\\b.md", ".git/config", "a/.specquer/user/uistate.yaml", "a\u0000b"])(
+  test.each(["../x.md", "a/../../x.md", "/etc/passwd", "C:/x.md", "a\\b.md", ".git/config", "a/.specquer/user/uistate.yaml", ".GIT/hooks", "a/.Specquer/shared", ".Git", "a\u0000b"])(
     "rejects %p",
     (path) => {
       expect(checkPath(path).ok).toBe(false);
@@ -32,7 +32,7 @@ describe("checkName", () => {
     expect(checkName(".hidden").ok).toBe(true);
   });
 
-  test.each(["", " x", "x ", ".", "..", "a/b", "a\\b", ".git", ".specquer", "x".repeat(256), "a\tb"])("rejects %p", (name) => {
+  test.each(["", " x", "x ", ".", "..", "a/b", "a\\b", ".git", ".specquer", ".GIT", ".SpecQuer", "x".repeat(256), "a\tb"])("rejects %p", (name) => {
     expect(checkName(name).ok).toBe(false);
   });
 

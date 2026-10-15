@@ -103,6 +103,26 @@ describe("GET /api/file", () => {
     expect((await request("/api/entry?path=linked/secret.md", { method: "DELETE" })).status).toBe(403);
     expect(await read(outside.root, "secret.md")).toBe("secret");
   });
+
+  test("won't follow a symbolic link into a protected folder", async () => {
+    const { root, request } = await setup({ ".specquer/shared/x.md": "data", ".git/info/y.md": "git" });
+    await symlink(join(root, ".specquer", "shared"), join(root, "shared"));
+    await symlink(join(root, ".git"), join(root, "repo"));
+    expect((await request("/api/file?path=shared/x.md")).status).toBe(403);
+    expect((await request("/api/file?path=shared/x.md", { method: "PUT", body: { text: "new", baseVersion: "x" } })).status).toBe(403);
+    expect((await request("/api/entry?path=shared/x.md", { method: "DELETE" })).status).toBe(403);
+    expect((await request("/api/rename", { method: "POST", body: { path: "repo/info", newName: "gone" } })).status).toBe(403);
+    expect((await request("/api/create", { method: "POST", body: { parent: "repo", name: "z.md", kind: "file" } })).status).toBe(403);
+    expect(await read(root, ".specquer/shared/x.md")).toBe("data");
+    expect(await read(root, ".git/info/y.md")).toBe("git");
+  });
+
+  test.each([".GIT", ".Git/info", ".SPECQUER/shared"])("refuses a protected folder in another case: %p", async (path) => {
+    const { request } = await setup({ "a.md": "x" });
+    expect((await request(`/api/entry?path=${path}`, { method: "DELETE" })).status).toBe(400);
+    expect((await request("/api/rename", { method: "POST", body: { path, newName: "x" } })).status).toBe(400);
+    expect((await request("/api/create", { method: "POST", body: { parent: path, name: "d", kind: "folder" } })).status).toBe(400);
+  });
 });
 
 describe("PUT /api/file", () => {

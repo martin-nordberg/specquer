@@ -1,5 +1,5 @@
 import { chmod, lstat, mkdir, readdir, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
-import { dirname, join, sep } from "node:path";
+import { dirname, join, relative, sep } from "node:path";
 import { ApiError, type DeletePreview, type FileContent, type SaveResult, type Tree, type TreeFolder } from "@specquer/shared/api";
 import {
   MARKDOWN_EXTENSION,
@@ -7,6 +7,7 @@ import {
   baseName,
   checkPath,
   isMarkdownFile,
+  isProtectedName,
   joinPath,
   parentPath,
   pathSegments,
@@ -72,6 +73,15 @@ export class FileService {
     return real === this.root || real.startsWith(this.root + sep);
   }
 
+  /**
+   * Checks a real path: it must be inside the root, and not in a protected folder (`.git`,
+   * `.specquer`, in any case), which a symbolic link inside the root could lead to.
+   */
+  private assertAllowed(real: string, path: string): void {
+    if (!this.isInsideRoot(real)) throw new ApiError(403, "forbidden", `'${path}' is outside the root folder.`);
+    if (relative(this.root, real).split(sep).some(isProtectedName)) throw new ApiError(403, "forbidden", `'${path}' is in a protected folder.`);
+  }
+
   /** An existing file's absolute path, following symbolic links, which must stay inside the root. */
   private async existingFile(path: string): Promise<string> {
     let real: string;
@@ -81,7 +91,7 @@ export class FileService {
       if (isNotFound(err)) throw new ApiError(404, "not_found", `'${path}' doesn't exist.`);
       throw err;
     }
-    if (!this.isInsideRoot(real)) throw new ApiError(403, "forbidden", `'${path}' is outside the root folder.`);
+    this.assertAllowed(real, path);
     if (!(await stat(real)).isFile()) throw new ApiError(400, "not_a_file", `'${path}' isn't a file.`);
     return real;
   }
@@ -101,7 +111,7 @@ export class FileService {
       if (isNotFound(err)) throw new ApiError(404, "not_found", `'${path}' doesn't exist.`);
       throw err;
     }
-    if (!this.isInsideRoot(realParent)) throw new ApiError(403, "forbidden", `'${path}' is outside the root folder.`);
+    this.assertAllowed(realParent, path);
     return { absolute: join(realParent, baseName(path)), isFolder: info.isDirectory() };
   }
 
@@ -114,7 +124,7 @@ export class FileService {
       if (isNotFound(err)) throw new ApiError(404, "not_found", `'${path}' doesn't exist.`);
       throw err;
     }
-    if (!this.isInsideRoot(real)) throw new ApiError(403, "forbidden", `'${path}' is outside the root folder.`);
+    this.assertAllowed(real, path);
     if (!(await stat(real)).isDirectory()) throw new ApiError(400, "not_a_folder", `'${path}' isn't a folder.`);
     return real;
   }
