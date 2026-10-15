@@ -137,6 +137,13 @@ export default defineConfig({
                       {text: 'Requirements', link: '/work-items/step-012-comment-threads/requirements'},
                       {text: 'Implementation Plan', link: '/work-items/step-012-comment-threads/implementation-plan'},
                     ]
+                  },
+                  {
+                    text: '013-Code Review',
+                    collapsed: false,
+                    items: [
+                      {text: 'Code Review', link: '/work-items/step-013-code-review/code-review'},
+                    ]
                   }
                 ]
               }
