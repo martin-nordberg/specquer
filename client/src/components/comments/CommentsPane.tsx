@@ -1,5 +1,5 @@
 import { toJsxRuntime } from "hast-util-to-jsx-runtime";
-import { ChevronDown, ChevronRight, MessageSquarePlus, Pencil, RotateCcw, Trash2, X, Check } from "lucide-react";
+import { ChevronDown, ChevronRight, MessageCirclePlus, Pencil, RotateCcw, Trash2, X, Check } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 import type { SectionStatusLists } from "@specquer/shared/api";
@@ -215,7 +215,7 @@ function Group({
           disabled={writing}
           onClick={() => store.startThread(group.sectionUid)}
         >
-          <MessageSquarePlus />
+          <MessageCirclePlus />
         </Button>
       </div>
       <div className="grid gap-2">

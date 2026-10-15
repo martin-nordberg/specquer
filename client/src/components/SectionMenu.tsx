@@ -1,4 +1,4 @@
-import { Copy, ListChecks, MessageSquarePlus, MessagesSquare } from "lucide-react";
+import { Copy, ListChecks, MessageCirclePlus, MessagesSquare } from "lucide-react";
 import { useRef } from "react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
@@ -81,13 +81,13 @@ export function SectionMenu({ target, onClose, onCopy, onAttributes, attributesD
                 onAddComment();
               }}
             >
-              <MessageSquarePlus aria-hidden="true" />
+              <MessageCirclePlus aria-hidden="true" />
               Add comment…
             </DropdownMenuItem>
           ) : (
             <div title={addCommentDisabled}>
               <DropdownMenuItem disabled aria-description={addCommentDisabled}>
-                <MessageSquarePlus aria-hidden="true" />
+                <MessageCirclePlus aria-hidden="true" />
                 Add comment…
               </DropdownMenuItem>
             </div>
