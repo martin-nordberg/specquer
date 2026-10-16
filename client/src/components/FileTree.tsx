@@ -1,18 +1,10 @@
-import { ChevronDown, ChevronRight, File, FileCode, FileImage, FilePlus, FileText, Folder, FolderOpen, FolderPlus, Pencil, Settings, Trash2, TriangleAlert } from "lucide-react";
+import { Anchor, ChevronDown, ChevronRight, File, FileCode, FileImage, FilePlus, FileText, Folder, FolderOpen, FolderPlus, Pencil, Settings, Trash2, TriangleAlert } from "lucide-react";
 import type { TreeFolder, TreeNode } from "@specquer/shared/api";
-import { type FileKind, checkPath, fileKind } from "@specquer/shared/paths";
+import { type FileKind, fileKind } from "@specquer/shared/paths";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { cn } from "@/lib/utils";
 
 const fileIcons: Record<FileKind, typeof FileText> = { markdown: FileText, text: FileCode, image: FileImage, binary: File };
-
-/**
- * Whether Specquer can change an entry (Step 014, R2.3): folders and Markdown files, but nothing
- * in `.specquer`, which no route that writes accepts.
- */
-function changeable(node: TreeNode): boolean {
-  return checkPath(node.path).ok && (node.kind === "folder" || fileKind(node.path) === "markdown");
-}
 
 /** The folder tree, in either view: expanded folders remembered, single click opens. */
 export interface FileTreeProps {
@@ -25,10 +17,12 @@ export interface FileTreeProps {
   onOpenFile: (path: string) => void;
   onNewFile: (folder: TreeFolder) => void;
   onNewFolder: (folder: TreeFolder) => void;
-  /** **Settings…** for a folder: whether it is sectioned, its prefix, and adding section anchors. */
+  /** **Settings…** for a folder: whether it is sectioned, and its prefix. */
   onFolderSettings?: (folder: TreeFolder) => void;
-  /** **Section problems…** for a folder. */
-  onShowProblems?: (folder: TreeFolder) => void;
+  /** **Add section anchors…** for a folder or a file (Step 015). */
+  onAddAnchors?: (node: TreeNode) => void;
+  /** **Section problems…** for a folder or a file. */
+  onShowProblems?: (node: TreeNode) => void;
   onRename: (node: TreeNode) => void;
   onDelete: (node: TreeNode) => void;
 }
@@ -50,21 +44,14 @@ export function FileTree(props: FileTreeProps) {
             {props.root.children.length === 0 && <p className="p-4 text-sm text-muted-foreground">{props.emptyMessage ?? "No Markdown files in this folder."}</p>}
           </div>
         </ContextMenuTrigger>
-        <ContextMenuContent>
-          <NewEntryItems folder={props.root} {...props} />
-        </ContextMenuContent>
+        <EntryMenu node={props.root} {...props} />
       </ContextMenu>
     </div>
   );
 }
 
-function NewEntryItems({
-  folder,
-  onNewFile,
-  onNewFolder,
-  onFolderSettings,
-  onShowProblems,
-}: Pick<FileTreeProps, "onNewFile" | "onNewFolder" | "onFolderSettings" | "onShowProblems"> & { folder: TreeFolder }) {
+/** **New file…** and **New folder…**. */
+function NewEntryItems({ folder, onNewFile, onNewFolder }: Pick<FileTreeProps, "onNewFile" | "onNewFolder"> & { folder: TreeFolder }) {
   return (
     <>
       <ContextMenuItem onSelect={() => onNewFile(folder)}>
@@ -73,17 +60,60 @@ function NewEntryItems({
       <ContextMenuItem onSelect={() => onNewFolder(folder)}>
         <FolderPlus /> New folder…
       </ContextMenuItem>
-      {onFolderSettings !== undefined && (
-        <ContextMenuItem onSelect={() => onFolderSettings(folder)}>
+    </>
+  );
+}
+
+/** **Add section anchors…**, **Settings…** (folders only) and **Section problems…**. */
+function SectionItems({ node, onAddAnchors, onFolderSettings, onShowProblems }: Pick<FileTreeProps, "onAddAnchors" | "onFolderSettings" | "onShowProblems"> & { node: TreeNode }) {
+  return (
+    <>
+      {onAddAnchors !== undefined && (
+        <ContextMenuItem onSelect={() => onAddAnchors(node)}>
+          <Anchor /> Add section anchors…
+        </ContextMenuItem>
+      )}
+      {node.kind === "folder" && onFolderSettings !== undefined && (
+        <ContextMenuItem onSelect={() => onFolderSettings(node)}>
           <Settings /> Settings…
         </ContextMenuItem>
       )}
       {onShowProblems !== undefined && (
-        <ContextMenuItem onSelect={() => onShowProblems(folder)}>
+        <ContextMenuItem onSelect={() => onShowProblems(node)}>
           <TriangleAlert /> Section problems…
         </ContextMenuItem>
       )}
     </>
+  );
+}
+
+/**
+ * An entry's menu (Step 015): the same for every folder and every file, Markdown or not; a
+ * dialog says when its action doesn't apply. The root folder has no **Rename…** or **Delete…**.
+ */
+function EntryMenu({ node, ...props }: FileTreeProps & { node: TreeNode }) {
+  const root = node.path === "";
+  return (
+    <ContextMenuContent>
+      {node.kind === "folder" && (
+        <>
+          <NewEntryItems folder={node} {...props} />
+          <ContextMenuSeparator />
+        </>
+      )}
+      {!root && (
+        <>
+          <ContextMenuItem onSelect={() => props.onRename(node)}>
+            <Pencil /> Rename…
+          </ContextMenuItem>
+          <ContextMenuItem variant="destructive" onSelect={() => props.onDelete(node)}>
+            <Trash2 /> Delete…
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+        </>
+      )}
+      <SectionItems node={node} {...props} />
+    </ContextMenuContent>
   );
 }
 
@@ -112,27 +142,10 @@ function TreeItem({ node, depth, ...props }: FileTreeProps & { node: TreeNode; d
 
   return (
     <li role="treeitem" aria-expanded={isFolder ? isExpanded : undefined} aria-selected={isCurrent} aria-label={node.name}>
-      {!changeable(node) ? (
-        button
-      ) : (
-        <ContextMenu>
-          <ContextMenuTrigger asChild>{button}</ContextMenuTrigger>
-          <ContextMenuContent>
-            {node.kind === "folder" && (
-              <>
-                <NewEntryItems folder={node} {...props} />
-                <ContextMenuSeparator />
-              </>
-            )}
-            <ContextMenuItem onSelect={() => props.onRename(node)}>
-              <Pencil /> Rename…
-            </ContextMenuItem>
-            <ContextMenuItem variant="destructive" onSelect={() => props.onDelete(node)}>
-              <Trash2 /> Delete…
-            </ContextMenuItem>
-          </ContextMenuContent>
-        </ContextMenu>
-      )}
+      <ContextMenu>
+        <ContextMenuTrigger asChild>{button}</ContextMenuTrigger>
+        <EntryMenu node={node} {...props} />
+      </ContextMenu>
       {isExpanded && node.kind === "folder" && (
         <ul role="group">
           {node.children.map((child) => (

@@ -1,12 +1,14 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, mock, test } from "bun:test";
-import type { AnchorFolderResult, SectionProblem, TreeFolder } from "@specquer/shared/api";
+import type { AnchorFolderResult, SectionProblem, TreeFile, TreeFolder } from "@specquer/shared/api";
 import { AnchorDialog } from "./AnchorDialog";
 import { ProblemsDialog } from "./ProblemsDialog";
 import { SectionBadge } from "./SectionBadge";
 import { SectionNotices, noticeText } from "./SectionNotices";
 
 const root: TreeFolder = { kind: "folder", name: "", path: "", children: [] };
+const notes: TreeFolder = { kind: "folder", name: "notes", path: "notes", children: [] };
+const file: TreeFile = { kind: "file", name: "login.md", path: "docs/login.md" };
 
 describe("SectionBadge", () => {
   test("a badge whose ID is used elsewhere is marked and offers to renumber", async () => {
@@ -73,14 +75,14 @@ describe("ProblemsDialog", () => {
       { kind: "conflict-markers", path: "docs/d.md" },
       { kind: "nested-specquer", folder: "docs/inner" },
     ];
-    const loadProblems = mock(async () => problems);
+    const loadProblems = mock(async () => ({ problems, sectioned: 4 }));
     const onRenumber = mock(async () => {
       problems = [];
       return null;
     });
     const onOpen = mock(() => {});
     const onClose = mock(() => {});
-    render(<ProblemsDialog folder={root} onClose={onClose} loadProblems={loadProblems} onOpen={onOpen} onRenumber={onRenumber} onRenumberDocument={async () => null} />);
+    render(<ProblemsDialog target={root} onClose={onClose} loadProblems={loadProblems} onOpen={onOpen} onRenumber={onRenumber} onRenumberDocument={async () => null} />);
     const list = await screen.findByRole("list", { name: "Problems" });
     expect(list.textContent).toContain("REQ-00005 is used by different sections:");
     expect(list.textContent).toContain("keeps the ID");
@@ -100,7 +102,7 @@ describe("ProblemsDialog", () => {
       return null;
     });
     render(
-      <ProblemsDialog folder={root} onClose={() => {}} loadProblems={async () => problems} onOpen={() => {}} onRenumber={async () => null} onRenumberDocument={onRenumberDocument} />,
+      <ProblemsDialog target={root} onClose={() => {}} loadProblems={async () => ({ problems, sectioned: 1 })} onOpen={() => {}} onRenumber={async () => null} onRenumberDocument={onRenumberDocument} />,
     );
     const list = await screen.findByRole("list", { name: "Problems" });
     expect(list.textContent).toContain("copies of one document");
@@ -117,7 +119,7 @@ describe("ProblemsDialog", () => {
     ];
     const onOpen = mock(() => {});
     const onClose = mock(() => {});
-    render(<ProblemsDialog folder={root} onClose={onClose} loadProblems={async () => problems} onOpen={onOpen} onRenumber={async () => null} onRenumberDocument={async () => null} />);
+    render(<ProblemsDialog target={root} onClose={onClose} loadProblems={async () => ({ problems, sectioned: 1 })} onOpen={onOpen} onRenumber={async () => null} onRenumberDocument={async () => null} />);
     fireEvent.click(await screen.findByRole("button", { name: "docs/b.md" }));
     expect(onOpen).toHaveBeenCalledWith("docs/b.md", "REQ-00005");
     expect(onClose).toHaveBeenCalled();
@@ -130,7 +132,7 @@ describe("ProblemsDialog", () => {
       { kind: "invalid-status", path: "docs/a.md", id: "REQ-00003", line: 6, value: "", prefix: "REQ" },
     ];
     const onOpen = mock(() => {});
-    render(<ProblemsDialog folder={root} onClose={() => {}} loadProblems={async () => problems} onOpen={onOpen} onRenumber={async () => null} onRenumberDocument={async () => null} />);
+    render(<ProblemsDialog target={root} onClose={() => {}} loadProblems={async () => ({ problems, sectioned: 1 })} onOpen={onOpen} onRenumber={async () => null} onRenumberDocument={async () => null} />);
     const items = await screen.findAllByRole("listitem");
     expect(items.map((item) => item.textContent)).toEqual([
       ".specquer/shared/SPEC/prefix.config.yaml: its list of statusValues is empty, so SPEC uses the default statuses.",
@@ -145,8 +147,8 @@ describe("ProblemsDialog", () => {
 describe("AnchorDialog", () => {
   test("offers the agent guide while AGENTS.md lacks it, and adds it only when ticked", async () => {
     const onRun = mock(async () => null);
-    const loadChanges = mock(async (): Promise<AnchorFolderResult> => ({ files: [], agentGuide: false }));
-    render(<AnchorDialog folder={root} onClose={() => {}} loadChanges={loadChanges} onRun={onRun} />);
+    const loadChanges = mock(async (): Promise<AnchorFolderResult> => ({ files: [], sectioned: 1, agentGuide: false }));
+    render(<AnchorDialog target={root} onClose={() => {}} loadChanges={loadChanges} onRun={onRun} />);
     const box = await screen.findByRole("checkbox", { name: /section anchor rules for coding agents/ });
     expect(screen.queryByRole("button", { name: "Add to AGENTS.md" })).toBeNull();
     fireEvent.click(box);
@@ -156,9 +158,44 @@ describe("AnchorDialog", () => {
 
   test("doesn't offer the guide when it is there", async () => {
     const onRun = mock(async () => null);
-    render(<AnchorDialog folder={root} onClose={() => {}} loadChanges={async () => ({ files: ["docs/a.md"], agentGuide: true })} onRun={onRun} />);
+    render(<AnchorDialog target={root} onClose={() => {}} loadChanges={async () => ({ files: ["docs/a.md"], sectioned: 1, agentGuide: true })} onRun={onRun} />);
     fireEvent.click(await screen.findByRole("button", { name: "Add anchors" }));
     expect(screen.queryByRole("checkbox")).toBeNull();
     await waitFor(() => expect(onRun).toHaveBeenCalledWith("", false));
+  });
+
+  test("for a file: its name, no agent guide, and its anchors added (Step 015)", async () => {
+    const onRun = mock(async () => null);
+    render(<AnchorDialog target={file} onClose={() => {}} loadChanges={async () => ({ files: ["docs/login.md"], sectioned: 1, agentGuide: false })} onRun={onRun} />);
+    expect((await screen.findByText("1 file will change:")).textContent).toBe("1 file will change:");
+    expect(screen.getByText(/Add missing section anchors and correct duplicate IDs in “login.md”/)).toBeTruthy();
+    expect(screen.queryByRole("checkbox")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Add anchors" }));
+    await waitFor(() => expect(onRun).toHaveBeenCalledWith("docs/login.md", false));
+  });
+
+  test("says when there are no sectioned files, for a folder and for a file", async () => {
+    const { unmount } = render(<AnchorDialog target={notes} onClose={() => {}} loadChanges={async () => ({ files: [], sectioned: 0, agentGuide: true })} onRun={async () => null} />);
+    expect(await screen.findByText(/“notes” holds no sectioned files\. Section anchors are added only in sectioned folders/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Add anchors" })).toBeNull();
+    unmount();
+    render(<AnchorDialog target={file} onClose={() => {}} loadChanges={async () => ({ files: [], sectioned: 0, agentGuide: true })} onRun={async () => null} />);
+    expect(await screen.findByText(/“login.md” isn't in a sectioned folder/)).toBeTruthy();
+  });
+});
+
+describe("ProblemsDialog for a file or an unsectioned folder (Step 015)", () => {
+  test("names a file, and says when nothing is sectioned while still listing other problems", async () => {
+    const { unmount } = render(
+      <ProblemsDialog target={file} onClose={() => {}} loadProblems={async () => ({ problems: [], sectioned: 1 })} onOpen={() => {}} onRenumber={async () => null} onRenumberDocument={async () => null} />,
+    );
+    expect(await screen.findByText("No problems found.")).toBeTruthy();
+    expect(screen.getByText(/Section anchors in “login.md” that need a decision/)).toBeTruthy();
+    unmount();
+    const nested: SectionProblem[] = [{ kind: "nested-specquer", folder: "notes/inner" }];
+    render(<ProblemsDialog target={notes} onClose={() => {}} loadProblems={async () => ({ problems: nested, sectioned: 0 })} onOpen={() => {}} onRenumber={async () => null} onRenumberDocument={async () => null} />);
+    expect(await screen.findByText("“notes” holds no sectioned files, so it has no section anchors to check.")).toBeTruthy();
+    expect(screen.queryByText("No problems found.")).toBeNull();
+    expect((await screen.findByRole("list", { name: "Problems" })).textContent).toContain("notes/inner/.specquer/");
   });
 });

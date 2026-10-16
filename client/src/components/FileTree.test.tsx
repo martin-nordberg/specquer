@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, mock, test } from "bun:test";
 import type { TreeFolder } from "@specquer/shared/api";
 import { FileTree } from "./FileTree";
@@ -147,17 +147,30 @@ describe("FileTree in All Files (Step 014)", () => {
     expect(icon("manual.pdf")).toMatch(/lucide-file(?!-)/);
   });
 
-  test("files other than Markdown, and everything in .specquer, have no context menu; they still open", async () => {
-    const props = handlers();
-    render(<FileTree root={all} expanded={new Set(["src", ".specquer", ".specquer/shared"])} currentFile={undefined} {...props} />);
-    for (const name of ["index.ts", "logo.png", ".specquer", "shared", "agent.config.yaml"]) {
+  test("every folder and every file has the same menu, Markdown or not, .specquer included (Step 015)", async () => {
+    const props = { ...handlers(), onFolderSettings: mock(() => {}), onAddAnchors: mock(() => {}), onShowProblems: mock(() => {}) };
+    const tree: TreeFolder = { ...all, children: [...all.children, { kind: "folder", name: "empty", path: "empty", children: [] }] };
+    render(<FileTree root={tree} expanded={new Set(["src", ".specquer", ".specquer/shared"])} currentFile={undefined} {...props} />);
+    const menu = async (name: string) => {
       fireEvent.contextMenu(screen.getByText(name));
-      expect([name, screen.queryByRole("menuitem", { name: "Rename…" })]).toEqual([name, null]);
-    }
-    fireEvent.click(screen.getByText("index.ts"));
-    expect(props.onOpenFile).toHaveBeenCalledWith("src/index.ts");
+      const items = await screen.findAllByRole("menuitem");
+      const shown = items.map((item) => item.textContent?.trim());
+      // Separators sit between the groups
+      const separators = document.querySelectorAll('[role="separator"]').length;
+      fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+      await waitFor(() => expect(screen.queryAllByRole("menuitem")).toHaveLength(0));
+      return { shown, separators };
+    };
+    const folderMenu = { shown: ["New file…", "New folder…", "Rename…", "Delete…", "Add section anchors…", "Settings…", "Section problems…"], separators: 2 };
+    const fileMenu = { shown: ["Rename…", "Delete…", "Add section anchors…", "Section problems…"], separators: 1 };
+    for (const name of ["src", "empty", ".specquer", "shared"]) expect([name, await menu(name)]).toEqual([name, folderMenu]);
+    for (const name of ["a.md", "index.ts", "logo.png", "agent.config.yaml"]) expect([name, await menu(name)]).toEqual([name, fileMenu]);
+    fireEvent.contextMenu(screen.getByText("index.ts"));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Add section anchors…" }));
+    expect(props.onAddAnchors).toHaveBeenCalledWith({ kind: "file", name: "index.ts", path: "src/index.ts" });
     fireEvent.contextMenu(screen.getByText("src"));
-    expect(await screen.findByRole("menuitem", { name: "Rename…" })).toBeTruthy();
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Section problems…" }));
+    expect((props.onShowProblems.mock.calls[0] as unknown[])[0]).toMatchObject({ kind: "folder", path: "src" });
   });
 
   test("an empty tree says what the view shows", () => {

@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
-import type { SectionProblem, TreeFolder } from "@specquer/shared/api";
+import type { SectionProblem, SectionProblemsResult, TreeNode } from "@specquer/shared/api";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { entryName } from "@/app/entry-actions";
 
 export interface ProblemsDialogProps {
-  /** The folder to check, or `null` when the dialog is closed. */
-  folder: TreeFolder | null;
+  /** The folder or file to check (Step 015), or `null` when the dialog is closed. */
+  target: TreeNode | null;
   onClose: () => void;
-  loadProblems: (folder: string) => Promise<SectionProblem[]>;
+  loadProblems: (path: string) => Promise<SectionProblemsResult>;
   /** Opens a file, at a section if given. */
   onOpen: (path: string, sectionId?: string) => void;
   /** Renumbers one occurrence; resolves to an error message, or `null` on success. */
@@ -23,19 +24,22 @@ const linkClass = "rounded-sm font-mono text-xs underline outline-none focus-vis
  * section IDs waiting for the user, unusable prefix settings, stray anchors, files with merge
  * conflict markers, and statuses that aren't allowed, in a folder's sectioned files.
  */
-export function ProblemsDialog({ folder, onClose, loadProblems, onOpen, onRenumber, onRenumberDocument }: ProblemsDialogProps) {
+export function ProblemsDialog({ target, onClose, loadProblems, onOpen, onRenumber, onRenumberDocument }: ProblemsDialogProps) {
   const [problems, setProblems] = useState<SectionProblem[] | null>(null);
+  const [sectioned, setSectioned] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const reload = useCallback(async () => {
-    if (folder === null) return;
+    if (target === null) return;
     try {
-      setProblems(await loadProblems(folder.path));
+      const result = await loadProblems(target.path);
+      setProblems(result.problems);
+      setSectioned(result.sectioned);
     } catch (err) {
       setError((err as Error).message);
     }
-  }, [folder, loadProblems]);
+  }, [target, loadProblems]);
 
   useEffect(() => {
     setProblems(null);
@@ -169,16 +173,22 @@ export function ProblemsDialog({ folder, onClose, loadProblems, onOpen, onRenumb
     }
   };
 
-  const name = folder === null ? "" : folder.path === "" ? "the root folder" : `“${folder.name}”`;
+  const name = target === null ? "" : entryName(target);
 
   return (
-    <Dialog open={folder !== null} onOpenChange={(isOpen) => !isOpen && onClose()}>
+    <Dialog open={target !== null} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Section problems</DialogTitle>
           <DialogDescription>Section anchors in {name} that need a decision.</DialogDescription>
         </DialogHeader>
-        {problems !== null && problems.length === 0 && <p className="text-sm">No problems found.</p>}
+        {/* Problems that need no sectioned files, such as a nested Specquer folder, are still listed */}
+        {problems !== null && sectioned === 0 && (
+          <p className="text-sm">
+            {target?.kind === "file" ? `${name} isn't in a sectioned folder` : `${name} holds no sectioned files`}, so it has no section anchors to check.
+          </p>
+        )}
+        {problems !== null && problems.length === 0 && sectioned > 0 && <p className="text-sm">No problems found.</p>}
         {problems !== null && problems.length > 0 && (
           <ul aria-label="Problems" className="grid max-h-80 gap-3 overflow-auto text-sm">
             {problems.map((problem, index) => (

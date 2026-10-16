@@ -123,12 +123,15 @@ export function createHandlers(
     getSections: (path) => sections.sectionsOf(path),
     searchSections: (query, limit, path) => sections.search(query, limit, path),
     async anchorFolder(folder, dryRun, addAgentGuide) {
-      const changed = await sections.anchorFolder(folder, dryRun);
+      const { changed, sectioned } = await sections.anchorFolder(folder, dryRun);
       if (!dryRun && addAgentGuide) await addAgentGuideFile(files);
       if (!dryRun && changed.length > 0) filesChanged();
-      return { files: changed, agentGuide: await hasAgentGuideFile(files) };
+      return { files: changed, sectioned, agentGuide: await hasAgentGuideFile(files) };
     },
-    sectionProblems: async (folder) => [...(await sections.problems(folder)), ...(await comments.problems(folder))],
+    async sectionProblems(folder) {
+      const problems = [...(await sections.problems(folder)), ...(await comments.problems(folder))];
+      return { problems, sectioned: await sections.sectionedCount(folder) };
+    },
     sectionStatuses: (path) => sections.statuses(path),
     renumberSection: (path, id, uid, baseVersion) => sections.renumber(path, id, uid, baseVersion),
     renumberDocument: (path, baseVersion) => sections.renumberDocument(path, baseVersion),

@@ -12,6 +12,7 @@ import {
   type AgentSettings,
   type AgentSettingsUpdate,
   type AnchorFolderResult,
+  type SectionProblemsResult,
   type ApiErrorBody,
   type DeletePreview,
   type FileContent,
@@ -104,7 +105,7 @@ export interface ApiHandlers {
   getSections(path: string): Promise<SectionInfo[]>;
   searchSections(query: string, limit: number, path?: string): Promise<SectionSearchResult[]>;
   anchorFolder(folder: string, dryRun: boolean, addAgentGuide: boolean): Promise<AnchorFolderResult>;
-  sectionProblems(folder: string): Promise<SectionProblem[]>;
+  sectionProblems(folder: string): Promise<SectionProblemsResult>;
   /** The status lists for a file's sections. */
   sectionStatuses(path: string): Promise<SectionStatusLists>;
   renumberSection(path: string, id: string, uid: string | null, baseVersion: string): Promise<SaveResult>;
@@ -262,7 +263,7 @@ export function createApiRouter(handlers: ApiHandlers) {
       return c.json(await handlers.anchorFolder(folder, dryRun, addAgentGuide));
     })
     .get("/sections/problems", validate("query", sectionProblemsSchema), async (c) => {
-      return c.json({ problems: await handlers.sectionProblems(c.req.valid("query").folder) });
+      return c.json(await handlers.sectionProblems(c.req.valid("query").folder));
     })
     .get("/sections/statuses", validate("query", fileQuerySchema), async (c) => {
       return c.json(await handlers.sectionStatuses(c.req.valid("query").path));

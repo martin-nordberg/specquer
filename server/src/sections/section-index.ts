@@ -474,10 +474,15 @@ export class SectionIndex {
    * unless `dryRun`, those files rewritten. A file changed on disk during the run is read again,
    * never overwritten blindly. Files with merge conflict markers are left alone.
    */
-  anchorFolder(folder: string, dryRun: boolean): Promise<string[]> {
+  /**
+   * **Add section anchors** for a folder, or a file (Step 015): the sectioned files under the
+   * path whose anchors change, and how many sectioned files it holds.
+   */
+  anchorFolder(folder: string, dryRun: boolean): Promise<{ changed: string[]; sectioned: number }> {
     return this.run(async () => {
       const config = await this.scanFiles();
       const changed: string[] = [];
+      const sectioned = this.sectionedUnder(folder);
       for (const path of [...this.documents.keys()].sort()) {
         if (!isSameOrInside(path, folder)) continue;
         for (let attempt = 0; attempt < 3; attempt++) {
@@ -499,8 +504,20 @@ export class SectionIndex {
         }
       }
       if (!dryRun) await this.dataFiles.write(this.data);
-      return changed;
+      return { changed, sectioned };
     });
+  }
+
+  /** How many sectioned files a folder holds, or 1 for a sectioned file itself, as of the last scan. */
+  private sectionedUnder(path: string): number {
+    let count = 0;
+    for (const doc of this.documents.keys()) if (isSameOrInside(doc, path)) count++;
+    return count;
+  }
+
+  /** How many sectioned files a folder (or a file) holds, as of the last scan. */
+  sectionedCount(path: string): Promise<number> {
+    return this.run(async () => this.sectionedUnder(path));
   }
 
   /**

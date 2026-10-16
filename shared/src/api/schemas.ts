@@ -182,6 +182,8 @@ export interface SectionSearchResult extends SectionInfo {
 export interface AnchorFolderResult {
   /** The sectioned files whose anchors change (or would, in a dry run). */
   files: string[];
+  /** How many sectioned files the folder (or the file itself) holds (Step 015): none means nothing applies. */
+  sectioned: number;
   /** Whether the root folder's `AGENTS.md` holds the section anchor rules for coding agents. */
   agentGuide: boolean;
 }
@@ -229,8 +231,15 @@ export const sectionSearchSchema = z.object({
   path: markdownPathSchema.optional(),
 });
 
+/** **Section problems** for a folder or a file (Step 015). */
+export interface SectionProblemsResult {
+  problems: SectionProblem[];
+  /** How many sectioned files the folder (or the file itself) holds. */
+  sectioned: number;
+}
+
 export const sectionProblemsSchema = z.object({
-  /** The folder ("" for the root folder). */
+  /** The folder ("" for the root folder), or a Markdown file (Step 015). */
   folder: workspacePathSchema.default(""),
 });
 
@@ -251,7 +260,7 @@ export const renumberDocumentSchema = z.object({
 });
 
 export const anchorFolderSchema = z.object({
-  /** The folder ("" for the root folder). */
+  /** The folder ("" for the root folder), or a Markdown file (Step 015). */
   folder: workspacePathSchema,
   /** Only report the files that would change. */
   dryRun: z.boolean(),

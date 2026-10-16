@@ -24,6 +24,7 @@ import {
   setViewType,
 } from "@specquer/shared/uistate";
 import { AnchorDialog } from "@/components/AnchorDialog";
+import { NotApplicableDialog } from "@/components/NotApplicableDialog";
 import { ChatPane } from "@/components/chat/ChatPane";
 import { ChatToggle } from "@/components/chat/ChatToggle";
 import { CommentsPane } from "@/components/comments/CommentsPane";
@@ -53,6 +54,7 @@ import { applyTheme, useSystemTheme } from "@/theme/theme";
 import { ChatStore } from "./chat-store";
 import { groupThreads, threadOrder } from "./comment-groups";
 import { CommentStore } from "./comment-store";
+import { ACTION_TITLES, type EntryAction, notApplicable } from "./entry-actions";
 import { AUTOSAVE_INTERVAL, DocumentStore, type SaveStatus } from "./document-store";
 import { SummaryStore } from "./summaries";
 import { UiStateStore } from "./ui-state-store";
@@ -93,8 +95,10 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
   const [creating, setCreating] = useState<CreateRequest | null>(null);
   const [renaming, setRenaming] = useState<TreeNode | null>(null);
   const [deleting, setDeleting] = useState<TreeNode | null>(null);
-  const [anchoring, setAnchoring] = useState<TreeFolder | null>(null);
-  const [checking, setChecking] = useState<TreeFolder | null>(null);
+  const [anchoring, setAnchoring] = useState<TreeNode | null>(null);
+  const [checking, setChecking] = useState<TreeNode | null>(null);
+  // An action from an entry's menu that doesn't apply to it, and why (Step 015)
+  const [notApplying, setNotApplying] = useState<{ title: string; message: string } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [folderSettings, setFolderSettings] = useState<TreeFolder | null>(null);
   const [scrollTarget, setScrollTarget] = useState<(ScrollTarget & { path: string }) | undefined>(undefined);
@@ -596,6 +600,13 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
     [api, docStore],
   );
 
+  /** Opens an action's dialog from an entry's menu, or says why the action doesn't apply to it. */
+  const fromMenu = (action: EntryAction, node: TreeNode, openDialog: () => void) => {
+    const message = notApplicable(action, node);
+    if (message === undefined) openDialog();
+    else setNotApplying({ title: ACTION_TITLES[action](node), message });
+  };
+
   const left = (
     <nav aria-label="Folders" className="flex h-full flex-col overflow-auto">
       {/* Both views come with every tree load, so switching asks the server nothing (R1.7) */}
@@ -607,12 +618,13 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
         currentFile={openPath}
         onToggleFolder={(path, isExpanded) => uiStore.update((s) => setFolderExpanded(s, path, isExpanded))}
         onOpenFile={openFromUi}
-        onNewFile={(folder) => setCreating({ parent: folder, kind: "file" })}
-        onNewFolder={(folder) => setCreating({ parent: folder, kind: "folder" })}
-        onFolderSettings={setFolderSettings}
-        onShowProblems={setChecking}
-        onRename={setRenaming}
-        onDelete={setDeleting}
+        onNewFile={(folder) => fromMenu("new-file", folder, () => setCreating({ parent: folder, kind: "file" }))}
+        onNewFolder={(folder) => fromMenu("new-folder", folder, () => setCreating({ parent: folder, kind: "folder" }))}
+        onFolderSettings={(folder) => fromMenu("settings", folder, () => setFolderSettings(folder))}
+        onAddAnchors={(node) => fromMenu("anchors", node, () => setAnchoring(node))}
+        onShowProblems={(node) => fromMenu("problems", node, () => setChecking(node))}
+        onRename={(node) => fromMenu("rename", node, () => setRenaming(node))}
+        onDelete={(node) => fromMenu("delete", node, () => setDeleting(node))}
       />
       {shownTree.truncated && <p className="shrink-0 p-2 text-xs text-muted-foreground">Too many files: the list is incomplete.</p>}
     </nav>
@@ -767,10 +779,11 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
       <CreateDialog request={creating} onClose={() => setCreating(null)} onCreate={create} loadSettings={api.folderSettings} />
       <RenameDialog node={renaming} onClose={() => setRenaming(null)} onRename={rename} />
       <DeleteDialog node={deleting} onClose={() => setDeleting(null)} loadPreview={api.deletePreview} onDelete={remove} />
-      <AnchorDialog folder={anchoring} onClose={() => setAnchoring(null)} loadChanges={anchorChanges} onRun={addAnchors} />
+      <NotApplicableDialog notice={notApplying} onClose={() => setNotApplying(null)} />
+      <AnchorDialog target={anchoring} onClose={() => setAnchoring(null)} loadChanges={anchorChanges} onRun={addAnchors} />
       <FolderSettingsDialog folder={folderSettings} onClose={() => setFolderSettings(null)} api={api} onAddAnchors={setAnchoring} />
       <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} api={api} onSaved={loadSummaryStatus} />
-      <ProblemsDialog folder={checking} onClose={() => setChecking(null)} loadProblems={loadProblems} onOpen={openFromUi} onRenumber={renumberIn} onRenumberDocument={renumberDocumentIn} />
+      <ProblemsDialog target={checking} onClose={() => setChecking(null)} loadProblems={loadProblems} onOpen={openFromUi} onRenumber={renumberIn} onRenumberDocument={renumberDocumentIn} />
     </div>
   );
 }

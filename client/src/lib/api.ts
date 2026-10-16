@@ -9,6 +9,7 @@ import type {
   DeletePreview,
   FileContent,
   FileView,
+  SectionProblemsResult,
   FolderSettings,
   ModelTestResult,
   SectionInfo,
@@ -144,7 +145,7 @@ export interface Api {
   getSections(path: string): Promise<SectionInfo[]>;
   searchSections(query: string, options?: { path?: string; limit?: number }): Promise<SectionSearchResult[]>;
   anchorFolder(folder: string, dryRun: boolean, addAgentGuide?: boolean): Promise<AnchorFolderResult>;
-  sectionProblems(folder: string): Promise<SectionProblem[]>;
+  sectionProblems(folder: string): Promise<SectionProblemsResult>;
   /** The status lists for a file's sections. */
   sectionStatuses(path: string): Promise<SectionStatusLists>;
   /** Renumbers one occurrence of a duplicate ID; the edits are relative to the body on disk. */
@@ -294,7 +295,7 @@ export const httpApi: Api = {
     return json<AnchorFolderResult>(await client.api.sections.anchor.$post({ json: { folder, dryRun, addAgentGuide } }));
   },
   async sectionProblems(folder) {
-    return (await json<{ problems: SectionProblem[] }>(await client.api.sections.problems.$get({ query: { folder } }))).problems;
+    return json<SectionProblemsResult>(await client.api.sections.problems.$get({ query: { folder } }));
   },
   async sectionStatuses(path) {
     return json<SectionStatusLists>(await client.api.sections.statuses.$get({ query: { path } }));

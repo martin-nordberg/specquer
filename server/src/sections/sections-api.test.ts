@@ -280,6 +280,39 @@ describe("section queries and Add section anchors", () => {
     const again = await request("/api/sections/anchor", { method: "POST", body: { folder: "docs", dryRun: true } });
     expect(((await again.json()) as { files: string[] }).files).toEqual([]);
   });
+
+  test("a single file is anchored on its own, and the dry run counts the sectioned files (Step 015)", async () => {
+    const { request, read } = await setup({ "docs/a.md": "# A\n", "docs/b.md": "# B\n", "other/c.md": "# C\n" });
+    const anchor = async (folder: string, dryRun: boolean) =>
+      (await (await request("/api/sections/anchor", { method: "POST", body: { folder, dryRun } })).json()) as { files: string[]; sectioned: number };
+    expect(await anchor("docs", true)).toMatchObject({ files: ["docs/a.md", "docs/b.md"], sectioned: 2 });
+    expect(await anchor("docs/a.md", false)).toMatchObject({ files: ["docs/a.md"], sectioned: 1 });
+    expect(ids(await read("docs/a.md"))).toEqual(["REQ-00001", "REQ-00002"]);
+    expect(await read("docs/b.md")).toBe("# B\n");
+    // Not sectioned: nothing applies
+    expect(await anchor("other", true)).toMatchObject({ files: [], sectioned: 0 });
+    expect(await anchor("other/c.md", true)).toMatchObject({ files: [], sectioned: 0 });
+  });
+
+  test("Section problems for a file lists what involves it, with the other side, and counts sectioned files (Step 015)", async () => {
+    const { request, save, read, write } = await setup({ "docs/a.md": "", "docs/b.md": "", "docs/c.md": "", "other/d.md": "" });
+    await save("docs/a.md", "# A\n");
+    // A copy of a's section in b, made outside Specquer
+    const section = /<a id="REQ-00002" data-uid="[a-z0-9]+"><\/a>\n# A\n/.exec(await read("docs/a.md"))![0];
+    await write("docs/b.md", section.replace("# A", "# Copied section"));
+    await save("docs/c.md", "# C\n");
+    const problems = async (folder: string) =>
+      (await (await request(`/api/sections/problems?folder=${encodeURIComponent(folder)}`)).json()) as {
+        problems: Array<{ kind: string; occurrences?: Array<{ path: string }> }>;
+        sectioned: number;
+      };
+    const forB = await problems("docs/b.md");
+    expect(forB.sectioned).toBe(1);
+    expect(forB.problems.map((problem) => problem.kind)).toEqual(["duplicate"]);
+    expect(forB.problems[0]!.occurrences!.map((occurrence) => occurrence.path)).toEqual(["docs/a.md", "docs/b.md"]);
+    expect(await problems("docs/c.md")).toEqual({ problems: [], sectioned: 1 });
+    expect(await problems("other")).toEqual({ problems: [], sectioned: 0 });
+  });
 });
 
 /** The anchor of the section with an ID, from a file's text. */

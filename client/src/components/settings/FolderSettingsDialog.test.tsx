@@ -39,7 +39,8 @@ describe("FolderSettingsDialog", () => {
     expect(prefixBox()?.value).toBe("REQ");
     expect(dialog().textContent).toContain("Inherited from docs: REQ");
     expect(button("Save").disabled).toBe(true);
-    expect(button("Add section anchors…").disabled).toBe(false);
+    // Add section anchors is in the folder's menu now (Step 015)
+    expect(within(dialog()).queryByRole("button", { name: "Add section anchors…" })).toBeNull();
   });
 
   test("saves only the values that differ from the inherited ones, and checks the prefix", async () => {
@@ -91,11 +92,10 @@ describe("FolderSettingsDialog", () => {
     const off: FolderSettings = { ...INHERITING, own: { folderType: "NONSECTIONED", defaultPrefix: "inherit" } };
     const { onAddAnchors, onClose } = setup(off);
     await waitFor(() => expect(radio(/^Non-sectioned/).getAttribute("aria-checked")).toBe("true"));
-    expect(button("Add section anchors…").disabled).toBe(true);
     fireEvent.click(radio(/^Inherited/));
     fireEvent.click(button("Save"));
     await waitFor(() => expect(within(dialog()).getByRole("status").textContent).toContain("The folder is sectioned now"));
-    fireEvent.click(within(dialog()).getAllByRole("button", { name: "Add section anchors…" }).at(-1)!);
+    fireEvent.click(within(dialog()).getByRole("button", { name: "Add section anchors…" }));
     expect(onClose).toHaveBeenCalled();
     expect(onAddAnchors).toHaveBeenCalledWith(folder);
   });

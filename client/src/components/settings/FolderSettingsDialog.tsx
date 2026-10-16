@@ -11,7 +11,7 @@ export interface FolderSettingsDialogProps {
   folder: TreeFolder | null;
   onClose: () => void;
   api: Pick<Api, "folderSettings" | "saveFolderSettings">;
-  /** Opens **Add section anchors** for the folder (this dialog closes first). */
+  /** Opens **Add section anchors** for the folder (this dialog closes first), offered after a save makes it sectioned. */
   onAddAnchors: (folder: TreeFolder) => void;
 }
 
@@ -20,7 +20,8 @@ const configFile = (path: string) => (path === "" ? FOLDER_CONFIG_FILE : `${path
 
 /**
  * A folder's settings: its type (inherited from the folder above, or Baseline, Change, Auxiliary
- * or Non-sectioned), its default prefix, and **Add section anchors**. Saving writes the folder's
+ * or Non-sectioned) and its default prefix. **Add section anchors** is in the folder's menu
+ * (Step 015), and offered here after a save makes the folder sectioned. Saving writes the folder's
  * own `.specquer-config.yaml`, holding only the values that differ from the inherited ones.
  */
 export function FolderSettingsDialog({ folder, onClose, api, onAddAnchors }: FolderSettingsDialogProps) {
@@ -115,14 +116,6 @@ export function FolderSettingsDialog({ folder, onClose, api, onAddAnchors }: Fol
                 take their parent section's prefix; a file's root section takes the folder's.
               </p>
               <FolderFields id={id} values={values} inherited={settings.inherited} {...(problem === undefined ? {} : { problem })} onChange={setValues} />
-              <div className="flex items-center gap-2">
-                <Button type="button" variant="secondary" size="sm" disabled={!sectioned} onClick={addAnchors}>
-                  Add section anchors…
-                </Button>
-                <span className="text-xs text-muted-foreground">
-                  {sectioned ? "Add missing anchors to the folder's files." : "For sectioned folders."}
-                </span>
-              </div>
             </div>
           )
         )}

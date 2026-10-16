@@ -165,3 +165,16 @@ test("a text file that was open last time opens again at start-up", async () => 
   expect(await screen.findByTestId("code-view")).toBeTruthy();
   expect(readView).toHaveBeenCalledWith("index.ts");
 });
+
+test("an action that doesn't apply says why instead of opening its dialog (Step 015)", async () => {
+  const { api } = allFilesApi({ treeView: "all" });
+  const rename = mock(async () => ({ kind: "renamed" as const }));
+  (api as unknown as { rename: typeof rename }).rename = rename;
+  render(<App api={api} />);
+  fireEvent.contextMenu(await screen.findByText("index.ts"));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Rename…" }));
+  const dialog = await screen.findByRole("dialog", { name: "Rename file" });
+  expect(dialog.textContent).toContain("Specquer renames and deletes only Markdown files. Rename “index.ts” outside Specquer.");
+  expect(screen.queryByRole("textbox", { name: "New name" })).toBeNull();
+  expect(rename).not.toHaveBeenCalled();
+});
