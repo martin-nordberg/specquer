@@ -245,7 +245,7 @@ From [Step 012](/work-items/step-012-comment-threads/requirements).
 12. **F8 and Shift+F8** move to the next and previous thread the filter shows, in document order, wrapping around: they open the pane, expand and focus the thread, and scroll the document to its section.
 13. **Files.** Renaming or deleting a document also renames or deletes its comment file, and the delete dialog lists it. Unusable and orphaned comment files and detached threads are listed in **Section problems…** (§3.5).
 
-<a id=""></a>
+<a id="SPEC-00127" data-uid="r2pvk6k274nm"></a>
 ## 13. Files Other Than Markdown
 
 From [Step 014](/work-items/step-014-all-files/requirements). Specquer edits Markdown files only; every other file is shown view-only.

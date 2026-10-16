@@ -1,14 +1,16 @@
-<a id=""></a>
+<a id="NOTE-00145" data-uid="ykjabivwzppm"></a>
+
+<a id="NOTE-00146" data-uid="pxsxau5t685h"></a>
 # Images in the Markdown Preview
 
 _Ideas for showing images in Markdown files, taken out of [Step 014](/work-items/step-014-all-files/requirements) in October 2026 to be taken up in a later step. Step 014 still adds the image route these ideas build on (its R7.3 and R8.3)._
 
-<a id=""></a>
+<a id="NOTE-00147" data-uid="vxtvofsau4ew"></a>
 ## What Is Missing
 
 Today an image with a relative path in a Markdown file (`![Flow](images/flow.png)`) shows as a broken image in the Preview, Split and WYSIWYG views. The page's CSP allows images from Specquer's own origin, but the server has no route that returns image bytes for the preview to use. Remote `https:` images and `data:` URIs already work (Security §7).
 
-<a id=""></a>
+<a id="NOTE-00148" data-uid="iz2nhdft0rbh"></a>
 ## The Idea
 
 1. **Relative paths:** in the Preview, Split and WYSIWYG views, an image whose URL is a relative path (`images/flow.png`, `../shared/logo.svg`) is resolved against the Markdown file's folder. Percent-encoding in the path is decoded, and a query or fragment is ignored.
@@ -18,7 +20,7 @@ Today an image with a relative path in a Markdown file (`![Flow](images/flow.png
 5. **Unchanged elsewhere:** chat answers and comments still show images as their alt text and URL (Step 012, R2.10), and summaries ignore images as today.
 6. **Updates:** editing the Markdown shouldn't make images that are already shown load again. The image route's `Cache-Control: no-cache` with an `ETag` lets the browser revalidate cheaply. An image changed on disk shows its new content the next time the preview renders it.
 
-<a id=""></a>
+<a id="NOTE-00149" data-uid="ck2i7b1pifo3"></a>
 ## Questions for Later
 
 1. **Root-relative paths:** should `/docs/images/flow.png` be resolved against the root folder, as GitHub does, or against a configured folder? VitePress, which this repository's docs use, resolves it against its `public/` folder.

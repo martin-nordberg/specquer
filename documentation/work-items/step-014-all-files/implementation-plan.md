@@ -1,11 +1,11 @@
-<a id=""></a>
+<a id="WORK-00595" data-uid="a19ypg79t3t4"></a>
 
-<a id=""></a>
+<a id="WORK-00596" data-uid="s86194rane1w"></a>
 # Step 014 - Implementation Plan
 
 _Plan for the [All Files requirements](requirements.md). Drafted October 2026._
 
-<a id=""></a>
+<a id="WORK-00597" data-uid="o4wuzlmqsjbv"></a>
 ## 1. Summary
 
 Step 014 adds an **All Files** view to the folder pane and view-only panes for text files, images and other files. It highlights code in Markdown previews, and lists the files once instead of four times per tree load (the code review's P1). Markdown editing is untouched: every route that changes something stays Markdown-only.
@@ -31,7 +31,7 @@ There are seven phases (§5):
 
 Decisions taken while planning are in §6, marked _Proposed_. The work proceeds on them unless they are changed. Three of them change the requirements' wording (§2).
 
-<a id=""></a>
+<a id="WORK-00598" data-uid="tandr8sdlr56"></a>
 ## 2. Precedence
 
 The requirements' Precedence table applies. This plan adds:
@@ -45,7 +45,7 @@ The requirements' Precedence table applies. This plan adds:
 | `FileService.listFiles`, `listMarkdownFiles` | Each call lists | Gone. Callers take `FileListing.get()` (§4.1) |
 | The preview pipeline's entry points | `markdownToHast(markdown)` | Also `createPreviewProcessor({ highlighter })` and `codeFileToHast(text, language)`, which take the highlighter from `@specquer/shared/highlight` (§4.4) |
 
-<a id=""></a>
+<a id="WORK-00599" data-uid="rkmenjnd50p4"></a>
 ## 3. Starting Point
 
 - **Listing** (`server/src/files.ts`):
@@ -74,10 +74,10 @@ The requirements' Precedence table applies. This plan adds:
 - **UI state** (`shared/src/uistate/uistate.ts`): each field falls back on its own (`.catch`). `UiStateStore` drops a recent or current file that no longer exists.
 - **Comments pane:** `CommentsPane` shows "This file can't have comment threads…" when `available` is false. The comments route takes `markdownPathSchema`.
 
-<a id=""></a>
+<a id="WORK-00600" data-uid="nd022zb0hsfp"></a>
 ## 4. Proposed Design
 
-<a id=""></a>
+<a id="WORK-00601" data-uid="qcsihotya2v5"></a>
 ### 4.1 Server: One Listing (R9)
 
 - **`server/src/listing.ts`** (new), `FileListing`:
@@ -113,7 +113,7 @@ The requirements' Precedence table applies. This plan adds:
   - A file not yet indexed, and every other operation that issues IDs, keeps the full scan with a 2-second listing.
   - Copies made outside Specquer are found by the next full scan, which every tree load starts (D1).
 
-<a id=""></a>
+<a id="WORK-00602" data-uid="k5tpwfqcskym"></a>
 ### 4.2 Shared: Paths, Kinds, Languages, UI State and API
 
 - **`shared/src/paths/paths.ts`:**
@@ -144,7 +144,7 @@ The requirements' Precedence table applies. This plan adds:
     - `apiGuard` is changed to set `no-store` only when the response has no `Cache-Control`, so the image keeps `no-cache`.
   - **Handlers:** `readView(path)` and `image(path)`, which returns `{ bytes, type, etag }` or `{ notModified: true }`.
 
-<a id=""></a>
+<a id="WORK-00603" data-uid="yautx4qw2ol6"></a>
 ### 4.3 Server: Trees, Viewing and Markdown-Only Changes
 
 - **Trees** (`files.ts`, `trees(listing)`), with `buildTree` as today:
@@ -160,7 +160,7 @@ The requirements' Precedence table applies. This plan adds:
 - **Markdown only (R7.4):** `deleteEntry` refuses a file that isn't Markdown (`400`, "Specquer changes only Markdown files."), as `checkRenamedFileName` does for renames. Folders are unchanged (requirements §7). `PUT /api/file` is already Markdown-only through its schema.
 - **The model (R3.6):** nothing changes. The chat index and summaries take `listing.markdown` only.
 
-<a id=""></a>
+<a id="WORK-00604" data-uid="wqxa2c0648mc"></a>
 ### 4.4 Shared: Highlighting (R3.2, R4)
 
 - **Dependencies:** `rehype-highlight` and `lowlight` added to `shared` with `bun add --filter @specquer/shared`.
@@ -193,7 +193,7 @@ The requirements' Precedence table applies. This plan adds:
     - the gutter `position: sticky; left: 0`, `user-select: none`, right-aligned in `--code-line-number`;
     - the block `overflow-x: auto`.
 
-<a id=""></a>
+<a id="WORK-00605" data-uid="m402heee5rpx"></a>
 ### 4.5 Client: The Selector and the Tree (R1, R2)
 
 - **`client/src/components/TreeViewSwitcher.tsx`:** a radio group like `ViewSwitcher` (same `ToggleGroup`), labeled "Files shown", above the tree in `App.tsx`'s `left`.
@@ -207,7 +207,7 @@ The requirements' Precedence table applies. This plan adds:
   - **Empty tree:** the empty message depends on the view: "No Markdown files in this folder." or "No files in this folder."
 - **Opening:** `onOpenFile` goes to `openAny` (§4.6). Expanded folders stay shared, and the selection follows `currentFile` in either view (R1.5, R1.6).
 
-<a id=""></a>
+<a id="WORK-00606" data-uid="rqdyuposutdy"></a>
 ### 4.6 Client: Viewing Files (R3, R5, R6)
 
 - **`client/src/app/file-view.ts`:** `ViewedFile`:
@@ -242,10 +242,10 @@ The requirements' Precedence table applies. This plan adds:
 - **The Comments pane (R3.7):** `CommentsPane` gets `body: null` and a new `viewOnly` prop while a file other than Markdown is open, and says "Comments are available for Markdown files in sectioned folders." The comment store isn't asked to load threads for it.
 - **Chat:** citations still open Markdown files only, through `openAny`.
 
-<a id=""></a>
+<a id="WORK-00607" data-uid="jlpzsi6cngb5"></a>
 ## 5. Phases
 
-<a id=""></a>
+<a id="WORK-00608" data-uid="s9b1ak49t7qn"></a>
 ### Phase 1: Listing the Files Once
 
 - §4.1, with the tree still built from `listing.markdown`, so nothing visible changes.
@@ -256,7 +256,7 @@ The requirements' Precedence table applies. This plan adds:
   - the existing section, comment and chat tests, unchanged.
 - _Done when_ `bun run typecheck` and `bun test` pass, and the code review note marks P1 fixed.
 
-<a id=""></a>
+<a id="WORK-00609" data-uid="l5cw92hsv39q"></a>
 ### Phase 2: Shared Foundations
 
 - §4.2: paths and kinds, languages, `treeView`, the API types and schemas with stub handlers.
@@ -268,7 +268,7 @@ The requirements' Precedence table applies. This plan adds:
   - `treeView`'s default and an invalid value.
 - _Done when_ `bun run typecheck` and `bun test` pass.
 
-<a id=""></a>
+<a id="WORK-00610" data-uid="p0mxtp06evqi"></a>
 ### Phase 3: Highlighting
 
 - §4.4, ending with Markdown's code blocks highlighted in Preview and Split (R4.3), shippable on its own.
@@ -280,7 +280,7 @@ The requirements' Precedence table applies. This plan adds:
   - the palette's new pairs.
 - _Done when_ `bun run typecheck` and `bun test` pass, and the worker's bundle size is measured and noted (requirements §9, risk 6).
 
-<a id=""></a>
+<a id="WORK-00611" data-uid="eiqlf36ao268"></a>
 ### Phase 4: The Server
 
 - §4.3, and the `apiGuard` change of §4.2.
@@ -291,7 +291,7 @@ The requirements' Precedence table applies. This plan adds:
   - deleting or renaming a file that isn't Markdown (`400`), and a folder holding one (allowed).
 - _Done when_ `bun run typecheck` and `bun test` pass.
 
-<a id=""></a>
+<a id="WORK-00612" data-uid="pkys1wzvpqcp"></a>
 ### Phase 5: The Client
 
 - §4.5 and §4.6.
@@ -308,7 +308,7 @@ The requirements' Precedence table applies. This plan adds:
   - reopening a text file at start-up.
 - _Done when_ `bun run typecheck` and `bun test` pass.
 
-<a id=""></a>
+<a id="WORK-00613" data-uid="iep6rivvxqcu"></a>
 ### Phase 6: End-to-End Tests
 
 - `e2e/all-files.spec.ts`:
@@ -322,7 +322,7 @@ The requirements' Precedence table applies. This plan adds:
 - `e2e/fixtures.ts` gains a helper that writes binary files and a `.gitignore` into the temporary repository.
 - _Done when_ the suite passes on Chrome and WebKit.
 
-<a id=""></a>
+<a id="WORK-00614" data-uid="xijszpgm0b34"></a>
 ### Phase 7: Documentation
 
 - The specifications in requirements §6, and the requirements' R7.1, R7.2, R7.4 and R8.3 updated for D2, D5, D6 and D7.
@@ -335,7 +335,7 @@ The requirements' Precedence table applies. This plan adds:
 - An Implementation Status section is added here.
 - _Done when_ `bun run typecheck`, `bun test`, `bun run test:e2e` and `docs:build` pass.
 
-<a id=""></a>
+<a id="WORK-00615" data-uid="nbdbmdge2ntl"></a>
 ## 6. Decisions
 
 _Proposed_. The work proceeds on them unless they are changed:
@@ -351,7 +351,7 @@ _Proposed_. The work proceeds on them unless they are changed:
 - **D9. The listing comes first** (Phase 1). It is a fix in its own right (P1), changes nothing visible, and every later phase builds on `FileListing`.
 - **D10. Highlighting ships before All Files** (Phase 3). Markdown's code blocks gain from it at once, and the text view then only adds `codeFileToHast` and the gutter.
 
-<a id=""></a>
+<a id="WORK-00616" data-uid="f33vu4htyclg"></a>
 ## 7. Risks
 
 | Risk | Impact | Mitigation |
@@ -365,7 +365,7 @@ _Proposed_. The work proceeds on them unless they are changed:
 | Saves not listing (D1) | A copy made outside Specquer goes unnoticed until the next tree load | The next scan reports or renumbers it, as today; tree loads happen on reload |
 | Stale view checks (2 seconds) | A file just created outside Specquer answers `404` briefly | Accepted in requirements §7 |
 
-<a id=""></a>
+<a id="WORK-00617" data-uid="c69vvdjny106"></a>
 ## 8. Implementation Status
 
 Phases 1 to 7 were carried out in October 2026, one commit each. What differs from the plan, or was learned doing it:
