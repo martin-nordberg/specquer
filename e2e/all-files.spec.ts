@@ -59,9 +59,14 @@ test("a TypeScript file is shown highlighted, with line numbers that aren't copi
   });
   expect(copied).not.toMatch(/^1\n/);
   expect(copied).toContain("export const answer: number = 42;");
-  // Not a file Specquer changes: no context menu
+  // Not a file Specquer changes: its menu's Rename says so (Step 015)
   await treeItem(page, "index.ts").click({ button: "right" });
-  await expect(page.getByRole("menuitem", { name: "Rename…" })).toHaveCount(0);
+  await page.getByRole("menuitem", { name: "Rename…" }).click();
+  const dialog = page.getByRole("dialog", { name: "Rename file" });
+  await expect(dialog).toContainText("Specquer renames and deletes only Markdown files. Rename “index.ts” outside Specquer.");
+  await expect(dialog.getByRole("textbox")).toHaveCount(0);
+  await dialog.getByRole("button", { name: "Close" }).first().click();
+  await expect(treeItem(page, "index.ts")).toBeVisible();
 });
 
 test("a file .gitignore hides can't be read either", async ({ page, specquer }) => {

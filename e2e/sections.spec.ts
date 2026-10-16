@@ -148,9 +148,9 @@ test("following a link to a section opens the document at the section", async ({
 });
 
 test("Add section anchors lists the files, then anchors them", async ({ page, specquer }) => {
+  // From the folder's menu (Step 015)
   await treeItem(page, "specs").click({ button: "right" });
-  await page.getByRole("menuitem", { name: "Settings…" }).click();
-  await page.getByRole("dialog", { name: "Folder settings" }).getByRole("button", { name: "Add section anchors…" }).click();
+  await page.getByRole("menuitem", { name: "Add section anchors…" }).click();
   const dialog = page.getByRole("dialog", { name: "Add section anchors" });
   await expect(dialog).toContainText("2 files will change");
   await expect(dialog.getByRole("list", { name: "Files to change" })).toContainText("specs/links.md");
@@ -159,6 +159,28 @@ test("Add section anchors lists the files, then anchors them", async ({ page, sp
   await expect(dialog).toBeHidden();
   expect(await specquer.read("specs/plain.md")).toMatch(/^<a id="SPEC-0000\d" data-uid="[a-z0-9]+"><\/a>\n\n<a id="SPEC-0000\d" data-uid="[a-z0-9]+"><\/a>\n# Plain/);
   expect(await specquer.read("notes/n.md")).toBe("# Not sectioned\n");
+});
+
+test("Add section anchors on one file anchors only that file (Step 015)", async ({ page, specquer }) => {
+  await treeItem(page, "specs").click();
+  await treeItem(page, "plain.md").click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Add section anchors…" }).click();
+  const dialog = page.getByRole("dialog", { name: "Add section anchors" });
+  await expect(dialog).toContainText("in “plain.md”");
+  await expect(dialog).toContainText("1 file will change");
+  await expect(dialog.getByRole("checkbox")).toHaveCount(0);
+  await dialog.getByRole("button", { name: "Add anchors" }).click();
+  await expect(dialog).toBeHidden();
+  expect(await specquer.read("specs/plain.md")).toMatch(/^<a id="SPEC-0000\d" data-uid="[a-z0-9]+"><\/a>/);
+  expect(await specquer.read("specs/links.md")).not.toContain('data-uid="');
+});
+
+test("a folder that isn't sectioned says so instead of anchoring (Step 015)", async ({ page }) => {
+  await treeItem(page, "notes").click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Add section anchors…" }).click();
+  const dialog = page.getByRole("dialog", { name: "Add section anchors" });
+  await expect(dialog).toContainText("“notes” holds no sectioned files");
+  await expect(dialog.getByRole("button", { name: "Add anchors" })).toHaveCount(0);
 });
 
 /** Pastes text into a CodeMirror editor at its end, as the browser would from the clipboard. */

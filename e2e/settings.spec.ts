@@ -126,7 +126,8 @@ test("a folder switched off isn't anchored, and keeps its IDs when switched back
 test("a folder gets a type and a prefix from the dialog", async ({ page, specquer }) => {
   await openFolderSettings(page, "notes");
   await expect(folderDialog(page)).toContainText("Inherited: non-sectioned");
-  await expect(folderDialog(page).getByRole("button", { name: "Add section anchors…" })).toBeDisabled();
+  // The button moved to the folder's menu (Step 015); the dialog offers it only after a save
+  await expect(folderDialog(page).getByRole("button", { name: "Add section anchors…" })).toHaveCount(0);
   await folderDialog(page).getByRole("radio", { name: /^Auxiliary/ }).click();
   await folderDialog(page).getByRole("textbox", { name: "Default prefix" }).fill("note");
   await folderDialog(page).getByRole("button", { name: "Save" }).click();
