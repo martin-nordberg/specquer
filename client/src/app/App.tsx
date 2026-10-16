@@ -290,7 +290,7 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
         else walk(child);
       }
     };
-    walk(tree.root);
+    walk(tree.specs.root);
     return files;
   }, [tree]);
   const isCitationMissing = useCallback((citation: Citation) => citation.sectionId === undefined && !treeFiles.has(citation.path), [treeFiles]);
@@ -574,7 +574,7 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
   const left = (
     <nav aria-label="Folders" className="flex h-full flex-col overflow-auto">
       <FileTree
-        root={tree.root}
+        root={tree.specs.root}
         expanded={expanded}
         currentFile={document_?.path}
         onToggleFolder={(path, isExpanded) => uiStore.update((s) => setFolderExpanded(s, path, isExpanded))}
@@ -586,7 +586,7 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
         onRename={setRenaming}
         onDelete={setDeleting}
       />
-      {tree.truncated && <p className="shrink-0 p-2 text-xs text-muted-foreground">Too many files: the list is incomplete.</p>}
+      {tree.specs.truncated && <p className="shrink-0 p-2 text-xs text-muted-foreground">Too many files: the list is incomplete.</p>}
     </nav>
   );
 
@@ -623,7 +623,7 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
           <ViewSwitcher value={fileState.viewType} onChange={(view) => uiStore.update((s) => setViewType(s, document_.path, view))} />
         </div>
         {openError !== null && <p className="border-b px-3 py-1 text-sm text-error-text">{openError}</p>}
-        <SectionNotices notices={doc.notices} onDismiss={() => docStore.dismissNotices()} onShowProblems={() => setChecking(tree.root)} />
+        <SectionNotices notices={doc.notices} onDismiss={() => docStore.dismissNotices()} onShowProblems={() => setChecking(tree.specs.root)} />
         <FrontmatterEditor
           key={`fm:${document_.revision}`}
           value={document_.frontmatter ?? ""}

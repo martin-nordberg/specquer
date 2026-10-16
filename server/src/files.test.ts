@@ -18,9 +18,14 @@ async function setup(files: Record<string, string>, options: { git?: boolean } =
 
 const read = (root: string, path: string) => Bun.file(join(root, path)).text();
 
-interface TreeJson {
+interface FolderTreeJson {
   root: { children: Array<{ kind: string; name: string; path: string; children?: unknown[] }> };
   truncated: boolean;
+}
+
+interface TreeJson {
+  specs: FolderTreeJson;
+  all: FolderTreeJson;
 }
 
 function flatten(node: { children?: unknown[]; path?: string; kind?: string }, out: string[] = []): string[] {
@@ -43,8 +48,8 @@ describe("GET /api/tree", () => {
       "B.MD": "",
     });
     const tree = (await (await request("/api/tree")).json()) as TreeJson;
-    expect(flatten(tree.root)).toEqual(["a/", "a/b.md", "B.MD", "z.md"]);
-    expect(tree.truncated).toBe(false);
+    expect(flatten(tree.specs.root)).toEqual(["a/", "a/b.md", "B.MD", "z.md"]);
+    expect(tree.specs.truncated).toBe(false);
   });
 
   test("lists folders that hold no files, inside and outside Git", async () => {
@@ -53,7 +58,7 @@ describe("GET /api/tree", () => {
       for (const folder of ["t/empty", "new/inner", "new/sub/deeper", "node_modules/x"]) await mkdir(join(root, folder), { recursive: true });
       await Bun.write(join(root, "new/sub/b.md"), "");
       const tree = (await (await request("/api/tree")).json()) as TreeJson;
-      expect(flatten(tree.root)).toEqual(["new/", "new/inner/", "new/sub/", "new/sub/deeper/", "new/sub/b.md", "t/", "t/empty/", "t/a.md"]);
+      expect(flatten(tree.specs.root)).toEqual(["new/", "new/inner/", "new/sub/", "new/sub/deeper/", "new/sub/b.md", "t/", "t/empty/", "t/a.md"]);
     }
   });
 
@@ -61,7 +66,111 @@ describe("GET /api/tree", () => {
     const { root, request } = await setup({ ".gitignore": "build/\nsecret.md\n", "a.md": "", "build/x.md": "", "secret.md": "" }, { git: true });
     await Bun.write(join(root, "new.md"), "untracked but not ignored");
     const tree = (await (await request("/api/tree")).json()) as TreeJson;
-    expect(flatten(tree.root)).toEqual(["a.md", "new.md"]);
+    expect(flatten(tree.specs.root)).toEqual(["a.md", "new.md"]);
+  });
+});
+
+describe("All Files (Step 014)", () => {
+  test("the tree lists every file not hidden, in and outside Git; Specs stays Markdown only", async () => {
+    for (const git of [false, true]) {
+      const { root, request } = await setup(
+        {
+          ".gitignore": "dist/\n.env\n",
+          "src/index.ts": "",
+          "docs/a.md": "",
+          "docs/logo.png": "",
+          ".github/workflows/ci.yml": "",
+          "web/node_modules/pkg/index.js": "",
+          "node_modules/x/README.md": "",
+          ".specquer/shared/REQ/sections.yaml": "",
+          ".specquer/user/instance.json": "{}",
+          ".specquer/cache/summaries.db": "",
+          "dist/out.js": "",
+          ".env": "SECRET=1",
+        },
+        { git },
+      );
+      await Bun.write(join(root, "src/new.ts"), "untracked");
+      const tree = (await (await request("/api/tree")).json()) as TreeJson;
+      // Outside Git there is no .gitignore to apply; `web/` holds only `node_modules`
+      const shared = [".github/", ".github/workflows/", ".github/workflows/ci.yml", ".specquer/", ".specquer/shared/", ".specquer/shared/REQ/", ".specquer/shared/REQ/sections.yaml"];
+      const docs = ["docs/", "docs/a.md", "docs/logo.png", "src/", "src/index.ts", "src/new.ts"];
+      expect([git, flatten(tree.all.root)]).toEqual([git, git ? [...shared, ...docs, ".gitignore"] : [...shared, "dist/", "dist/out.js", ...docs, ".env", ".gitignore"]]);
+      expect(flatten(tree.specs.root)).toEqual(["docs/", "docs/a.md"]);
+      expect(tree.all.truncated).toBe(false);
+    }
+  });
+
+  test("GET /api/view returns text without its byte-order mark, line endings kept", async () => {
+    const { request } = await setup({ "src/a.ts": "\uFEFFconst a = 1;\r\nconst b = 2;\r\n" });
+    const view = await (await request("/api/view?path=src/a.ts")).json();
+    expect(view).toMatchObject({ kind: "text", path: "src/a.ts", text: "const a = 1;\r\nconst b = 2;\r\n", size: 31 });
+  });
+
+  test("GET /api/view says why a file can't be shown, and that an image is one", async () => {
+    const { root, request } = await setup({ "x.md": "# X", "logo.svg": "<svg/>" });
+    await Bun.write(join(root, "data.bin"), new Uint8Array([1, 2, 0, 3]));
+    await Bun.write(join(root, "latin1.txt"), new Uint8Array([0x63, 0x61, 0x66, 0xe9]));
+    await Bun.write(join(root, "big.log"), new Uint8Array(5 * 1024 * 1024 + 1).fill(0x61));
+    const view = async (path: string) => (await request(`/api/view?path=${path}`)).json();
+    expect(await view("data.bin")).toEqual({ kind: "other", path: "data.bin", size: 4, reason: "binary" });
+    expect(await view("latin1.txt")).toEqual({ kind: "other", path: "latin1.txt", size: 4, reason: "not_utf8" });
+    expect(await view("big.log")).toEqual({ kind: "other", path: "big.log", size: 5 * 1024 * 1024 + 1, reason: "too_large" });
+    expect(await view("logo.svg")).toMatchObject({ kind: "image", path: "logo.svg", size: 6 });
+    expect((await request("/api/view?path=x.md")).status).toBe(400);
+  });
+
+  test("GET /api/view reads .specquer/shared/ but nothing hidden, ignored or outside the root", async () => {
+    const { root, request } = await setup(
+      { ".gitignore": ".env\n", ".env": "SECRET=1", ".specquer/shared/agent.config.yaml": "model: x\n", ".specquer/user/instance.json": "{}", "node_modules/a.js": "" },
+      { git: true },
+    );
+    const outside = await tempRoot({ "secret.txt": "outside" });
+    cleanups.push(outside.cleanup);
+    await symlink(join(outside.root, "secret.txt"), join(root, "out.txt"));
+    expect(await (await request("/api/view?path=.specquer/shared/agent.config.yaml")).json()).toMatchObject({ kind: "text", text: "model: x\n" });
+    expect((await request("/api/view?path=.env")).status).toBe(404);
+    expect((await request("/api/view?path=node_modules/a.js")).status).toBe(404);
+    expect((await request("/api/view?path=.specquer/user/instance.json")).status).toBe(400);
+    expect((await request("/api/view?path=out.txt")).status).toBe(403);
+  });
+
+  test("GET /api/image serves listed images with strict headers, and revalidates", async () => {
+    const { root, request } = await setup({ "logo.svg": "<svg xmlns='http://www.w3.org/2000/svg'/>", "notes.txt": "x", ".gitignore": "hidden.png\n" }, { git: true });
+    await Bun.write(join(root, "big.png"), new Uint8Array(5 * 1024 * 1024 + 1));
+    await Bun.write(join(root, "hidden.png"), "x");
+    const res = await request("/api/image?path=logo.svg");
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe("<svg xmlns='http://www.w3.org/2000/svg'/>");
+    expect(Object.fromEntries(["content-type", "x-content-type-options", "content-security-policy", "content-disposition", "cache-control"].map((name) => [name, res.headers.get(name)]))).toEqual({
+      "content-type": "image/svg+xml",
+      "x-content-type-options": "nosniff",
+      "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+      "content-disposition": "inline",
+      "cache-control": "no-cache",
+    });
+    const etag = res.headers.get("etag")!;
+    expect(etag).toMatch(/^W\/"\d+-\d+"$/);
+    const again = await request("/api/image?path=logo.svg", { headers: { "if-none-match": etag } });
+    expect(again.status).toBe(304);
+    expect(await again.text()).toBe("");
+    expect((await request("/api/image?path=big.png")).status).toBe(413);
+    expect((await request("/api/image?path=notes.txt")).status).toBe(415);
+    expect((await request("/api/image?path=hidden.png")).status).toBe(404);
+    // Other routes keep `no-store`
+    expect((await request("/api/view?path=notes.txt")).headers.get("cache-control")).toBe("no-store");
+  });
+
+  test("files other than Markdown can't be renamed or deleted; a folder holding them can", async () => {
+    const { root, request } = await setup({ "src/a.ts": "", "src/b.md": "" });
+    expect((await request("/api/rename", { method: "POST", body: { path: "src/a.ts", newName: "c.ts" } })).status).toBe(400);
+    const deleted = await request("/api/entry?path=src/a.ts", { method: "DELETE" });
+    expect(deleted.status).toBe(400);
+    expect(((await deleted.json()) as { message: string }).message).toBe("Specquer changes only Markdown files.");
+    expect(await Bun.file(join(root, "src/a.ts")).exists()).toBe(true);
+    expect((await request("/api/rename", { method: "POST", body: { path: "src", newName: "lib" } })).status).toBe(200);
+    expect((await request("/api/entry?path=lib", { method: "DELETE" })).status).toBe(200);
+    expect(await readdir(root)).not.toContain("lib");
   });
 });
 

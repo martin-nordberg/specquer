@@ -93,6 +93,6 @@ describe("reading the files", () => {
     const temp = await tempRoot({ "new/.specquer-config.yaml": "folderType: CHANGE\n" });
     cleanups.push(temp.cleanup);
     const tree = await new FileService(temp.root).getTree();
-    expect(tree.root.children.map((child) => child.path)).toEqual(["new"]);
+    expect(tree.specs.root.children.map((child) => child.path)).toEqual(["new"]);
   });
 });

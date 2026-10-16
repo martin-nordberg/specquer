@@ -68,9 +68,10 @@ export const SHARED_DATA_FOLDER = ".specquer/shared";
  */
 export function checkViewPath(path: string): PathCheck {
   const segments = path.split("/").filter((s) => s !== "" && s !== ".");
-  if (segments.length > 2 && segments[0] === ".specquer" && segments[1] === "shared") {
+  if (segments.length >= 2 && segments[0] === ".specquer" && segments[1] === "shared") {
     const rest = checkPath(segments.slice(2).join("/"));
-    return rest.ok ? { ok: true, path: `${SHARED_DATA_FOLDER}/${rest.path}` } : rest;
+    if (!rest.ok) return rest;
+    return { ok: true, path: rest.path === "" ? SHARED_DATA_FOLDER : `${SHARED_DATA_FOLDER}/${rest.path}` };
   }
   return checkPath(path);
 }

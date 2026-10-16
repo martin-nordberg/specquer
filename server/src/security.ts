@@ -77,7 +77,8 @@ export function apiGuard(config: SecurityConfig): MiddlewareHandler {
       if (!allowed) return c.json({ error: "forbidden", message: "Invalid Origin" }, 403);
     }
     await next();
-    c.header("Cache-Control", "no-store");
+    // Images set their own (Step 014, R8.3): the browser revalidates them
+    if (!c.res.headers.has("Cache-Control")) c.header("Cache-Control", "no-store");
     c.header("X-Content-Type-Options", "nosniff");
   };
 }

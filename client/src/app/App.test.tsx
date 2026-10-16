@@ -7,7 +7,8 @@ import type { Api } from "@/lib/api";
 import { App } from "./App";
 
 function fakeApi() {
-  const tree: Tree = { root: { kind: "folder", name: "", path: "", children: [{ kind: "file", name: "a.md", path: "a.md" }] }, truncated: false };
+  const view = { root: { kind: "folder" as const, name: "", path: "", children: [{ kind: "file" as const, name: "a.md", path: "a.md" }] }, truncated: false };
+  const tree: Tree = { specs: view, all: view };
   const saveFile = mock(async () => ({ kind: "saved" as const, version: "v2" }));
   const api = {
     getUiState: async () => ({ ...defaultUiState(), currentFile: "a.md" }),
@@ -43,7 +44,7 @@ test("the save status is a button that saves now only while there are unsaved ch
 });
 
 test("a citation opens its section's current file in Preview; one found nowhere is marked", async () => {
-  const tree: Tree = {
+  const view: Tree["specs"] = {
     root: {
       kind: "folder",
       name: "",
@@ -55,6 +56,7 @@ test("a citation opens its section's current file in Preview; one found nowhere 
     },
     truncated: false,
   };
+  const tree: Tree = { specs: view, all: view };
   const patches: unknown[] = [];
   const readFile = mock(async (path: string) => ({ path, text: `# ${path}\n\nText\n`, version: "v1" }));
   const searchSections = mock(async () => [{ id: "SPEC-00001", path: "b.md", title: "Moved", kind: "heading", uid: null, depth: 1 }]);

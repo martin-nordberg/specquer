@@ -68,6 +68,8 @@ export function createHandlers(
       return tree;
     },
     readFile: (path) => files.readFile(path),
+    readView: (path) => files.readView(path),
+    image: (path, ifNoneMatch) => files.image(path, ifNoneMatch),
     async saveFile(path, text, baseVersion) {
       const result = await sections.save(path, text, baseVersion);
       if (result.ok) filesChanged();

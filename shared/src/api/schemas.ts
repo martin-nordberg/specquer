@@ -37,10 +37,20 @@ export interface TreeFile {
 
 export type TreeNode = TreeFolder | TreeFile;
 
-export interface Tree {
+/** One view of the folder tree. */
+export interface FolderTree {
   root: TreeFolder;
   /** True when the folder held more files than the tree's size limit. */
   truncated: boolean;
+}
+
+/**
+ * Both views of the folder tree, built from one listing, so switching views needs no request
+ * (Step 014, R1.7): `specs`, folders and Markdown files, and `all`, every file not hidden.
+ */
+export interface Tree {
+  specs: FolderTree;
+  all: FolderTree;
 }
 
 export interface FileContent {

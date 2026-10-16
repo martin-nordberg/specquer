@@ -78,7 +78,8 @@ describe("viewing paths (Step 014)", () => {
   test("checkViewPath accepts the root's .specquer/shared/ only", () => {
     expect(checkViewPath(".specquer/shared/REQ/sections.yaml")).toEqual({ ok: true, path: ".specquer/shared/REQ/sections.yaml" });
     expect(checkViewPath("./src//index.ts")).toEqual({ ok: true, path: "src/index.ts" });
-    for (const path of [".specquer/user/instance.json", ".specquer/cache/search.db", ".SPECQUER/shared/x.yaml", ".specquer/Shared/x.yaml", ".specquer/shared", "docs/.specquer/shared/x.yaml", ".specquer/shared/../user/x", ".git/config"]) {
+    expect(checkViewPath(".specquer/shared/")).toEqual({ ok: true, path: ".specquer/shared" });
+    for (const path of [".specquer/user/instance.json", ".specquer/cache/search.db", ".SPECQUER/shared/x.yaml", ".specquer/Shared/x.yaml", ".specquer", "docs/.specquer/shared/x.yaml", ".specquer/shared/../user/x", ".git/config"]) {
       expect([path, checkViewPath(path).ok]).toEqual([path, false]);
     }
     expect(viewPathSchema.safeParse(".specquer/shared/agent.config.yaml").success).toBe(true);

@@ -1,11 +1,14 @@
 import { chmod, lstat, mkdir, readdir, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join, relative, sep } from "node:path";
-import { ApiError, type DeletePreview, type FileContent, type SaveResult, type Tree, type TreeFolder } from "@specquer/shared/api";
+import { ApiError, type DeletePreview, type FileContent, type FileView, type FolderTree, type ImageResult, MAX_VIEW_BYTES, type SaveResult, type Tree, type TreeFolder } from "@specquer/shared/api";
 import {
   MARKDOWN_EXTENSION,
   PROTECTED_NAMES,
   baseName,
   checkPath,
+  checkViewPath,
+  hiddenPath,
+  imageType,
   isMarkdownFile,
   isProtectedName,
   joinPath,
@@ -40,9 +43,11 @@ export const LISTING_MAX_AGE = 2_000;
  * until it may be stale.
  */
 export interface Listing {
-  /** Every listed file, sorted. */
+  /** Every listed file, sorted: what the All Files tree shows (Step 014, R2.1). */
   all: string[];
-  /** The Markdown files, sorted. */
+  /** The same, to look paths up. */
+  listed: ReadonlySet<string>;
+  /** The Markdown files, sorted, outside `.specquer`. */
   markdown: string[];
   /** The folder configuration files (`.specquer-config.yaml`), sorted. */
   configs: string[];
@@ -145,6 +150,13 @@ export class FileService {
     return path === "" ? this.root : join(this.root, ...pathSegments(path));
   }
 
+  /** The absolute path for a path that is only read to show it, which may be in `.specquer/shared/`. */
+  private viewAbsolute(path: string): string {
+    const check = checkViewPath(path);
+    if (!check.ok || check.path !== path) throw new ApiError(400, "invalid", "Invalid path");
+    return path === "" ? this.root : join(this.root, ...pathSegments(path));
+  }
+
   private isInsideRoot(real: string): boolean {
     return real === this.root || real.startsWith(this.root + sep);
   }
@@ -236,13 +248,19 @@ export class FileService {
     }
   }
 
-  /** The tree, from a new listing, so changes made outside Specquer show on reload. */
+  /**
+   * Both views of the tree, from a new listing, so changes made outside Specquer show on reload
+   * (Step 014, R7.1). Each view is cut at the size limit on its own.
+   */
   async getTree(): Promise<Tree> {
     const listing = await this.listing(0);
-    const truncated = listing.markdown.length > MAX_TREE_FILES || listing.walkTruncated;
-    // A folder holding only its configuration file still shows
-    const folders = [...listing.emptyFolders, ...listing.configs.map(parentPath).filter((folder) => folder !== "")];
-    return { root: buildTree(listing.markdown.slice(0, MAX_TREE_FILES), folders), truncated };
+    const view = (files: string[], folders: string[]): FolderTree => ({
+      root: buildTree(files.slice(0, MAX_TREE_FILES), folders),
+      truncated: files.length > MAX_TREE_FILES || listing.walkTruncated,
+    });
+    // A folder holding only its configuration file still shows; `.specquer` only in All Files
+    const specsFolders = [...listing.emptyFolders.filter((folder) => checkPath(folder).ok), ...listing.configs.map(parentPath).filter((folder) => folder !== "")];
+    return { specs: view(listing.markdown, specsFolders), all: view(listing.all, listing.emptyFolders) };
   }
 
   /** Every Markdown file the tree would show, sorted, without the tree's size limit. */
@@ -281,9 +299,8 @@ export class FileService {
     for (const path of walked.files) {
       const nested = nestedSpecquerFolder(path);
       if (nested !== undefined) walked.nested.add(nested);
-      const check = checkPath(path);
-      if (!check.ok) continue;
-      if (pathSegments(check.path).some((segment) => SKIPPED_FOLDERS.has(segment))) continue;
+      const check = checkViewPath(path);
+      if (!check.ok || hiddenPath(check.path)) continue;
       all.push(check.path);
     }
     // A symbolic link Git tracks may lead to a folder, or nowhere
@@ -292,11 +309,14 @@ export class FileService {
     const notFiles = new Set(linked.filter((_, i) => kinds[i] !== "file"));
     const files = notFiles.size === 0 ? all : all.filter((path) => !notFiles.has(path));
     files.sort();
+    // Specquer's own data is shown in All Files, but holds no documents
+    const outside = files.filter((path) => checkPath(path).ok);
     return {
       all: files,
-      markdown: files.filter(isMarkdownFile),
-      configs: files.filter((path) => baseName(path) === FOLDER_CONFIG_FILE),
-      sidecars: files.filter(isSidecarPath),
+      listed: new Set(files),
+      markdown: outside.filter(isMarkdownFile),
+      configs: outside.filter((path) => baseName(path) === FOLDER_CONFIG_FILE),
+      sidecars: outside.filter(isSidecarPath),
       emptyFolders: walked.emptyFolders,
       nested: [...walked.nested].sort(),
       walkTruncated: walked.entries > MAX_WALK_ENTRIES,
@@ -310,7 +330,7 @@ export class FileService {
   private async walk(folder: string, result: WalkResult, collectFiles: boolean): Promise<boolean> {
     let entries;
     try {
-      entries = await readdir(this.absolute(folder), { withFileTypes: true });
+      entries = await readdir(this.viewAbsolute(folder), { withFileTypes: true });
     } catch (err) {
       if (isNotFound(err)) return true;
       throw err;
@@ -320,6 +340,12 @@ export class FileService {
       if (++result.entries > MAX_WALK_ENTRIES) return true;
       const path = joinPath(folder, entry.name);
       if (entry.isDirectory() && entry.name === ".specquer" && folder !== "") result.nested.add(folder);
+      // Of the root's own `.specquer`, only the committed `shared/` is listed (Step 014, R2.2)
+      if (collectFiles && entry.isDirectory() && entry.name === ".specquer" && folder === "") {
+        await this.walk(`.specquer/shared`, result, true);
+        holdsFiles = true;
+        continue;
+      }
       if (!entry.isDirectory() || SKIPPED_FOLDERS.has(entry.name)) {
         // A folder holding only its configuration file counts as empty, so the tree shows it
         if (entry.name !== FOLDER_CONFIG_FILE) holdsFiles = true;
@@ -338,6 +364,57 @@ export class FileService {
     } catch {
       return undefined;
     }
+  }
+
+  /**
+   * A listed file to show (Step 014, R7.2): its real path, inside the root and not hidden, and
+   * its size. A path the listing doesn't hold, such as a file `.gitignore` hides, is missing.
+   */
+  private async viewable(path: string): Promise<{ real: string; size: number; mtimeMs: number }> {
+    if (!(await this.listing()).listed.has(path)) throw new ApiError(404, "not_found", `'${path}' doesn't exist.`);
+    let real: string;
+    try {
+      real = await realpath(this.viewAbsolute(path));
+    } catch (err) {
+      if (isNotFound(err)) throw new ApiError(404, "not_found", `'${path}' doesn't exist.`);
+      throw err;
+    }
+    if (!this.isInsideRoot(real)) throw new ApiError(403, "forbidden", `'${path}' is outside the root folder.`);
+    const relativePath = relative(this.root, real).split(sep).join("/");
+    if (hiddenPath(relativePath) || !checkViewPath(relativePath).ok) throw new ApiError(403, "forbidden", `'${path}' is in a protected folder.`);
+    const info = await stat(real);
+    if (!info.isFile()) throw new ApiError(400, "not_a_file", `'${path}' isn't a file.`);
+    return { real, size: info.size, mtimeMs: info.mtimeMs };
+  }
+
+  /** A file other than Markdown, to show: its text, that it is an image, or why it can't be shown. */
+  async readView(path: string): Promise<FileView> {
+    if (isMarkdownFile(path)) throw new ApiError(400, "invalid", "Markdown files are opened through /api/file.");
+    const { real, size, mtimeMs } = await this.viewable(path);
+    if (imageType(path) !== undefined) return { kind: "image", path, size, version: imageVersion(mtimeMs, size) };
+    // Never read to be refused (R7.5)
+    if (size > MAX_VIEW_BYTES) return { kind: "other", path, size, reason: "too_large" };
+    const bytes = await Bun.file(real).bytes();
+    if (bytes.includes(0)) return { kind: "other", path, size, reason: "binary" };
+    let text: string;
+    try {
+      text = decoder.decode(bytes);
+    } catch {
+      return { kind: "other", path, size, reason: "not_utf8" };
+    }
+    return { kind: "text", path, text: text.startsWith("\uFEFF") ? text.slice(1) : text, size, version: contentVersion(bytes) };
+  }
+
+  /** An image's bytes for `GET /api/image` (R7.3), or that the browser's copy, `ifNoneMatch`, is current. */
+  async image(path: string, ifNoneMatch: string | undefined): Promise<ImageResult> {
+    const type = imageType(path);
+    if (type === undefined) throw new ApiError(415, "not_an_image", `'${path}' isn't an image Specquer shows.`);
+    const { real, size, mtimeMs } = await this.viewable(path);
+    if (size > MAX_VIEW_BYTES) throw new ApiError(413, "too_large", `'${path}' is ${size} bytes, more than Specquer shows.`);
+    // Weak: from the modification time and size, so a revalidation reads nothing (plan D7)
+    const etag = `W/"${imageVersion(mtimeMs, size)}"`;
+    if (ifNoneMatch !== undefined && ifNoneMatch.split(",").some((tag) => tag.trim() === etag)) return { notModified: true, etag };
+    return { notModified: false, etag, type, bytes: await Bun.file(real).bytes() };
   }
 
   async readFile(path: string): Promise<FileContent> {
@@ -473,10 +550,17 @@ export class FileService {
   }
 
   async deleteEntry(path: string): Promise<void> {
-    const { absolute } = await this.existingEntry(path);
+    const { absolute, isFolder } = await this.existingEntry(path);
+    // Specquer changes only Markdown files (Step 014, R2.3); a folder goes with all it holds
+    if (!isFolder && !isMarkdownFile(path)) throw new ApiError(400, "invalid", "Specquer changes only Markdown files.");
     await rm(absolute, { recursive: true });
     this.invalidateListing();
   }
+}
+
+/** An image's version: changes when the file does, without reading it. */
+function imageVersion(mtimeMs: number, size: number): string {
+  return `${Math.round(mtimeMs)}-${size}`;
 }
 
 /** Builds the folder tree from sorted file paths and empty folders; folders come before files. */

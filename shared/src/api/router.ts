@@ -15,6 +15,7 @@ import {
   type ApiErrorBody,
   type DeletePreview,
   type FileContent,
+  type FileView,
   type FolderSettings,
   type ModelTestResult,
   type SectionInfo,
@@ -34,6 +35,7 @@ import {
   entryQuerySchema,
   envQuerySchema,
   fileQuerySchema,
+  viewQuerySchema,
   folderQuerySchema,
   folderSettingsUpdateSchema,
   modelTestSchema,
@@ -88,6 +90,10 @@ export interface CreateOptions {
 export interface ApiHandlers {
   getTree(): Promise<Tree>;
   readFile(path: string): Promise<FileContent>;
+  /** A file other than Markdown, to show it (Step 014). */
+  readView(path: string): Promise<FileView>;
+  /** An image's bytes, or that the browser's copy is current (`ifNoneMatch` its `ETag`). */
+  image(path: string, ifNoneMatch: string | undefined): Promise<ImageResult>;
   saveFile(path: string, text: string, baseVersion: string): Promise<SaveResult>;
   create(parent: string, name: string, kind: "file" | "folder", options?: CreateOptions): Promise<CreateResult>;
   rename(path: string, newName: string): Promise<RenameResult>;
@@ -149,6 +155,19 @@ function settingsFailure(result: Extract<SettingsSaveResult, { ok: false }>) {
     : ({ status: 422, body: { error: "invalid", message: result.message } } as const);
 }
 
+export type ImageResult = { notModified: true; etag: string } | { notModified: false; etag: string; type: string; bytes: Uint8Array };
+
+/**
+ * The headers of an image response (Step 014, R8.3): an SVG opened at its URL can't run scripts
+ * in Specquer's origin, and the browser revalidates rather than downloading again.
+ */
+export const IMAGE_HEADERS: Readonly<Record<string, string>> = {
+  "X-Content-Type-Options": "nosniff",
+  "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+  "Content-Disposition": "inline",
+  "Cache-Control": "no-cache",
+};
+
 /** A successful save's response body: the new version, and the edits and notices if any. */
 function saveBody(result: Extract<SaveResult, { ok: true }>) {
   return {
@@ -183,6 +202,12 @@ export function createApiRouter(handlers: ApiHandlers) {
     .get("/tree", async (c) => c.json(await handlers.getTree()))
     .get("/file", validate("query", fileQuerySchema), async (c) => {
       return c.json(await handlers.readFile(c.req.valid("query").path));
+    })
+    .get("/view", validate("query", viewQuerySchema), async (c) => c.json(await handlers.readView(c.req.valid("query").path)))
+    .get("/image", validate("query", viewQuerySchema), async (c) => {
+      const result = await handlers.image(c.req.valid("query").path, c.req.header("if-none-match"));
+      if (result.notModified) return c.body(null, 304, { ...IMAGE_HEADERS, ETag: result.etag });
+      return c.body(result.bytes as Uint8Array<ArrayBuffer>, 200, { ...IMAGE_HEADERS, ETag: result.etag, "Content-Type": result.type });
     })
     .put("/file", validate("query", fileQuerySchema), validate("json", saveFileSchema), async (c) => {
       const { text, baseVersion } = c.req.valid("json");
