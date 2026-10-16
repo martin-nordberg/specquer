@@ -319,9 +319,10 @@ UiState = {
   version: 1,
   theme?: "light" | "dark",      // absent until the user chooses; the browser's preference applies
   treePaneFraction: number,      // folder pane width, 0.1 to 0.7 of the window; default 0.25
-  sidePane: "chat" | "comments" | null,  // the third pane; default null (read from an old `chatOpen: true` as "chat")
+  sidePane: "chat" | "comments" | "outline" | null,  // the third pane; default null (read from an old `chatOpen: true` as "chat")
   chatPaneFraction: number,      // chat pane width, 0.15 to 0.5 of the window; default 0.3
   commentsPaneFraction: number,  // Comments pane width, the same limits and default
+  outlinePaneFraction: number,   // Outline pane width, the same limits and default (Step 016)
   commentFilter: "open" | "resolved" | "all",  // which comment threads show; default "open"
   treeView: "specs" | "all",     // the folder pane's view (Step 014); default "specs"
   expandedFolders: string[],     // workspace paths, shared by both views
@@ -331,6 +332,7 @@ UiState = {
     viewType: "text" | "split" | "preview" | "wysiwyg",   // default "text"
     frontmatterHeight?: number,  // front matter editor height in pixels
     summaryStop?: number,        // the summary slider, as steps from the full text (0 to 7; absent is 0)
+    outlineCollapsed?: string[], // the Outline's collapsed items: section UIDs, or `path:` and an outline path (Step 016)
   }>,
 }
 ```

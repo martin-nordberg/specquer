@@ -61,7 +61,7 @@ root folder
 <a id="SPEC-00035" data-uid="ih7efd3xle7k"></a>
 ## 2. Screen Layout
 
-Specquer has one view: a header and two or three panes side by side. The third pane on the right shows the chat or the comment threads, opened and closed with the **Chat** and **Comments** buttons in the header.
+Specquer has one view: a header and two or three panes side by side. The third pane on the right shows the outline, the comment threads or the chat, opened and closed with the **Outline**, **Comments** and **Chat** buttons in the header.
 
 ```
 ┌───────────────────────────────────────────────────────────────────────────────┐
@@ -81,7 +81,7 @@ Specquer has one view: a header and two or three panes side by side. The third p
 
 | Region | Contents |
 | ------ | -------- |
-| Header | App icon and application name; the chat toggle, the light/dark switch and the settings gear button |
+| Header | App icon and application name; the Outline, Comments and Chat toggles, the light/dark switch and the settings gear button |
 | Left pane | The **Specs** / **All Files** selector above the folder tree; the same context menu on every folder (New file, New folder / Rename, Delete / Add section anchors, Settings, Section problems), every file (Rename, Delete / Add section anchors, Section problems) and the empty space below the last entry (the folder's, without Rename and Delete, for the root); an action that doesn't apply says why |
 | Right pane, row 1 | File path breadcrumb (a drop-down of recent files once there are any), save status, view-type switch |
 | Right pane, row 2 | Front matter editor with a drag bar below it |

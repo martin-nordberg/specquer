@@ -45,7 +45,7 @@ Step 016 takes precedence over the specifications and earlier steps where they c
 <a id="WORK-00636" data-uid="ipakscf7sxwo"></a>
 ### R2. The Tree
 
-1. **A sectioned document:** the sections of the document open in the file pane, as the text being edited holds them, nested as in the document: a heading's section holds the headings below it of a deeper level, and the list items sectioned within it; a sectioned list item holds its sectioned nested items.
+1. **A sectioned document:** the sections of the document open in the file pane, as the text being edited holds them, nested as in the document: a heading's section holds the headings below it of a deeper level, and the list items sectioned within it. (Only the items of top-level lists are sections; an anchor in a nested item is a stray, so items have no items below them.)
 2. **A document that isn't sectioned** (outside a sectioned folder) has no sections, so the tree shows its headings, nested by level, without list items.
 3. **The root:** the document's root section isn't an item of its own; its sections are the tree's top level. The file name is already in the path above the file pane.
 4. **Order:** document order.
@@ -104,8 +104,8 @@ Step 016 takes precedence over the specifications and earlier steps where they c
 <a id="WORK-00641" data-uid="s2r8s0qg3jev"></a>
 ### R8. Performance
 
-1. **Parsing:** the tree is built from the sections the views already find (the preview's worker, or the section analysis the comment highlights use), not from a parse of its own on every keystroke (see the code review's P2).
-2. **Large documents:** a document with 2,000 sections opens its tree in under 100 ms, and typing in it doesn't lag.
+1. **Parsing:** the tree is worked out off the main thread, in the preview worker, so typing never waits for it; the main thread's own section lookups parse each body once (see the code review's P2).
+2. **Large documents:** typing in a document with 2,000 sections doesn't lag. Parsing such a document (10,000 lines) takes 300 to 600 ms, so its tree appears within about half a second of opening it or of a pause in typing; the 100 ms first asked for isn't reachable with the Markdown parser Specquer uses.
 
 <a id="WORK-00642" data-uid="ukce6unma6rf"></a>
 ### R9. Other Files and No File

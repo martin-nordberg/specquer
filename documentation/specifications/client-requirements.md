@@ -17,8 +17,8 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 
 1. The window is split into a folder pane on the left and a file pane on the right, with a drag bar between them.
 2. Dragging the bar (or pressing the arrow keys on it) changes the folder pane's width, as a fraction of the window between 10% and 70%. The fraction persists in the UI state.
-3. The header holds the app icon and name on the left, and on the right the **Comments** toggle (§12), the **Chat** toggle (§11), twice the usual gap, the light/dark mode toggle (§8) and, right of it, the **Settings** gear button (§10).
-4. The third pane, right of the file pane, shows the chat (§11), the comment threads (§12) or nothing: the two toggles work as a three-way switch, and opening one pane closes the other. With it open, a second drag bar separates it from the file pane. Each kind of pane keeps its own width.
+3. The header holds the app icon and name on the left, and on the right the **Outline** toggle (§14), the **Comments** toggle (§12), the **Chat** toggle (§11), twice the usual gap, the light/dark mode toggle (§8) and, right of it, the **Settings** gear button (§10).
+4. The third pane, right of the file pane, shows the outline (§14), the comment threads (§12), the chat (§11) or nothing: the three toggles work as one switch, and opening one pane closes the one open. With it open, a second drag bar separates it from the file pane. Each kind of pane keeps its own width.
 
 <a id="SPEC-00043" data-uid="arb991i3e6ej"></a>
 ## 3. Folder Tree
@@ -144,9 +144,10 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 6. A section of fewer than 60 words (after simplification) is shown as written, without calling the model. A section added since the last save is shown as written until it is saved.
 7. A summary shows "Summarizing..." with a spinner while it is made (the spinner stays still when the system asks for reduced motion); then plain text paragraphs, never Markdown or HTML, under a subtle label: "AI summary", the name of the model that made it (the part after the last `/`, with the full ID as a tooltip), and "shortened" when the section was too long and was cut. If it can't be made (a network failure, the provider's rate limit), the error shows in its place with **Retry**.
 8. Summaries are made from the saved file only; unsaved text is never sent. A section edited since the last save keeps its last summary, labeled "out of date", and is summarized again after the next save.
-9. Clicking a summary, or its **Show full text**, moves the slider to the full text and scrolls to its section. A link to a section hidden by a summary (`other.md#SPEC-00012`) does the same.
-10. Summaries are kept in memory while Specquer is open, so moving the slider back and forth asks for nothing new. At most three summary requests are in flight at once, in document order, so they never take all of the browser's connections to the server and saves and file loads don't wait behind them. Requests no longer needed (the slider moved, another file opened, another view chosen) are aborted, or dropped before they are sent.
-11. A summary another model made (or an older prompt) is shown at once, labeled "older model", while the configured model's is made; it is asked for after the summaries the preview still needs, and replaces the older one in place. If it can't be made, the older summary stays, with the error and **Retry**.
+9. The Outline follows the slider: it shows only the sections the slider leaves visible (§14 item 7).
+10. Clicking a summary, or its **Show full text**, moves the slider to the full text and scrolls to its section. A link to a section hidden by a summary (`other.md#SPEC-00012`) does the same.
+11. Summaries are kept in memory while Specquer is open, so moving the slider back and forth asks for nothing new. At most three summary requests are in flight at once, in document order, so they never take all of the browser's connections to the server and saves and file loads don't wait behind them. Requests no longer needed (the slider moved, another file opened, another view chosen) are aborted, or dropped before they are sent.
+12. A summary another model made (or an older prompt) is shown at once, labeled "older model", while the configured model's is made; it is asked for after the summaries the preview still needs, and replaces the older one in place. If it can't be made, the older summary stays, with the error and **Retry**.
 
 <a id="SPEC-00113" data-uid="omkqex82dhaa"></a>
 ### 6.3 Section Status
@@ -260,3 +261,20 @@ From [Step 014](/work-items/step-014-all-files/requirements). Specquer edits Mar
 3. **Images** (PNG, JPEG, GIF, WebP, AVIF, SVG, BMP and ICO, at most 5 MB) are shown over a checkerboard, scaled down to fit the pane; clicking the image, or Enter on it, switches to actual size, where the pane scrolls, and back. A line under it gives its pixel size and file size. SVG is shown only as an image.
 4. **Anything else** shows a placeholder with the file's size and why it can't be shown: "This file type cannot be displayed by Specquer.", "This file isn't UTF-8 text, so Specquer can't display it.", "This file is too large to display." or, for an image that doesn't decode, "This image can't be displayed."
 5. **Comments.** While such a file is open, the Comments pane says that comments are available for Markdown files in sectioned folders.
+
+<a id=""></a>
+## 14. Outline
+
+From [Step 016](/work-items/step-016-right-pane-section-nav/requirements).
+
+1. **The pane.** The **Outline** button (a toggle with `aria-pressed`; Lucide's table of contents icon), left of **Comments**, opens and closes the Outline in the third pane's place (§2). Its width (0.15 to 0.5 of the window, default 0.3) and whether it is open persist in the UI state.
+2. **The tree** (`role="tree"`, named "Outline") holds the open document's sections, as the text being edited holds them, at most a quarter of a second after typing stops: headings nested by level, and the items of sectioned lists under their heading. The root section isn't an item. In a document that isn't sectioned, the tree holds its headings. It is worked out in the preview worker.
+3. **Items** are one line each, cut with "…", their full text in a tooltip: a heading's text, or a list item's section ID and first eight words. A section's icon is its badge (with the warning ring of an ID used twice or a status that isn't allowed), a heading without a section a plain heading icon. The icon has no menu.
+4. **Expanding and collapsing.** An item with items below it has a chevron; clicking the chevron, the icon or the space left of them expands or collapses it. Everything starts expanded; collapsed items persist per file in the UI state, by section UID, or by outline path in a document that isn't sectioned.
+5. **Moving.** Clicking an item's text, or the space right of it, scrolls the file pane to its section in any view (both sides in Split) and highlights the item in the navigation color. The focus stays in the tree.
+6. **Following.** As the file pane scrolls, the highlight moves to the section at its top (the first item above the first heading), and the row is scrolled into view unless the pointer is over the pane or the focus is in it. A clicked item stays highlighted until the reader scrolls. A highlight inside a collapsed or summarized item shows on that item, fainter.
+7. **The summary slider.** In the Preview and Split views, the tree shows only what the slider leaves visible: a summarized section stays, marked "summary", without the items below it; with the whole document summarized the pane says so. The Text and WYSIWYG views show every section.
+8. **Keyboard.** One item is in the tab order. Up and Down move between items, Home and End to the first and last; Right expands or moves to the first child, Left collapses or moves to the parent; Enter and Space move the file pane to the section.
+9. **Other states.** A file other than Markdown shows "(Not Markdown)"; with no file open, "Open a document to see its outline."; a document without headings, "This document has no headings."
+10. **Add section anchors…**, a link under the tree, opens **Add section anchors** for the open file (§3.4).
+

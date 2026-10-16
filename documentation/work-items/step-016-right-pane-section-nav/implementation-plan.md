@@ -198,3 +198,19 @@ _Proposed_. The work proceeds on them unless they are changed:
 | Two scroll reports in Split | The highlight jumps between the sides' different tops | The side scrolled last wins; a programmatic scroll from a click reports both sides at the same section |
 | Outline paths shift when a heading is inserted | A collapsed heading in a document that isn't sectioned changes | Accepted in the requirements (R4.4); sectioned documents use UIDs |
 | Moving `onTopSection` out of the comment markers | The Comments pane stops following the document | Phase 2 keeps the Comments pane's following tests unchanged and passing |
+
+<a id=""></a>
+## 8. Implementation Status
+
+Phases 1 to 5 were carried out in October 2026, one commit each. What differs from the plan, or was learned doing it:
+
+1. **Only top-level list items are sections.** An anchor in a nested list item is a stray, so the requirements' "a sectioned list item holds its sectioned nested items" was wrong; R2.1 now says so, and list items never have children in the tree.
+2. **The tree is built in the preview worker** (D2 revised, §7 risk 1 realized). Measured: parsing a 10,000-line, 2,000-section document takes 300 to 600 ms, and `buildOutline` parsed it a second time. `outlineOf` in `outline.ts` does one parse for the tree and the badges' statuses, and runs in the worker through `PreviewRenderer.outline`; `buildOutline` takes the sections when it has them. The main thread's own lookups still go through `bodySections`, one parse per body. R8.2's 100 ms isn't reachable; R8 now records what is.
+3. **The Outline follows the preview's own summaries, not the stop** (D6 revised). The preview shows a short section, or one not saved yet, as written even at a stop that summarizes it, so the stop alone would hide items the preview shows. The preview reports the sections it really summarizes (`onSummarized`), only when they change, and nothing when it unmounts, which is how Text and WYSIWYG show every section.
+4. **The top position goes through a small store** (`TopPositionStore`), so scrolling re-renders only the Outline, not the workspace. The views also report once when they open or render, so an item is highlighted before the first scroll; above the first heading the first item is.
+5. **A click's own scrolling is ignored for 300 ms** (R6.5): reports in that window come from the scroll the click caused, which for the last sections stops above them.
+6. **Rows have a chevron** in the indentation for items with items below them, as the folder tree has, besides the icon and the space that also toggle.
+7. **The debounce restarts only on a change of document or text** (one string), and another document's tree shows at once, without waiting.
+8. **`statusesOfBody` and the text view's section lookup** use `bodySections` too, removing two more parses per keystroke on the main thread.
+9. **Tests:** `bun run typecheck` and `bun test` (756) pass. The end-to-end suite passes on Chrome and WebKit (202), including the new `e2e/outline.spec.ts`. Reporting the top while scrolling needs real layout, so it is covered there rather than in component tests.
+

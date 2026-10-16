@@ -73,7 +73,7 @@ The shared package holds everything both sides need. It must run unchanged in th
 | ------ | ------ | -------- |
 | API | `@specquer/shared/api` | Hono router (`createApiRouter`) with every route, Zod request schemas, response types |
 | Paths | `@specquer/shared/paths` | Workspace path and name validation (relative, `/`-separated, no `..`, no `.git` or `.specquer`); the paths that may only be shown (`checkViewPath`, the root's `.specquer/shared/`) and those **All Files** never lists (`hiddenPath`); file kinds and image types by name (`kinds.ts`) |
-| Markdown | `@specquer/shared/markdown` | Front matter split and join, YAML syntax check (`yaml` package), the preview pipeline, finding and adding section anchors, a text file as a code block (`codeFileToHast`), languages by file name (`languages.ts`); see [Data Architecture](data-architecture.md) §1 and §2 |
+| Markdown | `@specquer/shared/markdown` | Front matter split and join, YAML syntax check (`yaml` package), the preview pipeline, finding and adding section anchors, a text file as a code block (`codeFileToHast`), languages by file name (`languages.ts`), the Outline's tree on the slider's heading outline (`outlineTree`, `visibleAt`, `outlineOf` in `outline.ts`); see [Data Architecture](data-architecture.md) §1 and §2 |
 | Highlighting | `@specquer/shared/highlight` | Highlighting with `rehype-highlight` and `lowlight`'s `common` grammars; imported only by the preview worker, so the grammars stay out of the main bundle (Step 014) |
 | Sections | `@specquer/shared/sections` | Section ID and UID formats; the section anchor rules for coding agents |
 | UI state | `@specquer/shared/uistate` | Zod schema, defaults and pure update functions; see [Data Architecture](data-architecture.md) §3 |
@@ -228,6 +228,8 @@ The root configuration excludes `./client`, so type checking runs in three passe
 Parsing Markdown is most of the cost of a preview render (about 80 ms of 100 ms for a 2,400-line spec), so the preview parses in a Web Worker and the main thread only turns the resulting HTML syntax tree into React elements. Bun's HTML bundling does not bundle workers, so the server builds the worker (`client/src/preview/preview-worker.ts`) with `Bun.build()` and serves it at `/_specquer/preview-worker.js`. The worker build uses the `worker` export condition, because some dependencies' browser builds use the DOM, which workers lack. The release build embeds the worker script. If the worker can't start, the preview parses on the main thread.
 
 The worker also highlights code (Step 014): it imports `@specquer/shared/highlight`, with `lowlight`'s `common` grammars, which adds about 42 KB gzipped to the worker and nothing to the main bundle. It renders text files other than Markdown too, as one code block with line numbers. The main-thread fallback renders both without highlighting.
+
+The worker also works out the Outline's tree and its badges' statuses (Step 016, `outlineOf`): parsing a 10,000-line, 2,000-section document takes a few hundred milliseconds, too long for the main thread while the user types. On the main thread, `client/src/app/body-sections.ts` parses each body once however many callers ask (the comment highlight, following the document, F8, the badges' statuses).
 
 <a id="SPEC-00102" data-uid="r2ww926dia8b"></a>
 ## 8. Documentation
