@@ -162,11 +162,12 @@ export default defineConfig({
                     ]
                   },
                   {
-                    text: '016-Table of Contents',
+                    text: '016-Outline',
                     collapsed: false,
                     items: [
                       {text: 'Notes', link: '/work-items/step-016-right-pane-section-nav/notes'},
                       {text: 'Requirements', link: '/work-items/step-016-right-pane-section-nav/requirements'},
+                      {text: 'Implementation Plan', link: '/work-items/step-016-right-pane-section-nav/implementation-plan'},
                     ]
                   }
                 ]
