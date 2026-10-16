@@ -144,6 +144,15 @@ export default defineConfig({
                     items: [
                       {text: 'Code Review', link: '/work-items/step-013-code-review/code-review'},
                     ]
+                  },
+                  {
+                    text: '014-All Files',
+                    collapsed: false,
+                    items: [
+                      {text: 'Notes', link: '/work-items/step-014-all-files/notes'},
+                      {text: 'Requirements', link: '/work-items/step-014-all-files/requirements'},
+                      {text: 'Implementation Plan', link: '/work-items/step-014-all-files/implementation-plan'},
+                    ]
                   }
                 ]
               }
@@ -164,6 +173,7 @@ export default defineConfig({
                         {text: 'Specquer, Kiro and Spec Kit', link: '/notes/spec-driven-tools'},
                         {text: 'Coding Agents in Comment Threads', link: '/notes/agent-comments'},
                         {text: 'Specquer Driving Coding Agents', link: '/notes/agent-workflows'},
+                        {text: 'Images in the Markdown Preview', link: '/notes/markdown-images'},
                     ]
                 },
             ],

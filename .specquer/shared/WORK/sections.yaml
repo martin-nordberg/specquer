@@ -1,5 +1,5 @@
 # Specquer's sections for one prefix, by unique ID; written by Specquer. Commit this file.
-lastSequence: 555
+lastSequence: 594
 sections:
   n8w0w4eq2ka6: { id: WORK-00001, documentId: n8w0w4eq2ka6 }
   o2v741k9khzq: { id: WORK-00002, documentId: n8w0w4eq2ka6 }
@@ -516,6 +516,43 @@ sections:
   iohu0b5ao98o: { id: WORK-00553, documentId: h818es2fvd3s }
   ttmvnk26qmwf: { id: WORK-00554, documentId: h818es2fvd3s }
   tew07dgbjlz2: { id: WORK-00555, documentId: h818es2fvd3s }
+  gm893vhndlka: { id: WORK-00556, documentId: gm893vhndlka }
+  pj01dekrat3o: { id: WORK-00557, documentId: gm893vhndlka }
+  p14pks0ynzon: { id: WORK-00558, documentId: gm893vhndlka }
+  rag3bfotifrp: { id: WORK-00559, documentId: gm893vhndlka }
+  ccuhikmswylq: { id: WORK-00560, documentId: gm893vhndlka }
+  deamg423ozsy: { id: WORK-00561, documentId: gm893vhndlka }
+  zdtb9phshj9t: { id: WORK-00562, documentId: gm893vhndlka }
+  eqa2oldaohrt: { id: WORK-00563, documentId: gm893vhndlka }
+  csrwhydpljso: { id: WORK-00564, documentId: gm893vhndlka }
+  dw8y8q3sqoeo: { id: WORK-00565, documentId: gm893vhndlka }
+  xqtjq9f5uyp9: { id: WORK-00566, documentId: gm893vhndlka }
+  ksxsqxmhr4jy: { id: WORK-00567, documentId: gm893vhndlka }
+  f284tih9rxbo: { id: WORK-00568, documentId: gm893vhndlka }
+  hyk9kimb7fzw: { id: WORK-00569, documentId: hyk9kimb7fzw }
+  ibqbagp3w4sg: { id: WORK-00570, documentId: hyk9kimb7fzw }
+  qove7vmqr6xv: { id: WORK-00571, documentId: hyk9kimb7fzw }
+  zmw7fg0n5h5t: { id: WORK-00572, documentId: hyk9kimb7fzw }
+  a8p238o1d4hl: { id: WORK-00573, documentId: hyk9kimb7fzw }
+  ykppp6ukqrgr: { id: WORK-00574, documentId: hyk9kimb7fzw }
+  aaxy9b7cb5a3: { id: WORK-00575, documentId: hyk9kimb7fzw }
+  y3c89b8jd3o6: { id: WORK-00576, documentId: hyk9kimb7fzw }
+  zqfeficuw8fb: { id: WORK-00577, documentId: hyk9kimb7fzw }
+  sbeue3bfkumc: { id: WORK-00578, documentId: hyk9kimb7fzw }
+  on4stwk09v3m: { id: WORK-00579, documentId: hyk9kimb7fzw }
+  hn1vsz1nwb90: { id: WORK-00580, documentId: hyk9kimb7fzw }
+  u6p70tom0wmp: { id: WORK-00581, documentId: hyk9kimb7fzw }
+  g5olmd35tyez: { id: WORK-00582, documentId: hyk9kimb7fzw }
+  wtorkkjj70ss: { id: WORK-00583, documentId: hyk9kimb7fzw }
+  yuh38ma8ee6w: { id: WORK-00584, documentId: hyk9kimb7fzw }
+  xcp025u5jsp0: { id: WORK-00585, documentId: hyk9kimb7fzw }
+  ab1y8ctslwu6: { id: WORK-00586, documentId: hyk9kimb7fzw }
+  k5tmb2gozyxc: { id: WORK-00587, documentId: hyk9kimb7fzw }
+  gdrf2qqsc7gk: { id: WORK-00588, documentId: hyk9kimb7fzw }
+  ci4yjdl45xde: { id: WORK-00589, documentId: hyk9kimb7fzw }
+  w33bmpm3u88f: { id: WORK-00594, documentId: hyk9kimb7fzw }
+  jqs3cix1okcl: { id: WORK-00590, documentId: hyk9kimb7fzw }
+  gq227n52j8cc: { id: WORK-00591, documentId: hyk9kimb7fzw }
 retired:
   xr6chk1oivmk: { id: WORK-00230 }
   cf99s3al8ng9: { id: WORK-00232 }
@@ -529,3 +566,5 @@ retired:
   qwf2pvy020q2: { id: WORK-00444 }
   flstqnbj3ob7: { id: WORK-00494 }
   wai42eackn4w: { id: WORK-00495 }
+  tniiro95wlkc: { id: WORK-00592 }
+  vq9zpwa6k1bu: { id: WORK-00593 }
