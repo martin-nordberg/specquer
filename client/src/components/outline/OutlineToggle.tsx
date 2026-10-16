@@ -14,7 +14,8 @@ export function OutlineToggle({ open, onChange }: { open: boolean; onChange: (op
       title={open ? "Close the outline" : "Open the outline"}
       onClick={() => onChange(!open)}
     >
-      <TableOfContents />
+      {/* Lucide's icon, mirrored horizontally */}
+      <TableOfContents className="-scale-x-100" />
     </Button>
   );
 }
