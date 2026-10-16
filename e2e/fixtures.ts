@@ -13,6 +13,8 @@ export interface Specquer {
   origin: string;
   read(path: string): Promise<string>;
   write(path: string, text: string): Promise<void>;
+  /** Writes a binary file (an image, say), creating its folder. */
+  writeBytes(path: string, bytes: Uint8Array): Promise<void>;
   exists(path: string): Promise<boolean>;
 }
 
@@ -65,6 +67,10 @@ async function startSpecquer(files: Record<string, string>): Promise<Specquer & 
     read: (path) => Bun.file(join(root, path)).text(),
     write: async (path, text) => {
       await Bun.write(join(root, path), text);
+    },
+    writeBytes: async (path, bytes) => {
+      await mkdir(dirname(join(root, path)), { recursive: true });
+      await Bun.write(join(root, path), bytes);
     },
     exists: (path) => Bun.file(join(root, path)).exists(),
     async stop() {
