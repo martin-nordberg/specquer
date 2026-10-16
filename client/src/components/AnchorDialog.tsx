@@ -76,7 +76,7 @@ export function AnchorDialog({ target, onClose, loadChanges, onRun }: AnchorDial
         </DialogHeader>
         {files !== null && (
           <div className="grid gap-2 text-sm">
-            <p>{sectioned === 0 ? unsectioned : count === 0 ? "No file needs to change." : `${count} ${count === 1 ? "file" : "files"} will change:`}</p>
+            <p>{sectioned === 0 ? unsectioned : count === 0 ? (isFile ? "This file needs no changes." : "No file needs to change.") : `${count} ${count === 1 ? "file" : "files"} will change:`}</p>
             {count > 0 && (
               <ul aria-label="Files to change" className="max-h-40 overflow-auto rounded-md border bg-muted px-3 py-2 font-mono text-xs">
                 {files.map((file) => (
