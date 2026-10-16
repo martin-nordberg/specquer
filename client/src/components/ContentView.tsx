@@ -3,7 +3,8 @@ import { EditorView } from "@codemirror/view";
 import { Columns2, Eye, FileCode, PenLine } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { SectionInfo, SectionStatusLists } from "@specquer/shared/api";
-import { analyzeBody } from "@specquer/shared/markdown";
+import { type SummarizedSection, type TopPosition, sectionAtPath } from "@specquer/shared/markdown";
+import { bodySections, headingPathAt } from "@/app/body-sections";
 import { sectionExtents } from "@specquer/shared/sections";
 import type { ViewType } from "@specquer/shared/uistate";
 import { cn } from "@/lib/utils";
@@ -74,13 +75,20 @@ export interface ContentViewProps {
   registerFlush?: (flush: () => void) => () => void;
   /** Comment threads: pips, highlighting and the badge menu's comment items (Step 012). */
   comments?: CommentMarkers;
+  /**
+   * The view reports where its top is as it scrolls, for the Comments and Outline panes to follow
+   * (Step 012, R7.7; Step 016, R6): the section there, and the heading's outline path.
+   */
+  onTopPosition?: (position: TopPosition) => void;
+  /** The preview reports the sections it shows summarized (Step 016, R7). */
+  onSummarized?: (summarized: readonly SummarizedSection[]) => void;
 }
 
 /** The innermost section holding an offset of a text, by its UID (for the Comments pane to follow). */
 function sectionAt(doc: Text, offset: number, cache: { doc: Text | null; sections: Array<{ uid: string | null; from: number; to: number }> }): string | null {
   if (cache.doc !== doc) {
     const text = doc.toString();
-    const found = analyzeBody(text).sections;
+    const found = bodySections(text).sections;
     const extents = sectionExtents(found.map((section) => ({ ...section, start: section.anchor?.from ?? section.insertAt })), text.length);
     cache.doc = doc;
     cache.sections = found.map((section, index) => ({ uid: section.uid, ...extents[index]! }));
@@ -110,6 +118,8 @@ export function ContentView({
   summaries,
   registerFlush,
   comments,
+  onTopPosition,
+  onSummarized,
 }: ContentViewProps) {
   const [textView, setTextView] = useState<EditorView | null>(null);
   const pathRef = useRef(path);
@@ -139,16 +149,15 @@ export function ContentView({
     if (textView !== null) setCommentGutterMarkers(textView, comments ?? null);
   }, [textView, comments]);
 
-  // The section at the top of the text view, as it scrolls (R7.7)
-  const onTopSection = comments?.onTopSection;
+  // Where the text view's top is, as it scrolls (Step 012, R7.7; Step 016, R6)
   useEffect(() => {
-    if (textView === null || onTopSection === undefined) return;
+    if (textView === null || onTopPosition === undefined) return;
     const cache = { doc: null as Text | null, sections: [] as Array<{ uid: string | null; from: number; to: number }> };
     let frame = 0;
     const report = () => {
       frame = 0;
       const block = textView.lineBlockAtHeight(textView.scrollDOM.scrollTop);
-      onTopSection(sectionAt(textView.state.doc, block.from, cache));
+      onTopPosition({ uid: sectionAt(textView.state.doc, block.from, cache), outlinePath: headingPathAt(textView.state.doc.toString(), block.from) });
     };
     const onScroll = () => {
       if (frame === 0) frame = requestAnimationFrame(report);
@@ -158,17 +167,24 @@ export function ContentView({
       textView.scrollDOM.removeEventListener("scroll", onScroll);
       cancelAnimationFrame(frame);
     };
-  }, [textView, onTopSection]);
+  }, [textView, onTopPosition]);
 
   // Scrolls the text view to a requested section's anchor
   const scrolled = useRef<number | null>(null);
   useEffect(() => {
-    if (textView === null || scrollTarget === undefined || !("sectionId" in scrollTarget) || scrolled.current === scrollTarget.request) return;
-    const { sectionId, uid } = scrollTarget;
-    const section = analyzeBody(textView.state.doc.toString()).sections.find((found) => found.id === sectionId && (uid === undefined || found.uid === uid));
-    if (section?.anchor === undefined) return;
+    if (textView === null || scrollTarget === undefined || scrolled.current === scrollTarget.request) return;
+    const text = textView.state.doc.toString();
+    let from: number | undefined;
+    if ("sectionId" in scrollTarget) {
+      const { sectionId, uid } = scrollTarget;
+      from = bodySections(text).sections.find((found) => found.id === sectionId && (uid === undefined || found.uid === uid))?.anchor?.from;
+    } else {
+      // A heading by its outline path (Step 016, R5.1)
+      from = sectionAtPath(bodySections(text).outline, scrollTarget.outlinePath)?.heading.from;
+    }
+    if (from === undefined) return;
     scrolled.current = scrollTarget.request;
-    textView.dispatch({ effects: EditorView.scrollIntoView(section.anchor.from, { y: "start", yMargin: 8 }) });
+    textView.dispatch({ effects: EditorView.scrollIntoView(from, { y: "start", yMargin: 8 }) });
   }, [textView, scrollTarget]);
   const editor = (
     <CodeEditor
@@ -196,6 +212,8 @@ export function ContentView({
       comments={comments}
       summaries={summaries}
       debounce={debounce}
+      {...(onTopPosition === undefined ? {} : { onTopPosition })}
+      {...(onSummarized === undefined ? {} : { onSummarized })}
     />
   );
   switch (viewType) {
@@ -221,6 +239,7 @@ export function ContentView({
           registerFlush={registerFlush}
           comments={comments}
           scrollTarget={scrollTarget}
+          {...(onTopPosition === undefined ? {} : { onTopPosition })}
         />
       );
   }

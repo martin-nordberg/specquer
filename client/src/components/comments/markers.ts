@@ -24,8 +24,6 @@ export interface CommentMarkers {
   onPip: (sectionUid: string) => void;
   onPipHover: (sectionUid: string | null) => void;
   onAddComment: (sectionUid: string) => void;
-  /** The view reports the section at its top as it scrolls, for the pane to follow (R7.7). */
-  onTopSection: (sectionUid: string | null) => void;
 }
 
 /** Why **Add comment…** is disabled on a section without a UID yet (R2.11). */

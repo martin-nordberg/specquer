@@ -8,6 +8,7 @@ import {
   OUTLINE_PATH_PROPERTY,
   SUMMARY_TAG,
   type SummarizedSection,
+  type TopPosition,
   buildOutline,
   hasConflictMarkers,
   summarizeTree,
@@ -143,6 +144,10 @@ export interface PreviewProps {
   comments?: CommentMarkers;
   /** Summaries; without them the preview always shows the full text. */
   summaries?: PreviewSummaries;
+  /** Where the preview's top is, as it scrolls (Step 012, R7.7; Step 016, R6). */
+  onTopPosition?: (position: TopPosition) => void;
+  /** The sections the preview shows summarized, whenever they change (Step 016, R7). */
+  onSummarized?: (summarized: readonly SummarizedSection[]) => void;
   /** Delay before rendering changes; 0 renders at once. */
   debounce?: number;
   className?: string;
@@ -163,6 +168,8 @@ export function Preview({
   summaries,
   debounce = 0,
   className,
+  onTopPosition,
+  onSummarized,
 }: PreviewProps) {
   // The tree with the text it was rendered from, whose offsets it holds
   const [rendered, setRendered] = useState<{ tree: Root; markdown: string } | null>(null);
@@ -422,11 +429,11 @@ export function Preview({
     hidden,
   ]);
 
-  // The section at the top, as the preview scrolls, for the Comments pane to follow (R7.7)
-  const onTopSection = comments?.onTopSection;
+  // Where the top is, as the preview scrolls: the section, and the heading by its outline path
   useEffect(() => {
     const element = container.current;
-    if (element === null || onTopSection === undefined) return;
+    if (element === null || onTopPosition === undefined) return;
+    const pathAttribute = OUTLINE_PATH_PROPERTY.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
     let frame = 0;
     const report = () => {
       frame = 0;
@@ -438,7 +445,12 @@ export function Preview({
         if (shown.getBoundingClientRect().top > top) break;
         uid = anchor.dataset.uid ?? null;
       }
-      onTopSection(uid);
+      let outlinePath: string | null = null;
+      for (const heading of element.querySelectorAll<HTMLElement>(`[${pathAttribute}]`)) {
+        if (heading.getBoundingClientRect().top > top) break;
+        outlinePath = heading.getAttribute(pathAttribute);
+      }
+      onTopPosition({ uid, outlinePath });
     };
     const onScroll = () => {
       if (frame === 0) frame = requestAnimationFrame(report);
@@ -448,7 +460,14 @@ export function Preview({
       element.removeEventListener("scroll", onScroll);
       cancelAnimationFrame(frame);
     };
-  }, [onTopSection]);
+  }, [onTopPosition]);
+
+  // The sections shown summarized, for the Outline (Step 016, R7): those the stop summarizes
+  // that the preview really replaces (not short ones, nor ones not saved yet)
+  useEffect(() => {
+    onSummarized?.([...shown.values()].map((entry) => entry.section));
+  }, [shown, onSummarized]);
+  useEffect(() => (onSummarized === undefined ? undefined : () => onSummarized([])), [onSummarized]);
 
   // Scroll to a requested section once it has been rendered; a section hidden by a summary
   // shows the full text first

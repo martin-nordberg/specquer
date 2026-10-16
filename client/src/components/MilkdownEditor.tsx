@@ -8,7 +8,17 @@ import type { EditorView } from "@milkdown/kit/prose/view";
 import { $prose, $view } from "@milkdown/kit/utils";
 import { useEffect, useRef, useState } from "react";
 import type { SectionStatusLists } from "@specquer/shared/api";
-import { anchorTagSectionId, anchorTagStatus, anchorTagUid, hasConflictMarkers, isAnchorCloseTag, withStatus } from "@specquer/shared/markdown";
+import {
+  type TopPosition,
+  anchorTagSectionId,
+  anchorTagStatus,
+  anchorTagUid,
+  hasConflictMarkers,
+  isAnchorCloseTag,
+  outlineHeadings,
+  withStatus,
+} from "@specquer/shared/markdown";
+import { bodySections } from "@/app/body-sections";
 import { type SectionWithStatus, allowedStatuses, badgeStatus, findSection, hasInvalidOwnStatus, statusLabel, statusesOfBody } from "@/app/section-status";
 import { SectionAttributesDialog, type SectionAttributesTarget } from "@/components/SectionAttributesDialog";
 import { anchorLinesPlugin } from "@/components/anchor-lines";
@@ -100,6 +110,18 @@ function sectionAnchorView(handlers: BadgeHandlers) {
 }
 
 /** The position of a section anchor's open tag in the editor's document: at `pos` if it is still there, else found by ID and UID. */
+/**
+ * The positions of the document's top-level headings, in order. Headings inside lists and block
+ * quotes aren't in the heading outline, so the n-th of these is the outline's n-th heading.
+ */
+function headingPositions(doc: Node): number[] {
+  const positions: number[] = [];
+  doc.forEach((node, offset) => {
+    if (node.type.name === "heading") positions.push(offset);
+  });
+  return positions;
+}
+
 function anchorPosition(view: EditorView, sectionId: string, uid: string | undefined, pos: number | undefined): number | undefined {
   const matches = (node: Node | null | undefined) => {
     if (node?.type.name !== "html") return false;
@@ -173,12 +195,14 @@ export interface MilkdownEditorProps {
   comments?: CommentMarkers;
   /** A request to scroll to a section. */
   scrollTarget?: ScrollTarget;
+  /** Where the view's top is, as it scrolls (Step 012, R7.7; Step 016, R6). */
+  onTopPosition?: (position: TopPosition) => void;
   className?: string;
 }
 
 type MenuState = SectionMenuTarget & { uid: string | undefined; view: EditorView; pos: number | undefined; conflicted: boolean };
 
-export function MilkdownEditor({ value, onChange, statusLists, onStatusMenu, registerFlush, comments, scrollTarget, className }: MilkdownEditorProps) {
+export function MilkdownEditor({ value, onChange, statusLists, onStatusMenu, registerFlush, comments, scrollTarget, onTopPosition, className }: MilkdownEditorProps) {
   const host = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const commentsRef = useRef(comments);
@@ -309,11 +333,10 @@ export function MilkdownEditor({ value, onChange, statusLists, onStatusMenu, reg
     if (view !== null) setCommentMarkers(view, comments ?? null);
   }, [comments, ready]);
 
-  // The section at the top, as the view scrolls, for the Comments pane to follow (R7.7)
-  const onTopSection = comments?.onTopSection;
+  // Where the top is, as the view scrolls: the section, and the heading by its outline path
   useEffect(() => {
     const element = host.current;
-    if (element === null || onTopSection === undefined) return;
+    if (element === null || onTopPosition === undefined) return;
     let frame = 0;
     const report = () => {
       frame = 0;
@@ -321,7 +344,10 @@ export function MilkdownEditor({ value, onChange, statusLists, onStatusMenu, reg
       if (view === null) return;
       const rect = element.getBoundingClientRect();
       const at = view.posAtCoords({ left: rect.left + rect.width / 2, top: rect.top + 8 });
-      onTopSection(at === null ? null : sectionAtPos(view.state.doc, at.pos));
+      if (at === null) return onTopPosition({ uid: null, outlinePath: null });
+      const before = headingPositions(view.state.doc).filter((pos) => pos <= at.pos).length;
+      const paths = outlineHeadings(bodySections(markdown.current).outline);
+      onTopPosition({ uid: sectionAtPos(view.state.doc, at.pos), outlinePath: before === 0 ? null : (paths[before - 1]?.path ?? null) });
     };
     const onScroll = () => {
       if (frame === 0) frame = requestAnimationFrame(report);
@@ -331,15 +357,21 @@ export function MilkdownEditor({ value, onChange, statusLists, onStatusMenu, reg
       element.removeEventListener("scroll", onScroll);
       cancelAnimationFrame(frame);
     };
-  }, [onTopSection]);
+  }, [onTopPosition]);
 
   // Scrolls to a requested section's anchor
   const scrolled = useRef<number | null>(null);
   useEffect(() => {
     const view = viewRef.current;
     const element = host.current;
-    if (scrollTarget === undefined || !("sectionId" in scrollTarget) || view === null || element === null || scrolled.current === scrollTarget.request) return;
-    const pos = anchorPosition(view, scrollTarget.sectionId, scrollTarget.uid, undefined);
+    if (scrollTarget === undefined || view === null || element === null || scrolled.current === scrollTarget.request) return;
+    let pos: number | undefined;
+    if ("sectionId" in scrollTarget) pos = anchorPosition(view, scrollTarget.sectionId, scrollTarget.uid, undefined);
+    else {
+      // A heading by its outline path (Step 016, R5.1)
+      const index = outlineHeadings(bodySections(markdown.current).outline).findIndex((heading) => heading.path === scrollTarget.outlinePath);
+      pos = index < 0 ? undefined : headingPositions(view.state.doc)[index];
+    }
     if (pos === undefined) return;
     scrolled.current = scrollTarget.request;
     const top = view.coordsAtPos(pos).top - element.getBoundingClientRect().top;

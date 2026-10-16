@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import type { CreateOptions, FileView, SectionStatusLists, SummaryStatus, Tree, TreeFolder, TreeNode } from "@specquer/shared/api";
 import type { Citation } from "@specquer/shared/chat";
 import { firstLine, shownBy } from "@specquer/shared/comments";
-import { analyzeBody } from "@specquer/shared/markdown";
+import type { TopPosition } from "@specquer/shared/markdown";
 import { descendantsOf, sectionParents } from "@specquer/shared/sections";
 import { isMarkdownFile, isSameOrInside, renamedPath } from "@specquer/shared/paths";
 import {
@@ -53,6 +53,7 @@ import { appIconSvg, svgDataUri } from "@/theme/logo";
 import { applyTheme, useSystemTheme } from "@/theme/theme";
 import { ChatStore } from "./chat-store";
 import { groupThreads, threadOrder } from "./comment-groups";
+import { bodySections } from "./body-sections";
 import { CommentStore } from "./comment-store";
 import { ACTION_TITLES, type EntryAction, notApplicable } from "./entry-actions";
 import { AUTOSAVE_INTERVAL, DocumentStore, type SaveStatus } from "./document-store";
@@ -453,7 +454,7 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
     (sectionUid: string) => {
       const document = docStore.get().document;
       if (document === null) return;
-      const sections = analyzeBody(document.body).sections;
+      const sections = bodySections(document.body).sections;
       const index = sections.findIndex((found) => found.uid === sectionUid);
       const section = sections[index];
       if (section?.id == null) return;
@@ -472,7 +473,7 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
     const uid = comments.highlight?.uid;
     let next: string[] | null = null;
     if (uid !== undefined && document_ !== null) {
-      const sections = analyzeBody(document_.body).sections;
+      const sections = bodySections(document_.body).sections;
       const index = sections.findIndex((found) => found.uid === uid);
       if (index >= 0) next = [uid, ...descendantsOf(sectionParents(sections), index).flatMap((i) => (sections[i]!.uid === null ? [] : [sections[i]!.uid!]))];
     }
@@ -501,7 +502,7 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
       if (sectionUid === null || document === null || uiStore.get().sidePane !== "comments") return;
       const filter = uiStore.get().commentFilter;
       const withGroups = new Set(commentStore.get().threads.filter((thread) => shownBy(filter, thread.status)).map((thread) => thread.sectionUid));
-      const sections = analyzeBody(document.body).sections;
+      const sections = bodySections(document.body).sections;
       for (let index = sections.findIndex((found) => found.uid === sectionUid); index >= 0; index--) {
         const uid = sections[index]!.uid;
         if (uid !== null && withGroups.has(uid)) return commentStore.follow(uid);
@@ -530,9 +531,11 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
       onPip: showComments,
       onPipHover: pipHover,
       onAddComment: addComment,
-      onTopSection: followSection,
     };
-  }, [comments.loaded, comments.path, comments.threads, comments.available, comments.unusable, currentPath, ui.commentFilter, highlight, flash, showComments, pipHover, addComment, followSection]);
+  }, [comments.loaded, comments.path, comments.threads, comments.available, comments.unusable, currentPath, ui.commentFilter, highlight, flash, showComments, pipHover, addComment]);
+  // Where the file pane's top is, reported by the views while a pane follows it (Step 016, plan §4.3)
+  const onTopPosition = useCallback((position: TopPosition) => followSection(position.uid), [followSection]);
+  const following = ui.sidePane === "comments" || ui.sidePane === "outline";
 
   // F8 and Shift+F8: the next and previous thread the filter shows, across the document (R8)
   const lastThread = useRef<string | null>(null);
@@ -708,6 +711,7 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
             summaries={summaries}
             registerFlush={docStore.addFlusher}
             comments={commentMarkers}
+            {...(following ? { onTopPosition } : {})}
           />
         </div>
         <ConflictDialog
