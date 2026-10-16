@@ -31,6 +31,17 @@ test("the split view's preview follows the text", async ({ page }) => {
   await expect(page.getByTestId("preview").getByRole("heading", { name: "Fresh heading" })).toBeVisible();
 });
 
+test("fenced code with a language is highlighted in the preview (Step 014, R4.3)", async ({ page }) => {
+  await openFile(page, "b.md");
+  await view(page, "Split").click();
+  await typeAtEnd(contentEditor(page), "\n\n```ts\nconst answer: number = 42;\n```\n");
+  const keyword = page.getByTestId("preview").locator("pre code.hljs .hljs-keyword", { hasText: "const" });
+  await expect(keyword).toBeVisible();
+  // In the palette's keyword color, not the text color
+  const [color, text] = await keyword.evaluate((el) => [getComputedStyle(el).color, getComputedStyle(el.closest("pre")!).color]);
+  expect(color).not.toBe(text);
+});
+
 test("the view type is remembered per file, also after a reload", async ({ page }) => {
   await openFile(page, "docs", "a.md");
   await view(page, "Preview").click();

@@ -80,6 +80,34 @@
   & img { @apply max-w-full; }
 }
 
+/* Highlighted code (Step 014, R4): highlight.js's classes, in the palette's token colors */
+.markdown {
+  & .hljs-keyword, & .hljs-selector-tag, & .hljs-doctag, & .hljs-name, & .hljs-template-tag { color: var(--code-keyword); }
+  & .hljs-string, & .hljs-regexp, & .hljs-char { color: var(--code-string); }
+  & .hljs-number, & .hljs-literal, & .hljs-symbol, & .hljs-bullet { color: var(--code-number); }
+  & .hljs-comment, & .hljs-quote { color: var(--code-comment); font-style: italic; }
+  & .hljs-title, & .hljs-section, & .hljs-selector-id, & .hljs-selector-class { color: var(--code-title); }
+  & .hljs-type, & .hljs-built_in { color: var(--code-type); }
+  & .hljs-attr, & .hljs-attribute, & .hljs-property, & .hljs-selector-attr, & .hljs-selector-pseudo { color: var(--code-attribute); }
+  & .hljs-meta { color: var(--code-meta); }
+  & .hljs-variable, & .hljs-template-variable, & .hljs-subst { color: var(--code-variable); }
+  & .hljs-addition { color: var(--code-addition); }
+  & .hljs-deletion { color: var(--code-deletion); }
+  & .hljs-emphasis { font-style: italic; }
+  & .hljs-strong { font-weight: 600; }
+  & .hljs-link { text-decoration: underline; }
+}
+
+/* A text file as a code block, with its line numbers (Step 014, R3.2) */
+.markdown .code-file {
+  @apply bg-muted relative my-0 flex min-h-full overflow-x-auto rounded-md font-mono text-[0.9em] leading-relaxed;
+  & pre { @apply my-0 rounded-none bg-transparent py-3; }
+  & .code-gutter {
+    @apply text-muted-foreground bg-muted sticky left-0 shrink-0 pr-3 pl-3 text-right select-none;
+  }
+  & .code-text { @apply flex-1 overflow-visible pr-3; }
+}
+
 /* Milkdown (ProseMirror) */
 .milkdown .ProseMirror {
   @apply min-h-full px-6 py-4 outline-none;

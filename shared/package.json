@@ -5,6 +5,8 @@
   "dependencies": {
     "@hono/zod-validator": "^0.9.1",
     "hono": "^4.13.9",
+    "lowlight": "^3.3.0",
+    "rehype-highlight": "^7.0.2",
     "rehype-raw": "^7.0.0",
     "rehype-sanitize": "^6.0.0",
     "remark-frontmatter": "^5.0.0",
@@ -28,6 +30,7 @@
     "./summaries": "./src/summaries/index.ts",
     "./settings": "./src/settings/index.ts",
     "./chat": "./src/chat/index.ts",
-    "./comments": "./src/comments/index.ts"
+    "./comments": "./src/comments/index.ts",
+    "./highlight": "./src/markdown/highlight.ts"
   }
 }

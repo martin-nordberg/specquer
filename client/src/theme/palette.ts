@@ -24,6 +24,29 @@ export const baseColors = {
 export type BaseColors = typeof baseColors;
 
 /**
+ * The highlighted code's token colors in light mode (Step 014, R4.5); dark mode lightens them.
+ * Both are nudged to WCAG AA against the code block's background (`muted`).
+ */
+export const baseCodeColors = {
+  keyword: "#cf222e",
+  string: "#0a3069",
+  number: "#0550ae",
+  comment: "#6e7781",
+  /** Functions, classes and headings */
+  title: "#8250df",
+  /** Types and built-ins */
+  type: "#953800",
+  attribute: "#116329",
+  meta: "#57606a",
+  variable: "#9a3412",
+  addition: "#116329",
+  deletion: "#82071e",
+};
+
+export const codeTokens = Object.keys(baseCodeColors) as Array<keyof typeof baseCodeColors>;
+export type CodeToken = (typeof codeTokens)[number];
+
+/**
  * The logo's own colors (the favicon and the app icon). Its tile, page and § use
  * `baseColors.navigation` and `baseColors.background`; these are the pencil's.
  */
@@ -67,6 +90,8 @@ export interface ModeColors {
   commentHighlight: string;
   /** Each fill with the text color chosen for it. */
   fills: Record<FillRole, { fill: string; text: string }>;
+  /** Highlighted code's token colors, on `muted`; line numbers use `mutedForeground`. */
+  code: Record<CodeToken, string>;
 }
 
 export interface Palette {
@@ -122,16 +147,24 @@ function modeColors(
   foreground: string,
   fillOverrides: Partial<Record<FillRole, string>> = {},
   folder: string = base.folder,
+  codeLightness?: number,
 ): ModeColors {
   const [lightText, darkText] = toOklch(background).l > toOklch(foreground).l ? [background, foreground] : [foreground, background];
   const fills = Object.fromEntries(
     fillRoles.map((role) => [role, fillWithText(fillOverrides[role] ?? base[role], lightText, darkText)]),
   ) as ModeColors["fills"];
-  const mutedForeground = nudgeForContrast(mix(background, foreground, 0.6), mix(background, foreground, 0.06));
+  const muted = mix(background, foreground, 0.06);
+  const mutedForeground = nudgeForContrast(mix(background, foreground, 0.6), muted);
+  const code = Object.fromEntries(
+    codeTokens.map((token) => {
+      const color = codeLightness === undefined ? baseCodeColors[token] : withLightness(baseCodeColors[token], codeLightness);
+      return [token, nudgeForContrast(color, muted)];
+    }),
+  ) as ModeColors["code"];
   return {
     background,
     foreground,
-    muted: mix(background, foreground, 0.06),
+    muted,
     mutedForeground,
     border: mix(background, foreground, 0.18),
     errorText: nudgeForContrast(base.error, background),
@@ -139,6 +172,7 @@ function modeColors(
     // Secondary text (section IDs) sits on it too, and contrasts less than the text
     commentHighlight: nudgeForContrast(mix(background, base.secondary, 0.22), mutedForeground),
     fills,
+    code,
   };
 }
 
@@ -151,7 +185,14 @@ export function derivePalette(base: BaseColors = baseColors): Palette {
   return {
     light: modeColors(base, base.background, base.text),
     // A darker sepia, so folders don't glow against the dark background
-    dark: modeColors(base, darkBackground, darkForeground, { navigation: withLightness(base.navigation, 0.3) }, withLightness(base.folder, 0.45, 0.7)),
+    dark: modeColors(
+      base,
+      darkBackground,
+      darkForeground,
+      { navigation: withLightness(base.navigation, 0.3) },
+      withLightness(base.folder, 0.45, 0.7),
+      0.8,
+    ),
   };
 }
 
@@ -181,6 +222,7 @@ export function cssVariables(colors: ModeColors): Record<string, string> {
     vars[`--${role}`] = colors.fills[role].fill;
     vars[`--${role}-foreground`] = colors.fills[role].text;
   }
+  for (const token of codeTokens) vars[`--code-${token}`] = colors.code[token];
   return vars;
 }
 

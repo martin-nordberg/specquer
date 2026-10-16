@@ -5,8 +5,9 @@ import remarkFrontmatter from "remark-frontmatter";
 import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
-import { unified } from "unified";
+import { type Pluggable, unified } from "unified";
 import { isSectionId } from "../sections/ids.ts";
+import { hasLongLine } from "./languages.ts";
 
 /**
  * The preview pipeline: Markdown text in, a sanitized HTML syntax tree (hast) out.
@@ -15,6 +16,9 @@ import { isSectionId } from "../sections/ids.ts";
  * server. Raw HTML in the Markdown is parsed (rehype-raw) and then sanitized with a strict list
  * of allowed tags and attributes (decision D15).
  */
+
+/** highlight.js's class names: `hljs-keyword`, and the modifiers in `hljs-title class_`. */
+const HLJS_CLASS = /^(hljs-[\w-]+|[a-z]+_+)$/;
 
 /** The prefix the sanitizer adds to `id` and `name` attributes against DOM clobbering. */
 export const CLOBBER_PREFIX = "user-content-";
@@ -31,7 +35,10 @@ export const sanitizeSchema: SanitizeSchema = {
   attributes: {
     ...defaultAttributes,
     a: [...(defaultAttributes.a ?? []), "data*"],
-    span: [...(defaultAttributes.span ?? []), "data*"],
+    // Highlighted code (Step 014, R4.4): highlight.js's class names, which may also come from raw
+    // HTML, where they only color text
+    code: [["className", /^language-./, "hljs"]],
+    span: [...(defaultAttributes.span ?? []), "data*", ["className", HLJS_CLASS]],
   },
 };
 
@@ -154,20 +161,74 @@ function rehypeSectionAnchors() {
   };
 }
 
-const processor = unified()
-  .use(remarkParse)
-  .use(remarkFrontmatter, ["yaml"])
-  .use(remarkGfm)
-  // Front matter is edited separately and isn't part of the preview
-  .use(remarkRehype, { allowDangerousHtml: true, handlers: { yaml: () => undefined } })
-  .use(rehypeRaw)
-  .use(rehypeSanitize, sanitizeSchema)
-  .use(rehypePrefixFragmentLinks)
-  .use(rehypeDropSectionAnchorMarks)
-  .use(rehypeSectionAnchors)
-  .freeze();
+/**
+ * The preview pipeline. `highlight`, a rehype plugin, highlights code blocks (Step 014, R4); it
+ * runs before the sanitizer, so what it produces is sanitized too. The grammars come from
+ * `@specquer/shared/highlight`, which only the preview worker imports, so they stay out of the
+ * main bundle.
+ */
+export function createPreviewProcessor(options: { highlight?: Pluggable } = {}) {
+  return unified()
+    .use(remarkParse)
+    .use(remarkFrontmatter, ["yaml"])
+    .use(remarkGfm)
+    // Front matter is edited separately and isn't part of the preview
+    .use(remarkRehype, { allowDangerousHtml: true, handlers: { yaml: () => undefined } })
+    .use(rehypeRaw)
+    .use(options.highlight === undefined ? [] : [options.highlight])
+    .use(rehypeSanitize, sanitizeSchema)
+    .use(rehypePrefixFragmentLinks)
+    .use(rehypeDropSectionAnchorMarks)
+    .use(rehypeSectionAnchors)
+    .freeze();
+}
 
-/** Turns Markdown text into a sanitized HTML syntax tree. */
+const processor = createPreviewProcessor();
+
+/** Turns Markdown text into a sanitized HTML syntax tree, without highlighting. */
 export function markdownToHast(markdown: string): Root {
   return processor.runSync(processor.parse(markdown)) as Root;
+}
+
+const sanitizer = unified().use(rehypeSanitize, sanitizeSchema).freeze();
+
+/** Highlights a text file's code: its highlighted children, or `undefined` to show it plain. */
+export type CodeHighlighter = (language: string, text: string) => ElementContent[] | undefined;
+
+/**
+ * A text file shown as a code block, as Markdown's preview would show the file in one fenced
+ * block (Step 014, R3.2), with a gutter of line numbers. The text is never parsed as Markdown:
+ * the tree is built from it directly, so nothing in it can end the block or add HTML. `highlight`
+ * colors it when a language is given; code with a long line stays plain (R3.9).
+ */
+export function codeFileToHast(text: string, language: string | undefined, highlight?: CodeHighlighter): Root {
+  // Shown with `\n` line endings; as in a fenced block, a final line break ends the last line
+  // rather than starting another
+  const lf = text.replace(/\r\n?/g, "\n");
+  const code = lf.endsWith("\n") ? lf.slice(0, -1) : lf;
+  const lines = code.split("\n").length;
+  const highlighted = language === undefined || hasLongLine(code) ? undefined : highlight?.(language, code);
+  const codeElement: Element = {
+    type: "element",
+    tagName: "code",
+    properties: { className: language === undefined ? [] : ["hljs", `language-${language}`] },
+    children: highlighted ?? [{ type: "text", value: code }],
+  };
+  // The sanitizer checks what the highlighter produced
+  const safe = sanitizer.runSync({ type: "root", children: [codeElement] }) as Root;
+  const gutter = Array.from({ length: lines }, (_, i) => String(i + 1)).join("\n");
+  return {
+    type: "root",
+    children: [
+      {
+        type: "element",
+        tagName: "div",
+        properties: { className: ["code-file"] },
+        children: [
+          { type: "element", tagName: "pre", properties: { className: ["code-gutter"], ariaHidden: "true" }, children: [{ type: "text", value: gutter }] },
+          { type: "element", tagName: "pre", properties: { className: ["code-text"] }, children: safe.children as ElementContent[] },
+        ],
+      },
+    ],
+  };
 }

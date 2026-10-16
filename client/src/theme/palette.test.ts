@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { wcagContrast } from "culori";
-import { MIN_CONTRAST, MIN_GRAPHIC_CONTRAST, baseColors, derivePalette, fillRoles, paletteStylesheet } from "./palette.ts";
+import { MIN_CONTRAST, MIN_GRAPHIC_CONTRAST, baseColors, codeTokens, derivePalette, fillRoles, paletteStylesheet } from "./palette.ts";
 
 const palette = derivePalette();
 
@@ -17,6 +17,10 @@ describe.each(["light", "dark"] as const)("%s mode", (mode) => {
     expect(wcagContrast(colors.mutedForeground, colors.background)).toBeGreaterThanOrEqual(MIN_CONTRAST);
     expect(wcagContrast(colors.mutedForeground, colors.muted)).toBeGreaterThanOrEqual(MIN_CONTRAST);
     expect(wcagContrast(colors.errorText, colors.background)).toBeGreaterThanOrEqual(MIN_CONTRAST);
+  });
+
+  test.each([...codeTokens])("the %s token color on the code block passes WCAG AA", (token) => {
+    expect(wcagContrast(colors.code[token], colors.muted)).toBeGreaterThanOrEqual(MIN_CONTRAST);
   });
 
   test("text and secondary text on the comment highlight pass WCAG AA", () => {
