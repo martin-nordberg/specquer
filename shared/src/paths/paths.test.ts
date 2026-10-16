@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import {
   checkName,
   checkPath,
+  checkViewPath,
+  hiddenPath,
   entryNameSchema,
   isMarkdownFile,
   isSameOrInside,
@@ -9,6 +11,7 @@ import {
   parentPath,
   relativePath,
   renamedPath,
+  viewPathSchema,
 } from "./paths.ts";
 
 describe("checkPath", () => {
@@ -69,4 +72,25 @@ test("relativePath", () => {
   expect(relativePath("c.md", "a/d.md")).toBe("a/d.md");
   expect(relativePath("a/b/c.md", "d.md")).toBe("../../d.md");
   expect(relativePath("a/c.md", "a/b/d.md")).toBe("b/d.md");
+});
+
+describe("viewing paths (Step 014)", () => {
+  test("checkViewPath accepts the root's .specquer/shared/ only", () => {
+    expect(checkViewPath(".specquer/shared/REQ/sections.yaml")).toEqual({ ok: true, path: ".specquer/shared/REQ/sections.yaml" });
+    expect(checkViewPath("./src//index.ts")).toEqual({ ok: true, path: "src/index.ts" });
+    for (const path of [".specquer/user/instance.json", ".specquer/cache/search.db", ".SPECQUER/shared/x.yaml", ".specquer/Shared/x.yaml", ".specquer/shared", "docs/.specquer/shared/x.yaml", ".specquer/shared/../user/x", ".git/config"]) {
+      expect([path, checkViewPath(path).ok]).toEqual([path, false]);
+    }
+    expect(viewPathSchema.safeParse(".specquer/shared/agent.config.yaml").success).toBe(true);
+    expect(viewPathSchema.safeParse(".specquer/user/approvals.yaml").success).toBe(false);
+  });
+
+  test("hiddenPath hides node_modules, .git and all of .specquer but the root's shared folder", () => {
+    for (const path of ["node_modules/x/index.js", "web/node_modules/y.js", "NODE_MODULES/z", ".git/config", ".specquer/user/instance.json", ".specquer/cache/summaries.db", "docs/.specquer/shared/x.yaml", ".SPECQUER/shared/x.yaml"]) {
+      expect([path, hiddenPath(path)]).toEqual([path, true]);
+    }
+    for (const path of ["src/index.ts", ".github/workflows/docs.yml", ".specquer", ".specquer/shared", ".specquer/shared/REQ/sections.yaml", "node_modules.md"]) {
+      expect([path, hiddenPath(path)]).toEqual([path, false]);
+    }
+  });
 });

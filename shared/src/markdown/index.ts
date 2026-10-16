@@ -5,3 +5,4 @@ export * from "./outline.ts";
 export * from "./summary-tree.ts";
 export * from "./answer.ts";
 export * from "./comment.ts";
+export * from "./languages.ts";

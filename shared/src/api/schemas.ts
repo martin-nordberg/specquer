@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { entryNameSchema, entryPathSchema, markdownPathSchema, workspacePathSchema } from "../paths/paths.ts";
+import { entryNameSchema, entryPathSchema, markdownPathSchema, viewPathSchema, workspacePathSchema } from "../paths/paths.ts";
 import { SECTION_ID_PATTERN } from "../sections/ids.ts";
 import {
   type ChatConfig,
@@ -49,6 +49,18 @@ export interface FileContent {
   /** A hash of the file's content; saves send it back to detect changes made on disk. */
   version: string;
 }
+
+/** Text files and images larger than this aren't shown (Step 014, R3.8, R5.6). */
+export const MAX_VIEW_BYTES = 5 * 1024 * 1024;
+
+/**
+ * A file other than Markdown, as `GET /api/view` returns it (Step 014): its text, or that it is
+ * an image (fetched from `GET /api/image`), or why it can't be shown. `size` is in bytes.
+ */
+export type FileView =
+  | { kind: "text"; path: string; text: string; size: number; version: string }
+  | { kind: "image"; path: string; size: number; version: string }
+  | { kind: "other"; path: string; size: number; reason: "binary" | "not_utf8" | "too_large" };
 
 export interface DeletePreview {
   path: string;
@@ -170,6 +182,9 @@ export interface ApiErrorBody {
 }
 
 export const fileQuerySchema = z.object({ path: markdownPathSchema });
+
+/** A file to view: any path the tree may show, `.specquer/shared/` included. */
+export const viewQuerySchema = z.object({ path: viewPathSchema });
 
 export const entryQuerySchema = z.object({ path: entryPathSchema });
 

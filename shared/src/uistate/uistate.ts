@@ -31,6 +31,10 @@ export const themeSchema = z.enum(["light", "dark"]);
 /** What the third pane shows: AI Chat, Comments, or nothing (`null`) (Step 012, R1.3). */
 export const sidePaneSchema = z.enum(["chat", "comments"]);
 export type SidePane = z.infer<typeof sidePaneSchema>;
+
+/** What the folder pane shows: Markdown files (`specs`) or every file (`all`) (Step 014, R1). */
+export const treeViewSchema = z.enum(["specs", "all"]);
+export type TreeView = z.infer<typeof treeViewSchema>;
 export type Theme = z.infer<typeof themeSchema>;
 
 export const fileUiStateSchema = z.object({
@@ -76,6 +80,8 @@ export const uiStateSchema = z.object({
     .catch(DEFAULT_CHAT_PANE_FRACTION),
   /** Which comment threads the pane, the pips and F8 show. */
   commentFilter: commentFilterSchema.catch("open"),
+  /** The folder pane's view; both views share the expanded folders. */
+  treeView: treeViewSchema.catch("specs"),
   expandedFolders: pathListSchema.catch([]),
   /** Most recent first, excluding the current file. */
   recentFiles: pathListSchema.transform((paths) => paths.slice(0, MAX_RECENT_FILES)).catch([]),
@@ -103,6 +109,7 @@ export const uiStatePatchSchema = z
     chatPaneFraction: z.number().min(MIN_CHAT_PANE_FRACTION).max(MAX_CHAT_PANE_FRACTION),
     commentsPaneFraction: z.number().min(MIN_CHAT_PANE_FRACTION).max(MAX_CHAT_PANE_FRACTION),
     commentFilter: commentFilterSchema,
+    treeView: treeViewSchema,
     expandedFolders: z.array(z.string()),
     recentFiles: z.array(z.string()).max(MAX_RECENT_FILES),
     currentFile: z.string().nullable(),
@@ -119,6 +126,7 @@ export function defaultUiState(): UiState {
     chatPaneFraction: DEFAULT_CHAT_PANE_FRACTION,
     commentsPaneFraction: DEFAULT_CHAT_PANE_FRACTION,
     commentFilter: "open",
+    treeView: "specs",
     expandedFolders: [],
     recentFiles: [],
     files: {},
@@ -154,6 +162,7 @@ export function diffUiState(from: UiState, to: UiState): UiStatePatch {
   if (from.chatPaneFraction !== to.chatPaneFraction) patch.chatPaneFraction = to.chatPaneFraction;
   if (from.commentsPaneFraction !== to.commentsPaneFraction) patch.commentsPaneFraction = to.commentsPaneFraction;
   if (from.commentFilter !== to.commentFilter) patch.commentFilter = to.commentFilter;
+  if (from.treeView !== to.treeView) patch.treeView = to.treeView;
   if (!same(from.expandedFolders, to.expandedFolders)) patch.expandedFolders = to.expandedFolders;
   if (!same(from.recentFiles, to.recentFiles)) patch.recentFiles = to.recentFiles;
   if (from.currentFile !== to.currentFile) patch.currentFile = to.currentFile ?? null;
@@ -246,6 +255,10 @@ export function setCommentsPaneFraction(state: UiState, fraction: number): UiSta
 
 export function setCommentFilter(state: UiState, filter: CommentFilter): UiState {
   return state.commentFilter === filter ? state : { ...state, commentFilter: filter };
+}
+
+export function setTreeView(state: UiState, treeView: TreeView): UiState {
+  return state.treeView === treeView ? state : { ...state, treeView };
 }
 
 /**

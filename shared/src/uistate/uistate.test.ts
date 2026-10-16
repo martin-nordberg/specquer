@@ -19,6 +19,7 @@ import {
   setFolderExpanded,
   setSummaryStop,
   setTreePaneFraction,
+  setTreeView,
   setViewType,
   summaryStopOf,
 } from "./uistate.ts";
@@ -27,6 +28,15 @@ describe("parseUiState", () => {
   test("defaults for missing or invalid content", () => {
     expect(parseUiState(undefined)).toEqual(defaultUiState());
     expect(parseUiState("garbage")).toEqual(defaultUiState());
+  });
+
+  test("the folder pane's view defaults to specs, and an invalid one becomes specs (Step 014)", () => {
+    expect(defaultUiState().treeView).toBe("specs");
+    expect(parseUiState({ treeView: "all" }).treeView).toBe("all");
+    expect(parseUiState({ treeView: "everything" }).treeView).toBe("specs");
+    const state = setTreeView(defaultUiState(), "all");
+    expect(diffUiState(defaultUiState(), state)).toEqual({ treeView: "all" });
+    expect(applyUiStatePatch(defaultUiState(), { treeView: "all" }).treeView).toBe("all");
   });
 
   test("keeps valid fields and replaces invalid ones", () => {

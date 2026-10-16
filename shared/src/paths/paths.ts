@@ -58,6 +58,39 @@ export function checkPath(path: string): PathCheck {
   return { ok: true, path: segments.join("/") };
 }
 
+/** The folder of Specquer's committed data, the one part of `.specquer` that can be viewed. */
+export const SHARED_DATA_FOLDER = ".specquer/shared";
+
+/**
+ * Like `checkPath`, but also accepts paths inside the root's `.specquer/shared/` (exactly that
+ * case), for the routes that only show files (Step 014, R2.2). Every route that writes, renames
+ * or deletes keeps `checkPath`, so `.specquer` stays out of their reach.
+ */
+export function checkViewPath(path: string): PathCheck {
+  const segments = path.split("/").filter((s) => s !== "" && s !== ".");
+  if (segments.length > 2 && segments[0] === ".specquer" && segments[1] === "shared") {
+    const rest = checkPath(segments.slice(2).join("/"));
+    return rest.ok ? { ok: true, path: `${SHARED_DATA_FOLDER}/${rest.path}` } : rest;
+  }
+  return checkPath(path);
+}
+
+/**
+ * Whether the All Files view leaves a path out whatever `.gitignore` says (Step 014, R2.1):
+ * anything in a `node_modules` folder or in `.git`, and everything in `.specquer` except the
+ * root's `.specquer/shared/` (the session's token is in `.specquer/user/`; a nested `.specquer`
+ * belongs to another Specquer).
+ */
+export function hiddenPath(path: string): boolean {
+  const segments = pathSegments(path);
+  return segments.some((segment, i) => {
+    const lower = segment.toLowerCase();
+    if (lower === "node_modules" || lower === ".git") return true;
+    if (lower !== ".specquer") return false;
+    return !(i === 0 && segment === ".specquer" && (segments.length === 1 || segments[1] === "shared"));
+  });
+}
+
 /** Normalizes a path, throwing if it is invalid. */
 export function normalizePath(path: string): string {
   const check = checkPath(path);
@@ -129,6 +162,16 @@ export const workspacePathSchema = z.string().transform((value, ctx) => {
 /** A workspace path that must name a Markdown file. */
 export const markdownPathSchema = workspacePathSchema.refine(isMarkdownFile, {
   message: "Only Markdown (.md) files can be opened.",
+});
+
+/** A workspace path for the routes that only show files, which may be in `.specquer/shared/`. */
+export const viewPathSchema = z.string().transform((value, ctx) => {
+  const check = checkViewPath(value);
+  if (!check.ok) {
+    ctx.addIssue({ code: "custom", message: check.reason });
+    return z.NEVER;
+  }
+  return check.path;
 });
 
 /** A workspace path that must not be the root folder. */
