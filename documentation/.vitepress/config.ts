@@ -153,6 +153,13 @@ export default defineConfig({
                       {text: 'Requirements', link: '/work-items/step-014-all-files/requirements'},
                       {text: 'Implementation Plan', link: '/work-items/step-014-all-files/implementation-plan'},
                     ]
+                  },
+                  {
+                    text: '015-Folder Menu',
+                    collapsed: false,
+                    items: [
+                      {text: 'Task and Plan', link: '/work-items/step-015-folder-menu/task'},
+                    ]
                   }
                 ]
               }
