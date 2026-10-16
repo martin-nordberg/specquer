@@ -139,18 +139,17 @@ Step 014 takes precedence over the specifications and earlier steps where they c
 <a id="WORK-00580" data-uid="hn1vsz1nwb90"></a>
 ### R7. Server
 
-1. **Tree:** `GET /api/tree?view=all` returns the **All Files** tree, and `GET /api/tree` (or `view=specs`) the **Specs** tree, both from the shared listing (R9) under the exclusions of R2.1. Their limits and truncation are those of Server Requirements §3 item 5.
-2. **Reading:** `GET /api/file` reads any existing file that the **All Files** tree would list and that is UTF-8 text without NUL bytes.
-   - **Refused:** a file R2.1 hides (ignored by `.gitignore`, in `node_modules`, `.git`, `.specquer/user/` or `.specquer/cache/`) answers `404`, as if it didn't exist. A file that isn't UTF-8, or holds a NUL byte, answers `415`. A text file other than Markdown over 5 MB answers `413` with its size.
-   - **Kind:** the response says whether the file is Markdown or text, so the client knows how to show it.
+1. **Tree:** `GET /api/tree` returns both trees, `{ specs, all }`, built from the shared listing (R9) under the exclusions of R2.1, so switching views needs no request (R1.7). Their limits and truncation are those of Server Requirements §3 item 5.
+2. **Reading:** `GET /api/file` stays Markdown-only. `GET /api/view?path=` returns any other file that the **All Files** tree would list: its text, if it is UTF-8 without NUL bytes and at most 5 MB, that it is an image, or why it can't be shown (`binary`, `not_utf8`, `too_large`).
+   - **Refused:** a file R2.1 hides (ignored by `.gitignore`, in `node_modules`, `.git`, `.specquer/user/` or `.specquer/cache/`) answers `404`, as if it didn't exist. A Markdown path answers `400`.
 3. **Images:** `GET /api/image?path=` returns the bytes of an existing listed file whose extension is one of R5's, at most 5 MB.
    - **Content-Type:** set from the extension, never sniffed.
    - **Headers:** see R8.3.
    - **Other files:** a request for any other file answers `415`, one over the limit `413`, and a hidden one `404`.
    - **Confinement and authentication:** the path is confined and the session is checked like every route.
 4. **Writing, renaming and deleting are unchanged:**
-   - `PUT /api/file` writes only existing `.md` files, as today (Server Requirements §4 item 2). Any other file answers `403`.
-   - `POST /api/rename` and `DELETE /api/entry` act on folders and `.md` files. Any other file answers `403`, with a message that Specquer changes only Markdown files.
+   - `PUT /api/file` writes only existing `.md` files, as today (Server Requirements §4 item 2). Any other path fails validation (`400`).
+   - `POST /api/rename` and `DELETE /api/entry` act on folders and `.md` files. Any other file answers `400`, as renaming already did, with a message that Specquer changes only Markdown files.
    - A document's sidecar is still renamed and deleted with its document (Step 012).
 5. **Size:** the file-size check happens before a file is read, so a large file is never loaded into memory to be refused.
 6. **The model:** nothing in this step sends file contents anywhere but the browser (R3.6).
@@ -168,7 +167,7 @@ Step 014 takes precedence over the specifications and earlier steps where they c
    - `X-Content-Type-Options: nosniff`;
    - `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; sandbox`;
    - `Content-Disposition: inline`;
-   - `Cache-Control: no-cache` with an `ETag` of the file's version, so the browser revalidates rather than downloading again.
+   - `Cache-Control: no-cache` with a weak `ETag` from the file's modification time and size, so the browser revalidates rather than downloading again, and a revalidation reads nothing.
 
    An SVG opened directly at its URL therefore can't run scripts in Specquer's origin. The page's own CSP (`img-src 'self'`) already allows these images.
 4. **`.specquer/shared/`** exposes nothing new: those files are committed.
@@ -184,8 +183,8 @@ This fixes the code review's P1 ([Code Review](/work-items/step-013-code-review/
    - a tree load always lists again, so changes made outside Specquer show on reload, as today;
    - the section scan, the chat index, pre-filling and the read checks reuse a listing for at most 2 seconds.
 3. **Fewer file-system calls:** tracked files deleted from disk are found with Git (`git ls-files --deleted`) rather than a `stat` of every listed file. Where `stat` is still needed, the calls run with bounded parallelism.
-4. **Saves don't list:** a save of a sectioned file that is already indexed reconciles that file without listing the files again. The full scan stays with tree loads and the operations that issue IDs across files (Server Requirements §7).
-5. **Measured:** a test counts the listings. One tree load lists once, a save of an indexed file lists not at all, and switching views lists not at all.
+4. **Saves still list.** A save that reused an older listing could issue an ID that an agent had just written into another file, or drop from the data files the sections of a file pulled in meanwhile. So every operation that writes the data files (a save, a create, a rename, a delete, renumbering, **Add section anchors**) lists again; only scans and lookups reuse a listing. Without the `stat` of each file, a listing costs far less than before.
+5. **Measured:** a test counts the listings. One tree load lists once for the tree, the scan, the chat index and pre-filling; a save lists once; switching views lists not at all.
 
 <a id="WORK-00582" data-uid="g5olmd35tyez"></a>
 ### R10. Tests
@@ -198,9 +197,9 @@ This fixes the code review's P1 ([Code Review](/work-items/step-013-code-review/
    - fenced code in Markdown: highlighted by a grammar's name and by an alias, in any case; plain for no info string, an unknown language, indented code and long lines;
    - the sanitizer keeping `hljs-*` classes and dropping anything else.
 2. **Server:**
-   - the `view=all` listing in and outside a Git work tree, with `.gitignore` rules, nested `node_modules`, `.specquer/shared/` listed, and `.specquer/user/` and `.specquer/cache/` never listed;
+   - the **All Files** listing in and outside a Git work tree, with `.gitignore` rules, nested `node_modules`, `.specquer/shared/` listed, and `.specquer/user/` and `.specquer/cache/` never listed;
    - reading a text file with CRLF line endings and a byte-order mark;
-   - refusals: a hidden file (`404`), non-UTF-8 and NUL bytes (`415`), over 5 MB (`413`), and writing, renaming or deleting a file other than Markdown (`403`);
+   - refusals: a hidden file (`404`), and renaming or deleting a file other than Markdown (`400`); what `GET /api/view` says of non-UTF-8, NUL bytes and over 5 MB;
    - the image route's headers, `ETag`, size limit and refusal of other types;
    - the listing counts of R9.5.
 3. **Components:**
@@ -287,7 +286,7 @@ The tree can't tell text from other files without reading them. It shows the tex
   - a new section for the text view with its line numbers, and the image and placeholder views;
   - §6: highlighting fenced code in the Preview and Split views.
 - **Server Requirements:**
-  - §3: the shared listing, the exclusions and `view=all`;
+  - §3: the shared listing, the exclusions and both views;
   - §4: reading text files, refusing hidden files, the image route, Markdown-only rename and delete, the 5 MB limits.
 - **Security:**
   - §5: what can be read, hidden files unreadable;

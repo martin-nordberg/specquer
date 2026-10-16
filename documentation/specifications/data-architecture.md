@@ -46,6 +46,8 @@ checkYaml(frontmatter: string): Array<{ message: string; line?: number }>
 
 ```ts
 markdownToHast(markdown: string): Root   // hast, the HTML syntax tree
+createPreviewProcessor({ highlight? })   // the same pipeline, with a highlighting plugin
+codeFileToHast(text, language?, highlight?): Root   // a text file as one code block with line numbers (Step 014)
 ```
 
 The pipeline is a frozen unified processor (decision D3):
@@ -57,12 +59,14 @@ The pipeline is a frozen unified processor (decision D3):
 | 3 | `remark-gfm` | Tables, task lists, strikethrough, autolinks, footnotes |
 | 4 | `remark-rehype` (`allowDangerousHtml`) | mdast to hast; front matter is dropped |
 | 5 | `rehype-raw` | Parse raw HTML into real elements |
+| 5a | `rehypeCodeHighlight` (in the worker only) | Highlight fenced code with a language: `rehype-highlight` with `lowlight`'s `common` grammars, the language lowercased, blocks with a line over 10,000 characters left plain (Step 014) |
 | 6 | `rehype-sanitize` | Remove anything not allowed (decision D15) |
 | 7 | Fragment links | Rewrite `#id` links to `#user-content-id` |
 | 8 | Section anchors | Mark the top-level section anchors (`data-section-anchor`, with the section's kind) and move a heading's anchor into the heading, so the preview can show badges |
 
-- **Sanitize schema:** GitHub's default schema, plus `data-*` attributes on `a` and `span` for traceability anchors (`<a name="r7k2" data-status="draft"></a>`). `id` and `name` values get the `user-content-` prefix against DOM clobbering, so step 7 rewrites in-page links to match. See [Security](security.md) §6.
-- **Where it runs:** in the client's Web Worker (`client/src/preview/preview-worker.ts`), which returns the hast tree; the main thread renders it with `hast-util-to-jsx-runtime` and a component map. The map's `a` component opens links to other workspace `.md` files in Specquer, and renders a marked section anchor as the anchor followed by a badge. If the worker can't start, the client calls `markdownToHast` on the main thread.
+- **Sanitize schema:** GitHub's default schema, plus `data-*` attributes on `a` and `span` for traceability anchors (`<a name="r7k2" data-status="draft"></a>`), and highlight.js's class names on `code` and `span`. `id` and `name` values get the `user-content-` prefix against DOM clobbering, so step 7 rewrites in-page links to match. See [Security](security.md) §6.
+- **Where it runs:** in the client's Web Worker (`client/src/preview/preview-worker.ts`), which returns the hast tree; the main thread renders it with `hast-util-to-jsx-runtime` and a component map. The map's `a` component opens links to other workspace `.md` files in Specquer, and renders a marked section anchor as the anchor followed by a badge. If the worker can't start, the client calls `markdownToHast` on the main thread, without highlighting.
+- **Highlighting** lives in `@specquer/shared/highlight` (`shared/src/markdown/highlight.ts`), which only the worker imports, so the grammars stay out of the main bundle. The worker also renders text files with `codeFileToHast`: the tree is built from the file's text, never parsed as Markdown, with a gutter of line numbers (`pre.code-gutter`, `aria-hidden`) beside the code. The language comes from the file name (`shared/src/markdown/languages.ts`).
 - **Output is data:** the tree is plain objects, so it can cross the worker boundary and could be produced on the server too.
 
 <a id="SPEC-00007" data-uid="rw9dw5ins0bf"></a>
@@ -319,9 +323,10 @@ UiState = {
   chatPaneFraction: number,      // chat pane width, 0.15 to 0.5 of the window; default 0.3
   commentsPaneFraction: number,  // Comments pane width, the same limits and default
   commentFilter: "open" | "resolved" | "all",  // which comment threads show; default "open"
-  expandedFolders: string[],     // workspace paths
-  recentFiles: string[],         // most recent first, at most 10, never the current file
-  currentFile?: string,          // the open file
+  treeView: "specs" | "all",     // the folder pane's view (Step 014); default "specs"
+  expandedFolders: string[],     // workspace paths, shared by both views
+  recentFiles: string[],         // most recent first, at most 10, never the current file; any file that opens
+  currentFile?: string,          // the open file, Markdown or not
   files: Record<string, {        // keyed by workspace path
     viewType: "text" | "split" | "preview" | "wysiwyg",   // default "text"
     frontmatterHeight?: number,  // front matter editor height in pixels

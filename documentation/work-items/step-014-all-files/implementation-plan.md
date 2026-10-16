@@ -364,3 +364,22 @@ _Proposed_. The work proceeds on them unless they are changed:
 | `.specquer/shared/` paths through a second schema | A write route accepting a `.specquer` path by mistake | Only `/api/view` and `/api/image` use `viewPathSchema`; a router test checks that the others refuse such paths |
 | Saves not listing (D1) | A copy made outside Specquer goes unnoticed until the next tree load | The next scan reports or renumbers it, as today; tree loads happen on reload |
 | Stale view checks (2 seconds) | A file just created outside Specquer answers `404` briefly | Accepted in requirements §7 |
+
+<a id=""></a>
+## 8. Implementation Status
+
+Phases 1 to 7 were carried out in October 2026, one commit each. What differs from the plan, or was learned doing it:
+
+1. **Saves still list the files** (D1 reversed, requirements R9.4 rewritten). Two existing tests showed that a save trusting an older listing is unsafe: an agent writes `REQ-00003` into another file, and the save issues `REQ-00003` again; or a pull brings a new file and a new `sections.yaml`, and the save drops the new file's sections from the data file. Every operation that writes the data files lists again. Only the read-only scan, **Section problems**, the lookup by ID, the chat index, pre-filling and the view checks reuse a listing up to 2 seconds old. Without a `stat` per file, the listing is far cheaper than before, which was most of P1's cost.
+2. **The listing stayed in `FileService`** (§4.1). `listing(maxAge)` holds the shared listing, and `listFiles` and `listMarkdownFiles` remain as thin wrappers taking a `maxAge`, so their callers barely changed. There is no `listing.ts`; the bounded parallelism is `mapLimit` in `server/src/limit.ts`. `FileService` invalidates the listing itself on create, rename, delete and file writes; `SectionIndex.configChanged()` invalidates it too, since a folder settings write may add a `.specquer-config.yaml`.
+3. **Git's listing** is `ls-files --cached --stage`, `--others --exclude-standard` and `--deleted`, run together. The stage modes drop submodules (`160000`) and name the symbolic links (`120000`), the only files still `stat`ed, since one may lead to a folder.
+4. **Tests list every time.** `AppConfig.listingMaxAge` (0 in `testApp`) keeps tests that write files and then call the API from seeing an old listing; the listing tests set their own age.
+5. **`checkViewPath` accepts the `.specquer/shared` folder itself**, so the walk outside Git can enter it.
+6. **The tree's types** are `FolderTree` (`{ root, truncated }`) for one view and `Tree` (`{ specs, all }`) for the response. In **Specs**, empty folders inside `.specquer/shared/` are left out.
+7. **The text view** is a flex row of two `pre` elements: the gutter (one text node, `aria-hidden`, sticky) and the code. Only the code element passes through the sanitizer; the wrapper is Specquer's own. CRLF line endings are shown as LF. The preview and the text view share one renderer, `sharedPreviewRenderer()`, moved out of `Preview.tsx`.
+8. **`rehype-highlight` and unknown languages:** it records a message on the file and leaves the block plain; it doesn't throw. `lowlight` matches names case-sensitively, hence the lowercasing step.
+9. **The worker** grew from 488 KB to 635 KB minified (155 KB to 198 KB gzipped). The main bundle doesn't import the grammars.
+10. **Token colors** follow GitHub's light theme, lightened to 0.8 OKLCH lightness for dark mode and nudged to WCAG AA on the code block's background. In dark mode, strings and numbers come out close in hue.
+11. **Images** carry `v=<version>` in their URL, so a changed file is a new URL; the server's routes ignore the parameter. The image is a button (`aria-pressed`, "Show at actual size" or "Fit to the pane").
+12. **A comment test's locator** for the **All** filter became exact, since **All Files** matches it too.
+13. **Tests:** `bun run typecheck` and `bun test` (730) pass. The end-to-end suite passes on Chrome and WebKit (186), including the new `e2e/all-files.spec.ts` and a highlighting test in `views.spec.ts`. One WebKit run failed `sections.spec.ts`'s section ID completion test, which passed on the next run.

@@ -3,7 +3,7 @@
 <a id="SPEC-00040" data-uid="j3ujxrx9s2cl"></a>
 # Specquer Client Requirements
 
-Requirements for the browser user interface (`client/`). They come from [Step 001](/work-items/step-001-doc-editing/requirements), its [implementation plan](/work-items/step-001-doc-editing/implementation-plan), [New File and Folder](/work-items/step-001-doc-editing/new-file-folder), [Step 002](/work-items/step-002-sections/requirements) (sections), [Step 003](/work-items/step-003-section-uids/implementation-plan) (section UIDs and conflicts), [Step 004](/work-items/step-004-hierarchical-summarization/requirements) (the summary slider), [Step 005](/work-items/step-005-summarization-changes/implementation-plan) (summaries from other models), [Step 006](/work-items/step-006-settings/requirements) (the settings dialogs), [Step 007](/work-items/step-007-no-documents-file/requirements) (copied documents) and [Step 008](/work-items/step-008-refactor-settings/requirements) (folder types and prefixes) and [Step 010](/work-items/step-010-document-chat/requirements) (document chat). The screen layout is in [Information Architecture](info-architecture.md).
+Requirements for the browser user interface (`client/`). They come from [Step 001](/work-items/step-001-doc-editing/requirements), its [implementation plan](/work-items/step-001-doc-editing/implementation-plan), [New File and Folder](/work-items/step-001-doc-editing/new-file-folder), [Step 002](/work-items/step-002-sections/requirements) (sections), [Step 003](/work-items/step-003-section-uids/implementation-plan) (section UIDs and conflicts), [Step 004](/work-items/step-004-hierarchical-summarization/requirements) (the summary slider), [Step 005](/work-items/step-005-summarization-changes/implementation-plan) (summaries from other models), [Step 006](/work-items/step-006-settings/requirements) (the settings dialogs), [Step 007](/work-items/step-007-no-documents-file/requirements) (copied documents) and [Step 008](/work-items/step-008-refactor-settings/requirements) (folder types and prefixes) and [Step 010](/work-items/step-010-document-chat/requirements) (document chat) and [Step 014](/work-items/step-014-all-files/requirements) (All Files, and files other than Markdown). The screen layout is in [Information Architecture](info-architecture.md).
 
 <a id="SPEC-00041" data-uid="n5x7fnnix37v"></a>
 ## 1. General
@@ -23,11 +23,16 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 <a id="SPEC-00043" data-uid="arb991i3e6ej"></a>
 ## 3. Folder Tree
 
-1. The tree starts at the root folder and shows folders and `.md` files only, as listed by the server (see [Server Requirements](server-requirements.md) §3). Empty folders are shown too, so a new folder appears at once.
+1. The tree starts at the root folder, as listed by the server (see [Server Requirements](server-requirements.md) §3), in one of two views chosen above it with **Files shown**, a radio group like the file pane's view selector:
+   - **Specs** shows folders and `.md` files only;
+   - **All Files** shows every folder and file except those `.gitignore` hides, `node_modules`, `.git` and `.specquer` other than its `shared/` folder.
+
+   Empty folders are shown too, so a new folder appears at once. Both views come with every tree load, so switching between them asks the server nothing. The view persists in the UI state (`treeView`, Specs by default). A view cut at the size limit says so below the tree.
 2. Folders come before files; names sort naturally, ignoring case.
-3. Clicking a folder expands or collapses it. Expanded folders persist in the UI state.
-4. Single-clicking a file opens it in the file pane. The open file is highlighted with the navigation color.
-5. Right-clicking a folder or file opens a context menu with **Rename…** and **Delete…**. For a folder, the menu starts with **New file…**, **New folder…**, **Settings…** (with a gear icon, §3.6) and **Section problems…**. Right-clicking the empty space below the last entry (or in an empty tree) offers the same four for the root folder.
+3. Clicking a folder expands or collapses it. Expanded folders persist in the UI state, shared by both views.
+4. Single-clicking a file opens it in the file pane (§13 for files other than Markdown). The open file is highlighted with the navigation color; switching views keeps it open.
+5. Right-clicking a folder or a Markdown file opens a context menu with **Rename…** and **Delete…**. For a folder, the menu starts with **New file…**, **New folder…**, **Settings…** (with a gear icon, §3.6) and **Section problems…**. Right-clicking the empty space below the last entry (or in an empty tree) offers the same four for the root folder. Specquer changes only Markdown files: other files, and everything in `.specquer`, have no menu. Renaming or deleting a folder still takes everything in it along.
+6. Each file has an icon for its kind, from its name alone: Markdown (a page with lines), text (a page with code brackets), image, and other files (a blank page).
 
 <a id="SPEC-00044" data-uid="u5s5qfu4wurh"></a>
 ### 3.1 Rename
@@ -106,7 +111,7 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 1. The content can be shown in four view types: **Text** (CodeMirror, Markdown mode), **Split** (CodeMirror and preview side by side), **Preview** (read-only) and **WYSIWYG** (Milkdown).
 2. The view type is persisted per file; files open in Text the first time.
 3. One in-memory copy of the file is shared by all views; switching views keeps unsaved changes.
-4. The preview is produced by the shared pipeline in a Web Worker and rendered with `hast-util-to-jsx-runtime`. In the split view it updates about 250 ms after typing stops; results for outdated text are dropped.
+4. The preview is produced by the shared pipeline in a Web Worker and rendered with `hast-util-to-jsx-runtime`. In the split view it updates about 250 ms after typing stops; results for outdated text are dropped. Fenced code blocks with a language (highlight.js's `common` grammars, by name or alias, in any case) are highlighted in the palette's token colors; code without a language, with another one, indented code and blocks with a line over 10,000 characters stay plain. The grammars load in the worker only, so where no worker runs code stays plain.
 5. In the preview, links to other `.md` files in the workspace open them in Specquer, in-page links scroll, and other links open in a new tab. A link to a section of another document (`other.md#REQ-00012`) opens it and, in the preview, scrolls to the section.
 6. Raw HTML in the preview is sanitized (see [Security](security.md) §6).
 7. Opening a file in WYSIWYG without editing it never changes the file; Milkdown's output is used only after the user changes something (Milkdown rewrites some Markdown, such as list markers, tables and reference links).
@@ -240,3 +245,13 @@ From [Step 012](/work-items/step-012-comment-threads/requirements).
 12. **F8 and Shift+F8** move to the next and previous thread the filter shows, in document order, wrapping around: they open the pane, expand and focus the thread, and scroll the document to its section.
 13. **Files.** Renaming or deleting a document also renames or deletes its comment file, and the delete dialog lists it. Unusable and orphaned comment files and detached threads are listed in **Section problems…** (§3.5).
 
+<a id=""></a>
+## 13. Files Other Than Markdown
+
+From [Step 014](/work-items/step-014-all-files/requirements). Specquer edits Markdown files only; every other file is shown view-only.
+
+1. **Opening.** A file other than Markdown opens as a Markdown file does, after the open document is saved (staying put on a conflict or a failed save). The file pane then shows its path with the recent files, and no save status, view selector, front matter editor, summary slider or comment pips. It joins the recent files, and opens again at start-up when it was open last.
+2. **Text files** (UTF-8 without NUL bytes, at most 5 MB) are shown as the preview shows one fenced code block holding the whole file, built from the text directly, so nothing in the file is read as Markdown or HTML. The language comes from the file name (`index.ts` is TypeScript, `Makefile` is Make); a file of another kind is plain text. A gutter numbers the lines; it stays in place when the code scrolls sideways, isn't copied with the text and is hidden from assistive technology. A file with a line over 10,000 characters isn't highlighted. A file changed on disk shows its new content when it is next opened.
+3. **Images** (PNG, JPEG, GIF, WebP, AVIF, SVG, BMP and ICO, at most 5 MB) are shown over a checkerboard, scaled down to fit the pane; clicking the image, or Enter on it, switches to actual size, where the pane scrolls, and back. A line under it gives its pixel size and file size. SVG is shown only as an image.
+4. **Anything else** shows a placeholder with the file's size and why it can't be shown: "This file type cannot be displayed by Specquer.", "This file isn't UTF-8 text, so Specquer can't display it.", "This file is too large to display." or, for an image that doesn't decode, "This image can't be displayed."
+5. **Comments.** While such a file is open, the Comments pane says that comments are available for Markdown files in sectioned folders.
