@@ -253,9 +253,9 @@ export class SummaryService {
     }
   }
 
-  close(): void {
+  async close(): Promise<void> {
     this.modelTest?.abort();
     this.prefill.close();
-    this.cache.close();
+    await this.cache.close();
   }
 }

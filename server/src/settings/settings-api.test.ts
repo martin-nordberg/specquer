@@ -8,8 +8,9 @@ import { NVIDIA_BASE_URL } from "@specquer/shared/settings";
 import { TEST_APPROVALS, tempRoot, testApp } from "../test-support.ts";
 
 let cleanups: Array<() => Promise<void> | void> = [];
+// Last pushed first, so the services close before their folder is deleted
 afterEach(async () => {
-  for (const cleanup of cleanups) await cleanup();
+  for (const cleanup of cleanups.reverse()) await cleanup();
   cleanups = [];
 });
 

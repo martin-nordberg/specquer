@@ -91,6 +91,8 @@ export function hasFts5(): boolean {
 export class SearchIndex {
   private db: Database | null = null;
   private updating: Promise<void> = Promise.resolve();
+  /** Closed for good: nothing opens the database again, so no late update recreates the folder. */
+  private closed = false;
   private readonly folder: string;
   private readonly file: string;
 
@@ -161,6 +163,7 @@ export class SearchIndex {
   }
 
   private async sync(): Promise<void> {
+    if (this.closed) return;
     const db = await this.open();
     const listed = await this.source.files();
     const wanted = new Set(listed);
@@ -194,6 +197,7 @@ export class SearchIndex {
   }
 
   private async open(): Promise<Database> {
+    if (this.closed) throw new Error("the search index is closed");
     if (this.db !== null) return this.db;
     if (!hasFts5()) throw new SearchUnavailableError("its SQLite has no FTS5");
     await ensureUserFolder(this.folder);
@@ -231,7 +235,10 @@ export class SearchIndex {
     }
   }
 
-  close(): void {
+  /** Closes the database for good, once an update under way has finished; later updates do nothing. */
+  async close(): Promise<void> {
+    this.closed = true;
+    await this.updating;
     this.db?.close();
     this.db = null;
   }

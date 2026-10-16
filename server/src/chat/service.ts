@@ -235,9 +235,9 @@ export class ChatService {
     }
   }
 
-  close(): void {
+  async close(): Promise<void> {
     if (this.indexTimer !== null) clearTimeout(this.indexTimer);
-    this.index.close();
+    await this.index.close();
   }
 }
 

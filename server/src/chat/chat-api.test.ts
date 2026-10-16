@@ -6,8 +6,9 @@ import { TEST_APPROVALS, tempRoot, testApp } from "../test-support.ts";
 import { CHAT_HISTORY_FILE } from "./history.ts";
 
 let cleanups: Array<() => Promise<void> | void> = [];
+// Last pushed first, so the services close before their folder is deleted
 afterEach(async () => {
-  for (const cleanup of cleanups) await cleanup();
+  for (const cleanup of cleanups.reverse()) await cleanup();
   cleanups = [];
 });
 
@@ -63,9 +64,9 @@ async function setup(files: Record<string, string>, stub: StubOptions = {}) {
     },
     warn: () => {},
   });
-  cleanups.push(() => {
-    app.summaries.close();
-    app.chat.close();
+  cleanups.push(async () => {
+    await app.summaries.close();
+    await app.chat.close();
   });
   const ask = (question: string, openFile?: string, init: { signal?: AbortSignal } = {}) =>
     app.app.request("/api/chat", {

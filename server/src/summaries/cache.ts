@@ -59,6 +59,8 @@ type Row = { summary: string; model_name: string; truncated: number };
 export class SummaryCache {
   private db: Database | null = null;
   private opening: Promise<Database | null> | null = null;
+  /** Closed for good: nothing opens the database again, so no late write recreates the folder. */
+  private closed = false;
   private readonly folder: string;
   private readonly file: string;
 
@@ -77,6 +79,7 @@ export class SummaryCache {
   }
 
   private open(): Promise<Database | null> {
+    if (this.closed) return Promise.resolve(null);
     if (this.db !== null) return Promise.resolve(this.db);
     this.opening ??= this.create().finally(() => {
       this.opening = null;
@@ -91,6 +94,7 @@ export class SummaryCache {
       this.warn(`can't create ${CACHE_FOLDER}: ${(err as Error).message}`);
       return null;
     }
+    if (this.closed) return null;
     try {
       this.db = this.connect();
     } catch (err) {
@@ -100,6 +104,7 @@ export class SummaryCache {
       try {
         await rename(this.file, aside);
         for (const suffix of ["-wal", "-shm"]) await rename(this.file + suffix, aside + suffix).catch(() => undefined);
+        if (this.closed) return null;
         this.db = this.connect();
       } catch (again) {
         this.warn(`summaries won't be cached: ${(again as Error).message}`);
@@ -209,7 +214,10 @@ export class SummaryCache {
     }
   }
 
-  close(): void {
+  /** Closes the database for good, once an opening under way has finished; later calls find no cache. */
+  async close(): Promise<void> {
+    this.closed = true;
+    await this.opening;
     this.db?.close();
     this.db = null;
   }

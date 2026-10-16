@@ -1,23 +1,28 @@
 import { Database } from "bun:sqlite";
 import { afterEach, expect, test } from "bun:test";
+import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tempRoot } from "../test-support.ts";
 import { ftsQuery } from "./query.ts";
 import { SEARCH_FILE, SearchIndex, hasFts5 } from "./search-index.ts";
 
 let cleanups: Array<() => Promise<void>> = [];
+// Last pushed first, so the index closes before its folder is deleted
 afterEach(async () => {
-  await Promise.all(cleanups.map((cleanup) => cleanup()));
+  for (const cleanup of cleanups.reverse()) await cleanup();
   cleanups = [];
 });
 
-/** An index over files kept in memory, counting the reads. */
-async function setup(files: Record<string, string>) {
-  const temp = await tempRoot();
-  cleanups.push(temp.cleanup);
+/** An index over files kept in memory, counting the reads; in a new folder unless given `root`. */
+async function setup(files: Record<string, string>, root?: string) {
+  if (root === undefined) {
+    const temp = await tempRoot();
+    cleanups.push(temp.cleanup);
+    root = temp.root;
+  }
   const reads: string[] = [];
   const stamps = new Map(Object.keys(files).map((path) => [path, "1"]));
-  const index = new SearchIndex(temp.root, {
+  const index = new SearchIndex(root, {
     files: async () => Object.keys(files).sort(),
     stamp: async (path) => stamps.get(path),
     read: async (path) => {
@@ -25,14 +30,14 @@ async function setup(files: Record<string, string>) {
       return files[path];
     },
   });
-  cleanups.push(async () => index.close());
+  cleanups.push(() => index.close());
   const search = (question: string, options: { openFile?: string; units?: number; contextTokens?: number } = {}) =>
     index.search(ftsQuery(question), { units: 8, contextTokens: 12_000, ...options });
   const change = (path: string, text: string) => {
     files[path] = text;
     stamps.set(path, String(Number(stamps.get(path) ?? "0") + 1));
   };
-  return { root: temp.root, index, reads, search, change, files };
+  return { root, index, reads, search, change, files };
 }
 
 const SPECS = {
@@ -108,15 +113,28 @@ test("a damaged database is moved aside and rebuilt; another schema version is r
   expect((await search("summaries cached"))[0]!.path).toBe("docs/summaries.md");
   const { root: root2, index: index2, search: search2 } = await setup({ ...SPECS });
   await search2("summaries");
-  index2.close();
+  await index2.close();
   const db = new Database(join(root2, SEARCH_FILE));
   db.run("PRAGMA user_version = 99");
   db.close();
-  expect((await search2("summaries cached"))[0]!.path).toBe("docs/summaries.md");
+  // A closed index stays closed; the next one, as after a restart, finds the other version
+  const { search: search3 } = await setup({ ...SPECS }, root2);
+  expect((await search3("summaries cached"))[0]!.path).toBe("docs/summaries.md");
 });
 
 test("the cache folder gets its .gitignore", async () => {
   const { root, index } = await setup({ ...SPECS });
   await index.update();
   expect(await Bun.file(join(root, ".specquer/cache/.gitignore")).text()).toBe("*\n");
+});
+
+test("a closed index waits for an update under way and never opens again, so its folder stays deleted", async () => {
+  const { root, index } = await setup({ ...SPECS });
+  const running = index.update();
+  await index.close();
+  await running;
+  await rm(join(root, ".specquer"), { recursive: true, force: true });
+  await index.update();
+  expect(await Bun.file(join(root, SEARCH_FILE)).exists()).toBe(false);
+  await expect(index.search(undefined, { units: 8, contextTokens: 12_000 })).rejects.toThrow("closed");
 });

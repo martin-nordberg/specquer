@@ -8,8 +8,9 @@ import { CACHE_FILE, MAX_UNUSED } from "./cache.ts";
 import type { SummaryServiceOptions } from "./service.ts";
 
 let cleanups: Array<() => Promise<void> | void> = [];
+// Last pushed first, so the services close before their folder is deleted
 afterEach(async () => {
-  for (const cleanup of cleanups) await cleanup();
+  for (const cleanup of cleanups.reverse()) await cleanup();
   cleanups = [];
 });
 
