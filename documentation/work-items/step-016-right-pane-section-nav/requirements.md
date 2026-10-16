@@ -36,7 +36,7 @@ Step 016 takes precedence over the specifications and earlier steps where they c
 <a id="WORK-00635" data-uid="oy13ldc2ekre"></a>
 ### R1. The Pane and Its Toggle
 
-1. **The button:** an **Outline** toggle in the header, left of the **Comments** toggle, with the same look as the other two: an icon button with `aria-pressed` and the tooltip "Outline". Its icon looks like a table of contents: lines of text with indented lines below them (Lucide's `TableOfContents`).
+1. **The button:** an **Outline** toggle in the header, left of the **Comments** toggle, with the same look as the other two: an icon button with `aria-pressed` and the tooltip "Open the outline", or "Close the outline" while it is open. Its icon looks like a table of contents: lines of text with indented lines below them (Lucide's `TableOfContents`).
 2. **The pane:** the outline opens in the third pane's place, right of the file pane, with a drag bar between them, as the chat and the comments do. Its heading is "Outline".
 3. **One at a time:** the three toggles work as one switch. Opening the outline closes the chat or the comments, and opening either of them closes the outline. Pressing the open pane's toggle closes it.
 4. **Width:** the pane has its own width, a fraction of the window from 0.15 to 0.5, by default 0.3, with the file pane keeping at least 30% of the window, as for the other two panes.
@@ -91,7 +91,7 @@ Step 016 takes precedence over the specifications and earlier steps where they c
 4. **Split view:** the side scrolled last decides.
 5. **After a click:** the clicked item stays highlighted until the file pane is scrolled again, even when the section can't reach the top (the document's last sections).
 
-<a id=""></a>
+<a id="WORK-00653" data-uid="e9cim4xfeb5l"></a>
 ### R7. The Summary Slider
 
 1. **Only what is shown:** the outline shows only the sections the summary slider leaves visible. A section the slider summarizes stays in the outline, as its summary stays in the preview; the sections inside it are hidden from the outline, as they are from the preview. Moving the slider from level 3 to level 2, for example, summarizes the level-2 sections, so every level-3 item disappears from the outline; moving it back brings them back.

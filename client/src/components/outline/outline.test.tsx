@@ -3,6 +3,7 @@ import { describe, expect, mock, test } from "bun:test";
 import type { SummarizedSection } from "@specquer/shared/markdown";
 import { TopPositionStore } from "@/app/top-position";
 import { OutlinePane, type OutlinePaneProps } from "./OutlinePane";
+import { OutlineToggle } from "./OutlineToggle";
 
 const anchor = (id: string, uid: string) => `<a id="${id}" data-uid="${uid}"></a>`;
 const SECTIONED = [
@@ -128,4 +129,11 @@ describe("OutlinePane (Step 016)", () => {
     expect(keys.has("uidone000001")).toBe(true);
     expect(keys.has("gone00000001")).toBe(false);
   });
+});
+
+test("the toggle's tooltip says what a click does, as its peers' do", () => {
+  const { rerender } = render(<OutlineToggle open={false} onChange={() => {}} />);
+  expect(screen.getByRole("button", { name: "Outline" }).getAttribute("title")).toBe("Open the outline");
+  rerender(<OutlineToggle open onChange={() => {}} />);
+  expect(screen.getByRole("button", { name: "Outline" }).getAttribute("title")).toBe("Close the outline");
 });

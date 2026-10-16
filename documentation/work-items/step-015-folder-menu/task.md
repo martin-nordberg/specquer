@@ -130,7 +130,7 @@ One commit per phase.
 | A client check missed lets a request through | The server's refusals stay as they are: a file other than Markdown can't be renamed or deleted, and `.specquer` is out of reach of every route that writes |
 | End-to-end tests that click **Add section anchors…** in the settings dialog | Updated in phase 2; the component tests catch the dialog's change first |
 
-<a id=""></a>
+<a id="WORK-00654" data-uid="a7s2d2seratc"></a>
 ## Implementation Status
 
 Phases 1 to 3 were carried out in October 2026, one commit each. What differs from the plan, or was learned doing it:
