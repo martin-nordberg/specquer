@@ -14,7 +14,8 @@ import {
 } from "@specquer/shared/paths";
 import { isSidecarPath, sidecarPath } from "@specquer/shared/comments";
 import { FOLDER_CONFIG_FILE } from "@specquer/shared/settings";
-import { gitInfo, gitMarkdownFiles, gitUncommitted, gitUntrackedFolders } from "./git.ts";
+import { gitInfo, gitListedFiles, gitUncommitted, gitUntrackedFolders } from "./git.ts";
+import { FILE_CALLS, mapLimit } from "./limit.ts";
 
 /** Folders the tree never shows (besides the protected `.git` and `.specquer`). */
 const SKIPPED_FOLDERS: ReadonlySet<string> = new Set([...PROTECTED_NAMES, "node_modules"]);
@@ -29,6 +30,36 @@ export const MAX_WALK_ENTRIES = 100_000;
 export const MAX_PREVIEW_FILES = 500;
 
 const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
+
+/** How long the scan, the chat index and pre-filling reuse a listing, in milliseconds (Step 014, R9.2). */
+export const LISTING_MAX_AGE = 2_000;
+
+/**
+ * One listing of the files under the root (Step 014, R9): every file the tree may show, and the
+ * kinds the section index, comments and chat take from it. Shared by everything that needs it
+ * until it may be stale.
+ */
+export interface Listing {
+  /** Every listed file, sorted. */
+  all: string[];
+  /** The Markdown files, sorted. */
+  markdown: string[];
+  /** The folder configuration files (`.specquer-config.yaml`), sorted. */
+  configs: string[];
+  /** The comment sidecars, sorted. */
+  sidecars: string[];
+  /** Folders holding no files (only other such folders, if any). */
+  emptyFolders: string[];
+  /** Folders below the root holding a `.specquer` folder of their own, sorted. */
+  nested: string[];
+  /** Whether a walk of the file system stopped at its limit. */
+  walkTruncated: boolean;
+}
+
+export interface FileServiceOptions {
+  /** How long a listing is reused by default (tests use 0, so files they write show at once). */
+  listingMaxAge?: number;
+}
 
 /** What a walk of the file system found for the tree. */
 interface WalkResult {
@@ -74,7 +105,38 @@ export function contentVersion(bytes: Uint8Array): string {
  * can't leave the root.
  */
 export class FileService {
-  constructor(readonly root: string) {}
+  private readonly listingMaxAge: number;
+  private cached: { listing: Promise<Listing>; startedAt: number } | null = null;
+  /** How many times the files were listed, for tests (R9.5). */
+  listings = 0;
+
+  constructor(
+    readonly root: string,
+    options: FileServiceOptions = {},
+  ) {
+    this.listingMaxAge = options.listingMaxAge ?? LISTING_MAX_AGE;
+  }
+
+  /**
+   * The listing of the files, reused while it is at most `maxAge` milliseconds old (by default
+   * `LISTING_MAX_AGE`; 0 lists again, `Infinity` takes the last one whatever its age). Callers
+   * at the same time share one listing.
+   */
+  listing(maxAge = this.listingMaxAge): Promise<Listing> {
+    const cached = this.cached;
+    if (cached !== null && Date.now() - cached.startedAt <= maxAge) return cached.listing;
+    const entry = { listing: this.list(), startedAt: Date.now() };
+    this.cached = entry;
+    entry.listing.catch(() => {
+      if (this.cached === entry) this.cached = null;
+    });
+    return entry.listing;
+  }
+
+  /** Lists the files again on the next call: Specquer created, renamed or deleted something. */
+  invalidateListing(): void {
+    this.cached = null;
+  }
 
   /** The absolute path for a workspace path, checked again for safety. */
   private absolute(path: string): string {
@@ -174,17 +236,18 @@ export class FileService {
     }
   }
 
+  /** The tree, from a new listing, so changes made outside Specquer show on reload. */
   async getTree(): Promise<Tree> {
-    const { files, configs, walked } = await this.markdownFiles();
-    const truncated = files.length > MAX_TREE_FILES || walked.entries > MAX_WALK_ENTRIES;
+    const listing = await this.listing(0);
+    const truncated = listing.markdown.length > MAX_TREE_FILES || listing.walkTruncated;
     // A folder holding only its configuration file still shows
-    const folders = [...walked.emptyFolders, ...configs.map(parentPath).filter((folder) => folder !== "")];
-    return { root: buildTree(files.slice(0, MAX_TREE_FILES), folders), truncated };
+    const folders = [...listing.emptyFolders, ...listing.configs.map(parentPath).filter((folder) => folder !== "")];
+    return { root: buildTree(listing.markdown.slice(0, MAX_TREE_FILES), folders), truncated };
   }
 
   /** Every Markdown file the tree would show, sorted, without the tree's size limit. */
-  async listMarkdownFiles(): Promise<string[]> {
-    return (await this.markdownFiles()).files;
+  async listMarkdownFiles(maxAge?: number): Promise<string[]> {
+    return (await this.listing(maxAge)).markdown;
   }
 
   /**
@@ -193,48 +256,56 @@ export class FileService {
    * tree's size limit, and the folders below the root that hold a `.specquer` folder of their own
    * (`nested`, sorted).
    */
-  async listFiles(): Promise<{ markdown: string[]; configs: string[]; sidecars: string[]; nested: string[] }> {
-    const { files, configs, sidecars, walked } = await this.markdownFiles();
-    return { markdown: files, configs, sidecars, nested: [...walked.nested].sort() };
+  async listFiles(maxAge?: number): Promise<{ markdown: string[]; configs: string[]; sidecars: string[]; nested: string[] }> {
+    const { markdown, configs, sidecars, nested } = await this.listing(maxAge);
+    return { markdown, configs, sidecars, nested };
   }
 
-  private async markdownFiles(): Promise<{ files: string[]; configs: string[]; sidecars: string[]; walked: WalkResult }> {
+  private async list(): Promise<Listing> {
+    this.listings++;
     const walked: WalkResult = { files: [], emptyFolders: [], entries: 0, nested: new Set() };
-    const gitFiles = await gitMarkdownFiles(this.root);
-    if (gitFiles === null) await this.walk("", walked, true);
+    const git = await gitListedFiles(this.root);
+    let links = new Set<string>();
+    if (git === null) await this.walk("", walked, true);
     else {
-      // Git lists neither empty folders nor what is inside untracked ones, so walk those
-      walked.files = gitFiles;
+      // Git lists no empty folders, so walk the untracked ones for them
+      walked.files = git.files;
+      links = git.links;
       for (const folder of (await gitUntrackedFolders(this.root)) ?? []) {
         const check = checkPath(folder);
         if (!check.ok || check.path === "" || pathSegments(check.path).some((segment) => SKIPPED_FOLDERS.has(segment))) continue;
         await this.walk(check.path, walked, false);
       }
     }
-    const files: string[] = [];
-    const configs: string[] = [];
-    const sidecars: string[] = [];
+    const all: string[] = [];
     for (const path of walked.files) {
       const nested = nestedSpecquerFolder(path);
       if (nested !== undefined) walked.nested.add(nested);
       const check = checkPath(path);
       if (!check.ok) continue;
-      const list = baseName(check.path) === FOLDER_CONFIG_FILE ? configs : isSidecarPath(check.path) ? sidecars : isMarkdownFile(check.path) ? files : null;
-      if (list === null) continue;
       if (pathSegments(check.path).some((segment) => SKIPPED_FOLDERS.has(segment))) continue;
-      // Git lists tracked files that were deleted from disk
-      if ((await this.kindOf(check.path)) !== "file") continue;
-      list.push(check.path);
+      all.push(check.path);
     }
+    // A symbolic link Git tracks may lead to a folder, or nowhere
+    const linked = all.filter((path) => links.has(path));
+    const kinds = await mapLimit(linked, FILE_CALLS, (path) => this.kindOf(path));
+    const notFiles = new Set(linked.filter((_, i) => kinds[i] !== "file"));
+    const files = notFiles.size === 0 ? all : all.filter((path) => !notFiles.has(path));
     files.sort();
-    configs.sort();
-    sidecars.sort();
-    return { files, configs, sidecars, walked };
+    return {
+      all: files,
+      markdown: files.filter(isMarkdownFile),
+      configs: files.filter((path) => baseName(path) === FOLDER_CONFIG_FILE),
+      sidecars: files.filter(isSidecarPath),
+      emptyFolders: walked.emptyFolders,
+      nested: [...walked.nested].sort(),
+      walkTruncated: walked.entries > MAX_WALK_ENTRIES,
+    };
   }
 
   /**
    * Walks a folder for the tree, collecting folders that hold no files (only other such folders,
-   * if any) and, if `collectFiles` is set, Markdown files. Returns whether the folder holds files.
+   * if any) and, if `collectFiles` is set, the files. Returns whether the folder holds files.
    */
   private async walk(folder: string, result: WalkResult, collectFiles: boolean): Promise<boolean> {
     let entries;
@@ -246,13 +317,13 @@ export class FileService {
     }
     let holdsFiles = false;
     for (const entry of entries) {
-      if (++result.entries > MAX_WALK_ENTRIES || result.files.length > MAX_TREE_FILES) return true;
+      if (++result.entries > MAX_WALK_ENTRIES) return true;
       const path = joinPath(folder, entry.name);
       if (entry.isDirectory() && entry.name === ".specquer" && folder !== "") result.nested.add(folder);
       if (!entry.isDirectory() || SKIPPED_FOLDERS.has(entry.name)) {
         // A folder holding only its configuration file counts as empty, so the tree shows it
         if (entry.name !== FOLDER_CONFIG_FILE) holdsFiles = true;
-        if (collectFiles && entry.isFile() && (isMarkdownFile(path) || isSidecarPath(path) || entry.name === FOLDER_CONFIG_FILE)) result.files.push(path);
+        if (collectFiles && entry.isFile()) result.files.push(path);
       } else if (await this.walk(path, result, collectFiles)) holdsFiles = true;
     }
     if (!holdsFiles && folder !== "") result.emptyFolders.push(folder);
@@ -301,6 +372,7 @@ export class FileService {
     try {
       if (kind === "folder") await mkdir(target);
       else await writeFile(target, content, { flag: "wx" });
+      this.invalidateListing();
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === "EEXIST") return null;
       throw err;
@@ -323,6 +395,7 @@ export class FileService {
       if (!isNotFound(err)) throw err;
     }
     await rename(absolute, target);
+    this.invalidateListing();
     return newPath;
   }
 
@@ -340,13 +413,17 @@ export class FileService {
   async writeText(path: string, text: string): Promise<void> {
     const folder = await this.existingFolder(parentPath(path));
     await writeAtomically(join(folder, baseName(path)), text);
+    this.invalidateListing();
   }
 
   /** Removes a file, if it exists. */
   async removeFile(path: string): Promise<void> {
     try {
       const { absolute, isFolder } = await this.existingEntry(path);
-      if (!isFolder) await rm(absolute);
+      if (!isFolder) {
+        await rm(absolute);
+        this.invalidateListing();
+      }
     } catch (err) {
       if (!(err instanceof ApiError && err.status === 404)) throw err;
     }
@@ -362,7 +439,10 @@ export class FileService {
       if (err instanceof ApiError && err.status === 404) return;
       throw err;
     }
-    if (!source.isFolder) await rename(source.absolute, join(dirname(source.absolute), baseName(to)));
+    if (!source.isFolder) {
+      await rename(source.absolute, join(dirname(source.absolute), baseName(to)));
+      this.invalidateListing();
+    }
   }
 
   async deletePreview(path: string): Promise<DeletePreview> {
@@ -395,6 +475,7 @@ export class FileService {
   async deleteEntry(path: string): Promise<void> {
     const { absolute } = await this.existingEntry(path);
     await rm(absolute, { recursive: true });
+    this.invalidateListing();
   }
 }
 

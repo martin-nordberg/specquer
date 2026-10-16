@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdir, readdir, stat, symlink } from "node:fs/promises";
+import { mkdir, readdir, rm, stat, symlink } from "node:fs/promises";
 import { join } from "node:path";
+import { FileService } from "./files.ts";
 import { tempRoot, testApp } from "./test-support.ts";
 
 let cleanups: Array<() => Promise<void>> = [];
@@ -61,6 +62,50 @@ describe("GET /api/tree", () => {
     await Bun.write(join(root, "new.md"), "untracked but not ignored");
     const tree = (await (await request("/api/tree")).json()) as TreeJson;
     expect(flatten(tree.root)).toEqual(["a.md", "new.md"]);
+  });
+});
+
+describe("the listing (Step 014, R9)", () => {
+  test("is shared by callers at the same time and reused while fresh", async () => {
+    const temp = await tempRoot({ "a.md": "" });
+    cleanups.push(temp.cleanup);
+    const files = new FileService(temp.root, { listingMaxAge: 60_000 });
+    const [one, two] = await Promise.all([files.listing(), files.listing()]);
+    expect(one).toBe(two);
+    expect(await files.listing()).toBe(one);
+    expect(files.listings).toBe(1);
+    // A tree load lists again
+    await files.getTree();
+    expect(files.listings).toBe(2);
+    // Specquer's own changes list again on the next call
+    await files.create("", "b.md", "file");
+    expect((await files.listing()).markdown).toEqual(["a.md", "b.md"]);
+    expect(files.listings).toBe(3);
+  });
+
+  test("leaves out tracked files deleted from disk, and links to folders, without a stat of each file", async () => {
+    const { root } = await setup({ "a.md": "", "gone.md": "", "docs/x.md": "" }, { git: true });
+    await symlink(join(root, "docs"), join(root, "link.md"));
+    await Bun.$`git -C ${root} add link.md && git -C ${root} -c user.email=t@t -c user.name=t commit -qm link`.quiet();
+    await rm(join(root, "gone.md"));
+    const listing = await new FileService(root).listing();
+    expect(listing.markdown).toEqual(["a.md", "docs/x.md"]);
+    expect(listing.all).toEqual(["a.md", "docs/x.md"]);
+  });
+
+  test("one tree load lists once for the tree, the scan and the chat index; saves list once", async () => {
+    const temp = await tempRoot({ "docs/.specquer-config.yaml": "folderType: BASELINE\ndefaultPrefix: REQ\n", "docs/a.md": "", "docs/b.md": "# B\n" });
+    cleanups.push(temp.cleanup);
+    const { files, sections, request } = testApp(temp.root, undefined, undefined, undefined, undefined, 60_000);
+    expect((await request("/api/tree")).status).toBe(200);
+    // The background scan, then the chat index and pre-filling, take the same listing
+    await sections.scan();
+    await files.listMarkdownFiles();
+    expect(files.listings).toBe(1);
+    const file = (await (await request("/api/file?path=docs/a.md")).json()) as { version: string };
+    const saved = await request("/api/file?path=docs/a.md", { method: "PUT", body: { text: "# A\n", baseVersion: file.version } });
+    expect(saved.status).toBe(200);
+    expect(files.listings).toBe(2);
   });
 });
 

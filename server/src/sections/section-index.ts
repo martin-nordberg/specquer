@@ -17,8 +17,9 @@ import {
 } from "@specquer/shared/markdown";
 import { baseName, isSameOrInside, renamedPath } from "@specquer/shared/paths";
 import { UID_LENGTH, formatSectionId, sectionStatuses } from "@specquer/shared/sections";
-import type { FileService } from "../files.ts";
+import { type FileService, LISTING_MAX_AGE } from "../files.ts";
 import { gitTrackedFiles } from "../git.ts";
+import { FILE_CALLS, mapLimit } from "../limit.ts";
 import { type FolderConfig, FolderConfigs } from "./folder-config.ts";
 import { PrefixConfigs, PrefixSettings } from "./prefix-config.ts";
 import { sectionPrefixes } from "./prefixes.ts";
@@ -264,8 +265,14 @@ export class SectionIndex {
     }
   }
 
-  private async scanFiles(): Promise<FolderConfig> {
-    const listed = await this.files.listFiles();
+  /**
+   * Brings the index up to date with the files. Operations that write the data files list the
+   * files again (`maxAge` 0): a file created outside Specquer that the listing missed would lose
+   * its sections from the data files, and an ID added there could be issued again. A scan alone
+   * writes nothing, and reuses a recent listing (Step 014, R9.2).
+   */
+  private async scanFiles(maxAge = 0): Promise<FolderConfig> {
+    const listed = await this.files.listFiles(maxAge);
     this.configFiles.setFiles(listed.configs);
     this.nested = listed.nested;
     for (const folder of this.nested) {
@@ -277,7 +284,7 @@ export class SectionIndex {
     const paths = listed.markdown.filter((path) => config.isSectioned(path));
     const wanted = new Set(paths);
     for (const path of this.documents.keys()) if (!wanted.has(path)) this.documents.delete(path);
-    for (const path of paths) await this.index(path);
+    await mapLimit(paths, FILE_CALLS, (path) => this.index(path));
     await this.findOriginals();
     this.apply(config);
     return config;
@@ -286,12 +293,14 @@ export class SectionIndex {
   /** Reads the folder configuration again on the next load, after Specquer wrote or deleted a file. */
   configChanged(): void {
     this.configFiles.invalidate();
+    // A folder's configuration file may be new
+    this.files.invalidateListing();
   }
 
   /** Brings the index up to date with the files. Writes nothing. */
   scan(): Promise<void> {
     return this.run(async () => {
-      await this.scanFiles();
+      await this.scanFiles(LISTING_MAX_AGE);
     });
   }
 
@@ -543,7 +552,7 @@ export class SectionIndex {
    */
   problems(folder: string): Promise<SectionProblem[]> {
     return this.run(async () => {
-      const config = await this.scanFiles();
+      const config = await this.scanFiles(LISTING_MAX_AGE);
       const problems: SectionProblem[] = [];
       for (const nested of this.nested) {
         if (isSameOrInside(nested, folder)) problems.push({ kind: "nested-specquer", folder: nested });
@@ -587,7 +596,7 @@ export class SectionIndex {
    */
   find(id: string): Promise<{ path: string; body: string; section: FoundSection } | undefined> {
     return this.run(async () => {
-      await this.scanFiles();
+      await this.scanFiles(LISTING_MAX_AGE);
       for (const doc of this.documents.values()) {
         if (!doc.sections.some((section) => section.id === id)) continue;
         let text: string;

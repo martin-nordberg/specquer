@@ -9,7 +9,7 @@ _Notes from October 2026, after Step 012 (commit `e197bee`)._
 
 Findings are ordered by severity. "Verified" means the behavior was reproduced with a short script; the others come from reading the code.
 
-**Status:** H1, M1 to M4 and L1 to L4 are fixed, one commit each. Each finding below names its commit. L5, P1, P2 and the maintainability notes are still open.
+**Status:** H1, M1 to M4 and L1 to L4 are fixed, one commit each. Each finding below names its commit. P1 is fixed by Step 014's first phase. L5, P2 and the maintainability notes are still open.
 
 <a id="WORK-00536" data-uid="e36ws9k2gleg"></a>
 ## Scope and Method
@@ -141,6 +141,12 @@ The chat escapes `&`, `<` and `>` inside each `<source>` (`agent/src/chat.ts`). 
 
 `FileService.markdownFiles` runs two `git ls-files` commands and then `stat`s every listed file one at a time. One tree load (`getTree`) runs it three times: once for the tree, once in the section scan it starts, and once in the chat index update 500 ms later. Pre-filling, when on, adds a fourth. Each save of a sectioned file runs a full `scanFiles` inside the section queue before writing, and **Section problems** lists the files again for comments. This is invisible in this repository. Near the 10,000-file limit, the sequential `stat`s alone are likely to add noticeable time to every save, since saves wait in the queue behind scans. Suggestions: share one listing across consumers for a short time, invalidated by Specquer's own writes; run the `stat`s with bounded parallelism; and let a save of an already-indexed file reconcile without relisting, leaving the full scan to tree loads.
 
+**Fixed** in Step 014, Phase 1 ([requirements](/work-items/step-014-all-files/requirements), R9).
+
+- **One listing:** `FileService.listing()` lists the files once and shares that listing with every caller, for up to 2 seconds. A tree load always lists again, and Specquer's own creates, renames, deletes and configuration writes invalidate it. One tree load now lists once for the tree, the section scan, the chat index and pre-filling.
+- **No `stat` per file:** Git reports tracked files deleted from disk (`git ls-files --deleted`). The section scan's and the chat index's checks of each file run 16 at a time.
+- **Saves still list.** A save that reused an older listing could issue an ID that an agent had just written into another file, or drop from the data files the sections of a file pulled in since. So every operation that writes the data files lists again; only scans and lookups reuse a listing. The listing is much cheaper than before, which was the bulk of the cost.
+
 <a id="WORK-00552" data-uid="bce854fi1win"></a>
 ### P2. Markdown parsing on the main thread as the user types
 
@@ -165,4 +171,4 @@ The chat escapes `&`, `<` and `>` inside each `<source>` (`agent/src/chat.ts`). 
 3. M2 and M3, which lose or block user work in normal use.
 4. L1 to L4 as they are touched; P1 before trying a large repository.
 
-Steps 1 to 4 are done, apart from P1. What remains: L5, P1 before trying a large repository, P2, and the maintainability notes.
+Steps 1 to 4 are done, and P1 too (Step 014). What remains: L5, P2 and the maintainability notes.

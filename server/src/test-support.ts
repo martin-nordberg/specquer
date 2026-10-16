@@ -42,8 +42,10 @@ export function testApp(
   chat: ChatServiceOptions = { indexDelay: 3_600_000 },
   // A fixed name, so tests don't depend on the Git configuration of the machine
   comments: CommentServiceOptions = { userName: async () => "Tester" },
+  // Files the tests write show at once; the listing tests set their own age
+  listingMaxAge = 0,
 ) {
-  const { app, sections, summaries: summaryService, chat: chatService } = createApp({
+  const { app, files, sections, summaries: summaryService, chat: chatService } = createApp({
     root,
     token: TEST_TOKEN,
     port: () => TEST_PORT,
@@ -52,6 +54,7 @@ export function testApp(
     summaries,
     chat,
     comments,
+    listingMaxAge,
   });
   const cookie = `${sessionCookieName(TEST_PORT)}=${TEST_TOKEN}`;
   /** A request as the signed-in browser would send it. */
@@ -67,5 +70,5 @@ export function testApp(
       },
       body: init.body === undefined ? undefined : JSON.stringify(init.body),
     });
-  return { app, sections, summaries: summaryService, chat: chatService, request };
+  return { app, files, sections, summaries: summaryService, chat: chatService, request };
 }

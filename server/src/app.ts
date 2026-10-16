@@ -37,6 +37,8 @@ export interface AppConfig extends SecurityConfig {
   chat?: ChatServiceOptions;
   /** Overrides for comment threads (tests fix the user's name and the time). */
   comments?: CommentServiceOptions;
+  /** How long a listing of the files is reused (tests list again each time). */
+  listingMaxAge?: number;
 }
 
 export function createHandlers(
@@ -185,7 +187,7 @@ const UNAUTHORIZED_PAGE = `<!doctype html><html lang="en"><head><meta charset="u
  * whose search index the caller starts building.
  */
 export function createApp(config: AppConfig) {
-  const files = new FileService(config.root);
+  const files = new FileService(config.root, config.listingMaxAge === undefined ? {} : { listingMaxAge: config.listingMaxAge });
   const uiState = new UiStateStore(config.root, (path) => files.kindOf(path));
   const sections = new SectionIndex(files);
   const comments = new CommentService(files, sections, config.comments);
@@ -238,6 +240,6 @@ export function createApp(config: AppConfig) {
   app.route("/", createApiRouter(createHandlers(files, uiState, sections, summaries, chat, comments)));
 
   app.notFound((c) => (c.req.path.startsWith("/api/") ? c.json({ error: "not_found", message: "Not found" }, 404) : c.text("Not found", 404)));
-  return { app, sections, summaries, chat };
+  return { app, files, sections, summaries, chat };
 }
 

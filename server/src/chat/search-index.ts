@@ -2,6 +2,7 @@ import { Database } from "bun:sqlite";
 import { rename } from "node:fs/promises";
 import { join } from "node:path";
 import { estimateTokens } from "@specquer/agent";
+import { FILE_CALLS, mapLimit } from "../limit.ts";
 import { CACHE_FOLDER } from "../summaries/cache.ts";
 import { ensureUserFolder } from "../user-folder.ts";
 import { type SearchUnit, searchUnits } from "./units.ts";
@@ -177,8 +178,10 @@ export class SearchIndex {
       for (const unit of units) insert.run(path, unit.ord, unit.outlinePath, unit.anchorId ?? null, unit.title, unit.headings.join("\n"), unit.text);
       db.query("INSERT OR REPLACE INTO files (path, stamp) VALUES (?, ?)").run(path, stamp);
     });
-    for (const path of listed) {
-      const stamp = await this.source.stamp(path);
+    // The stamps first, a few at a time (Step 014, R9.3); then the files that changed, in order
+    const stamps = await mapLimit(listed, FILE_CALLS, (path) => this.source.stamp(path));
+    for (const [i, path] of listed.entries()) {
+      const stamp = stamps[i];
       if (stamp === undefined) {
         if (known.has(path)) remove(path);
         continue;

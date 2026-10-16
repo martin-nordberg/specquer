@@ -54,18 +54,49 @@ export async function gitUserName(root: string): Promise<string> {
   }
 }
 
+/** What Git lists of a work tree's files (`gitListedFiles`). */
+export interface GitListing {
+  /** Tracked files still on disk, and untracked files Git doesn't ignore, relative to the root. */
+  files: string[];
+  /** The listed files that Git tracks as symbolic links, which may lead to folders. */
+  links: Set<string>;
+}
+
 /**
- * Markdown files and folder configuration files (`.specquer-config.yaml`) Git doesn't ignore
- * (tracked, or untracked and not ignored), relative to the root, comment sidecars
- * (`*.md.comments.yaml`), and the files of `.specquer` folders, which reveal nested Specquer
- * folders (their `shared/` data is committed).
+ * Every file Git doesn't ignore (tracked, or untracked and not ignored), relative to the root,
+ * without tracked files deleted from disk and without submodules (Step 014, R9.3: Git says which
+ * files are gone, so they needn't be `stat`ed one by one).
  */
-export async function gitMarkdownFiles(root: string): Promise<string[] | null> {
-  const result = await $`git -C ${root} ls-files -z --cached --others --exclude-standard -- ${":(icase)*.md"} ${":(icase)*.md.comments.yaml"} ${":(glob)**/.specquer-config.yaml"} ${":(glob)**/.specquer/**"}`
-    .quiet()
-    .nothrow();
-  if (result.exitCode !== 0) return null;
-  return [...new Set(result.stdout.toString().split("\0").filter((p) => p !== ""))];
+export async function gitListedFiles(root: string): Promise<GitListing | null> {
+  try {
+    const [cached, others, deleted] = await Promise.all([
+      $`git -C ${root} ls-files -z --cached --stage`.quiet().nothrow(),
+      $`git -C ${root} ls-files -z --others --exclude-standard`.quiet().nothrow(),
+      $`git -C ${root} ls-files -z --deleted`.quiet().nothrow(),
+    ]);
+    if (cached.exitCode !== 0 || others.exitCode !== 0 || deleted.exitCode !== 0) return null;
+    const gone = new Set(split(deleted.stdout.toString()));
+    const files = new Set<string>();
+    const links = new Set<string>();
+    // `<mode> <object> <stage>\t<path>`; a file with merge conflicts is listed once per stage
+    for (const entry of split(cached.stdout.toString())) {
+      const tab = entry.indexOf("\t");
+      const mode = entry.slice(0, entry.indexOf(" "));
+      const path = entry.slice(tab + 1);
+      if (tab < 0 || mode === "160000" || gone.has(path)) continue;
+      files.add(path);
+      if (mode === "120000") links.add(path);
+    }
+    for (const path of split(others.stdout.toString())) files.add(path);
+    return { files: [...files], links };
+  } catch {
+    // Git isn't installed
+    return null;
+  }
+}
+
+function split(output: string): string[] {
+  return output.split("\0").filter((p) => p !== "");
 }
 
 /**
