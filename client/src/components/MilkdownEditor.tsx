@@ -353,11 +353,13 @@ export function MilkdownEditor({ value, onChange, statusLists, onStatusMenu, reg
       if (frame === 0) frame = requestAnimationFrame(report);
     };
     element.addEventListener("scroll", onScroll, { passive: true });
+    // Where the top is now, before any scrolling
+    onScroll();
     return () => {
       element.removeEventListener("scroll", onScroll);
       cancelAnimationFrame(frame);
     };
-  }, [onTopPosition]);
+  }, [onTopPosition, ready]);
 
   // Scrolls to a requested section's anchor
   const scrolled = useRef<number | null>(null);

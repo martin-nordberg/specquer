@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import type { CreateOptions, FileView, SectionStatusLists, SummaryStatus, Tree, TreeFolder, TreeNode } from "@specquer/shared/api";
 import type { Citation } from "@specquer/shared/chat";
 import { firstLine, shownBy } from "@specquer/shared/comments";
-import type { TopPosition } from "@specquer/shared/markdown";
+import type { OutlineItem, SummarizedSection, TopPosition } from "@specquer/shared/markdown";
 import { descendantsOf, sectionParents } from "@specquer/shared/sections";
 import { isMarkdownFile, isSameOrInside, renamedPath } from "@specquer/shared/paths";
 import {
@@ -22,6 +22,9 @@ import {
   setTreePaneFraction,
   setTreeView,
   setViewType,
+  setOutlineCollapsed,
+  setOutlinePaneFraction,
+  pruneOutlineCollapsed,
 } from "@specquer/shared/uistate";
 import { AnchorDialog } from "@/components/AnchorDialog";
 import { NotApplicableDialog } from "@/components/NotApplicableDialog";
@@ -39,6 +42,8 @@ import { CodeFileView } from "@/components/files/CodeFileView";
 import { FilePlaceholder } from "@/components/files/FilePlaceholder";
 import { ImageView } from "@/components/files/ImageView";
 import { TreeViewSwitcher } from "@/components/TreeViewSwitcher";
+import { OutlinePane } from "@/components/outline/OutlinePane";
+import { OutlineToggle } from "@/components/outline/OutlineToggle";
 import { FrontmatterEditor, initialFrontmatterHeight } from "@/components/FrontmatterEditor";
 import type { PreviewSummaries, ScrollTarget } from "@/components/Preview";
 import { ProblemsDialog } from "@/components/ProblemsDialog";
@@ -54,6 +59,7 @@ import { applyTheme, useSystemTheme } from "@/theme/theme";
 import { ChatStore } from "./chat-store";
 import { groupThreads, threadOrder } from "./comment-groups";
 import { bodySections } from "./body-sections";
+import { TopPositionStore } from "./top-position";
 import { CommentStore } from "./comment-store";
 import { ACTION_TITLES, type EntryAction, notApplicable } from "./entry-actions";
 import { AUTOSAVE_INTERVAL, DocumentStore, type SaveStatus } from "./document-store";
@@ -534,7 +540,34 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
     };
   }, [comments.loaded, comments.path, comments.threads, comments.available, comments.unusable, currentPath, ui.commentFilter, highlight, flash, showComments, pipHover, addComment]);
   // Where the file pane's top is, reported by the views while a pane follows it (Step 016, plan §4.3)
-  const onTopPosition = useCallback((position: TopPosition) => followSection(position.uid), [followSection]);
+  const topPositions = useMemo(() => new TopPositionStore(), []);
+  useEffect(() => topPositions.clear(), [topPositions, currentPath]);
+  const onTopPosition = useCallback(
+    (position: TopPosition) => {
+      followSection(position.uid);
+      topPositions.set(position);
+    },
+    [followSection, topPositions],
+  );
+  // What the preview shows summarized, for the Outline to follow the slider (Step 016, R7)
+  const [summarized, setSummarized] = useState<readonly SummarizedSection[]>([]);
+  /** Moves the file pane to an Outline item: by section ID, or a heading by its outline path (R5.1). */
+  const moveToItem = useCallback(
+    (item: OutlineItem) => {
+      const path = docStore.get().document?.path;
+      if (path === undefined) return;
+      if (item.sectionId !== null) setScrollTarget({ path, sectionId: item.sectionId, ...(item.uid === null ? {} : { uid: item.uid }), request: Date.now() });
+      else if (item.outlinePath !== null) setScrollTarget({ path, outlinePath: item.outlinePath, request: Date.now() });
+    },
+    [docStore],
+  );
+  const pruneCollapsed = useCallback(
+    (keys: ReadonlySet<string>) => {
+      const path = docStore.get().document?.path;
+      if (path !== undefined) uiStore.update((s) => pruneOutlineCollapsed(s, path, keys));
+    },
+    [docStore, uiStore],
+  );
   const following = ui.sidePane === "comments" || ui.sidePane === "outline";
 
   // F8 and Shift+F8: the next and previous thread the filter shows, across the document (R8)
@@ -712,6 +745,7 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
             registerFlush={docStore.addFlusher}
             comments={commentMarkers}
             {...(following ? { onTopPosition } : {})}
+            onSummarized={setSummarized}
           />
         </div>
         <ConflictDialog
@@ -731,6 +765,7 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
           Specquer
         </span>
         <span className="flex items-center gap-1">
+          <OutlineToggle open={ui.sidePane === "outline"} onChange={() => uiStore.update((s) => toggleSidePane(s, "outline"))} />
           <CommentsToggle open={ui.sidePane === "comments"} onChange={() => uiStore.update((s) => toggleSidePane(s, "comments"))} />
           {/* Twice the space before the theme toggle (R1.1) */}
           <ChatToggle open={ui.sidePane === "chat"} onChange={() => uiStore.update((s) => toggleSidePane(s, "chat"))} className="mr-1" />
@@ -741,17 +776,37 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
       <main className="min-h-0 flex-1">
         <PaneLayout
           treeFraction={ui.treePaneFraction}
-          rightFraction={ui.sidePane === "comments" ? ui.commentsPaneFraction : ui.chatPaneFraction}
+          rightFraction={ui.sidePane === "comments" ? ui.commentsPaneFraction : ui.sidePane === "outline" ? ui.outlinePaneFraction : ui.chatPaneFraction}
           rightOpen={ui.sidePane !== null}
-          rightLabel={ui.sidePane === "comments" ? "comments" : "chat"}
+          rightLabel={ui.sidePane ?? "chat"}
           onTreeFractionChange={(fraction) => uiStore.update((s) => setTreePaneFraction(s, fraction))}
           onRightFractionChange={(fraction) =>
-            uiStore.update((s) => (s.sidePane === "comments" ? setCommentsPaneFraction(s, fraction) : setChatPaneFraction(s, fraction)))
+            uiStore.update((s) =>
+              s.sidePane === "comments" ? setCommentsPaneFraction(s, fraction) : s.sidePane === "outline" ? setOutlinePaneFraction(s, fraction) : setChatPaneFraction(s, fraction),
+            )
           }
           left={left}
           center={right}
           right={
-            ui.sidePane === "comments" ? (
+            ui.sidePane === "outline" ? (
+              <OutlinePane
+                document={
+                  document_ === null
+                    ? null
+                    : { path: document_.path, body: document_.body, sectioned: statusLists?.path === document_.path && statusLists.lists.sectioned, savedVersion: doc.version }
+                }
+                notMarkdown={viewed !== null}
+                {...(statusLists !== null && statusLists.path === document_?.path ? { statusLists: statusLists.lists } : {})}
+                loadSections={api.getSections}
+                summarized={summarized}
+                collapsed={document_ === null ? [] : (fileUiState(ui, document_.path).outlineCollapsed ?? [])}
+                onCollapse={(key, collapse) => document_ !== null && uiStore.update((s) => setOutlineCollapsed(s, document_.path, key, collapse))}
+                onPrune={pruneCollapsed}
+                topPositions={topPositions}
+                onMove={moveToItem}
+                onAddAnchors={() => document_ !== null && setAnchoring({ kind: "file", name: document_.path.slice(document_.path.lastIndexOf("/") + 1), path: document_.path })}
+              />
+            ) : ui.sidePane === "comments" ? (
               <CommentsPane
                 state={comments}
                 store={commentStore}

@@ -456,16 +456,24 @@ export function Preview({
       if (frame === 0) frame = requestAnimationFrame(report);
     };
     element.addEventListener("scroll", onScroll, { passive: true });
+    // Where the top is now, before any scrolling
+    onScroll();
     return () => {
       element.removeEventListener("scroll", onScroll);
       cancelAnimationFrame(frame);
     };
-  }, [onTopPosition]);
+  }, [onTopPosition, content]);
 
   // The sections shown summarized, for the Outline (Step 016, R7): those the stop summarizes
   // that the preview really replaces (not short ones, nor ones not saved yet)
+  const reportedSummaries = useRef<string | null>(null);
   useEffect(() => {
-    onSummarized?.([...shown.values()].map((entry) => entry.section));
+    const sections = [...shown.values()].map((entry) => entry.section);
+    // Only a change of the sections summarized is reported, not every render
+    const key = sections.map((section) => section.path).join(" ");
+    if (key === reportedSummaries.current) return;
+    reportedSummaries.current = key;
+    onSummarized?.(sections);
   }, [shown, onSummarized]);
   useEffect(() => (onSummarized === undefined ? undefined : () => onSummarized([])), [onSummarized]);
 

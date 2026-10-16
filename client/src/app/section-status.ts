@@ -1,5 +1,6 @@
 import type { SectionStatusLists } from "@specquer/shared/api";
-import { type FoundSection, analyzeBody } from "@specquer/shared/markdown";
+import type { FoundSection } from "@specquer/shared/markdown";
+import { bodySections } from "./body-sections";
 import { DEFAULT_STATUS_VALUES, type SectionStatus, matchStatus, parseSectionId, sectionStatuses } from "@specquer/shared/sections";
 
 /**
@@ -30,7 +31,7 @@ export function allowedStatuses(lists: SectionStatusLists, prefix: string | unde
 /** Every section of a body with its status; empty when the file isn't sectioned. */
 export function statusesOfBody(body: string, lists: SectionStatusLists): SectionWithStatus[] {
   if (!lists.sectioned) return [];
-  const sections = analyzeBody(body).sections;
+  const sections = bodySections(body).sections;
   const statuses = sectionStatuses(sections, {
     allowed: (prefix) => allowedStatuses(lists, prefix),
     ...(lists.folderPrefix === null ? {} : { folderPrefix: lists.folderPrefix }),

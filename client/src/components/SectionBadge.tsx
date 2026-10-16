@@ -6,7 +6,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { cn } from "@/lib/utils";
 import { faviconSvg, svgDataUri } from "@/theme/logo";
 
-const badgeUri = svgDataUri(faviconSvg);
+/** The section badge's image: the § favicon. */
+export const badgeUri = svgDataUri(faviconSvg);
 
 export interface SectionBadgeProps {
   sectionId: string;

@@ -1,3 +1,4 @@
+import { DEFAULT_STATUS_VALUES, type SectionStatus, sectionStatuses } from "../sections/status.ts";
 import { sectionParents } from "../sections/tree.ts";
 import { type FoundSection, type Range, analyzeBody } from "./sections.ts";
 
@@ -28,9 +29,9 @@ export interface Outline {
   levels: number[];
 }
 
-/** Builds the outline of a body. */
-export function buildOutline(body: string): Outline {
-  const headings = analyzeBody(body).sections.filter((section) => section.kind === "heading");
+/** Builds the outline of a body; `found`, the body's sections if already known, saves parsing it again. */
+export function buildOutline(body: string, found?: readonly FoundSection[]): Outline {
+  const headings = (found ?? analyzeBody(body).sections).filter((section) => section.kind === "heading");
   const end = body.length;
   const flat = headings.map((section) => {
     const anchorFrom = section.anchor?.from ?? section.insertAt;
@@ -195,7 +196,7 @@ export interface OutlineItem {
  */
 export function outlineTree(body: string, options: { sectioned: boolean }, analysis?: { sections: readonly FoundSection[]; outline: Outline }): OutlineItem[] {
   const sections = analysis?.sections ?? analyzeBody(body).sections;
-  const outline = analysis?.outline ?? buildOutline(body);
+  const outline = analysis?.outline ?? buildOutline(body, sections);
   const paths = outlineHeadings(outline).map((heading) => heading.path);
   const parents = sectionParents(sections);
   const items = new Map<number, OutlineItem>();
@@ -288,4 +289,27 @@ export function outlineKeys(items: readonly OutlineItem[]): string[] {
   };
   visit(items);
   return keys;
+}
+
+/** The allowed statuses for the Outline's badges: the prefixes' lists and the folder's prefix. */
+export interface OutlineStatusLists {
+  folderPrefix: string | null;
+  statusValues: Readonly<Record<string, readonly string[]>>;
+}
+
+/**
+ * The Outline's tree and its sections' statuses, by UID, from one parse (Step 016). Plain data,
+ * so the preview worker can work it out off the main thread: a large document takes a few hundred
+ * milliseconds to parse.
+ */
+export function outlineOf(body: string, options: { sectioned: boolean; lists?: OutlineStatusLists }): { items: OutlineItem[]; statuses: Array<[string, SectionStatus]> } {
+  const sections = analyzeBody(body).sections;
+  const items = outlineTree(body, options, { sections, outline: buildOutline(body, sections) });
+  const lists = options.lists;
+  if (!options.sectioned || lists === undefined) return { items, statuses: [] };
+  const statuses = sectionStatuses(sections, {
+    allowed: (prefix) => (prefix === undefined ? undefined : lists.statusValues[prefix]) ?? DEFAULT_STATUS_VALUES,
+    ...(lists.folderPrefix === null ? {} : { folderPrefix: lists.folderPrefix }),
+  });
+  return { items, statuses: sections.flatMap((section, index) => (section.uid === null ? [] : [[section.uid, statuses[index]!] as [string, SectionStatus]])) };
 }

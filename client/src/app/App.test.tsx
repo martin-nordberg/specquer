@@ -178,3 +178,14 @@ test("an action that doesn't apply says why instead of opening its dialog (Step 
   expect(screen.queryByRole("textbox", { name: "New name" })).toBeNull();
   expect(rename).not.toHaveBeenCalled();
 });
+
+test("the Outline is one of three side panes, and shows the open document's headings (Step 016)", async () => {
+  const { api, patches } = allFilesApi({ sidePane: "comments" });
+  render(<App api={api} />);
+  const outline = await screen.findByRole("button", { name: "Outline" });
+  fireEvent.click(outline);
+  expect(outline.getAttribute("aria-pressed")).toBe("true");
+  expect(screen.getByRole("button", { name: "Comments" }).getAttribute("aria-pressed")).toBe("false");
+  expect(await screen.findByRole("treeitem", { name: "A" })).toBeTruthy();
+  await waitFor(() => expect(patches.some((patch) => patch.sidePane === "outline")).toBe(true));
+});

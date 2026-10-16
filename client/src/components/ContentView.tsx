@@ -163,6 +163,8 @@ export function ContentView({
       if (frame === 0) frame = requestAnimationFrame(report);
     };
     textView.scrollDOM.addEventListener("scroll", onScroll, { passive: true });
+    // Where the top is now, before any scrolling
+    onScroll();
     return () => {
       textView.scrollDOM.removeEventListener("scroll", onScroll);
       cancelAnimationFrame(frame);

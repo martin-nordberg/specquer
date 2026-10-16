@@ -15,7 +15,7 @@ let last: { body: string; result: BodySections } | null = null;
 export function bodySections(body: string): BodySections {
   if (last?.body !== body) {
     const analysis = analyzeBody(body);
-    last = { body, result: { ...analysis, outline: buildOutline(body) } };
+    last = { body, result: { ...analysis, outline: buildOutline(body, analysis.sections) } };
   }
   return last.result;
 }
