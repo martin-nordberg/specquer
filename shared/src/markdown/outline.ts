@@ -1,4 +1,5 @@
-import { type Range, analyzeBody } from "./sections.ts";
+import { sectionParents } from "../sections/tree.ts";
+import { type FoundSection, type Range, analyzeBody } from "./sections.ts";
 
 /**
  * The heading outline of a Markdown body, for summaries: each top-level heading's section with
@@ -162,4 +163,129 @@ export function summaryStopName(outline: Outline, stop: number): string {
   if (stop >= count - 1) return "Full text";
   if (stop <= 0) return "Summarize document";
   return `Summarize level ${outline.levels[stop - 1]} sections`;
+}
+
+/**
+ * An item of the Outline pane (Step 016): a section of a sectioned document, or a heading of one
+ * that isn't sectioned, with what is below it.
+ */
+export interface OutlineItem {
+  /**
+   * What the item is remembered by (collapsed, highlighted): the section's UID; else, for a
+   * heading, `path:` and its outline path; else `at:` and its offset, until the next edit.
+   */
+  key: string;
+  kind: "heading" | "item";
+  /** A heading's text; a list item's ID and first words. */
+  text: string;
+  sectionId: string | null;
+  uid: string | null;
+  /** A heading's outline path (`0.2.1`), as the summaries use; `null` for list items. */
+  outlinePath: string | null;
+  /** Where the section starts in the body. */
+  from: number;
+  children: OutlineItem[];
+}
+
+/**
+ * The Outline's tree of a body (Step 016, R2, R3): in a sectioned document its sections, list
+ * items included, nested as `sectionParents` nests them; in one that isn't sectioned, its
+ * headings. The root section isn't an item: its sections are the top level. Built on the
+ * heading outline, so each heading has the outline path the summary slider uses (plan D1).
+ */
+export function outlineTree(body: string, options: { sectioned: boolean }, analysis?: { sections: readonly FoundSection[]; outline: Outline }): OutlineItem[] {
+  const sections = analysis?.sections ?? analyzeBody(body).sections;
+  const outline = analysis?.outline ?? buildOutline(body);
+  const paths = outlineHeadings(outline).map((heading) => heading.path);
+  const parents = sectionParents(sections);
+  const items = new Map<number, OutlineItem>();
+  const top: OutlineItem[] = [];
+  let heading = 0;
+  sections.forEach((section, index) => {
+    if (section.kind === "root") return;
+    const outlinePath = section.kind === "heading" ? (paths[heading++] ?? null) : null;
+    if (section.kind === "item" && !options.sectioned) return;
+    const sectioned = options.sectioned;
+    const id = sectioned ? section.id : null;
+    const uid = sectioned ? section.uid : null;
+    const from = Math.min(section.anchor?.from ?? section.insertAt, section.range?.from ?? section.insertAt, section.insertAt);
+    const text = section.kind === "item" ? [id, section.title].filter((part) => part !== null && part !== "").join(" ") : section.title;
+    const key = uid ?? (outlinePath !== null ? `path:${outlinePath}` : `at:${from}`);
+    const item: OutlineItem = { key, kind: section.kind, text, sectionId: id, uid, outlinePath, from, children: [] };
+    items.set(index, item);
+    // The nearest enclosing section shown in the tree, or the top level
+    let parent = parents[index] ?? null;
+    while (parent !== null && !items.has(parent)) parent = parents[parent] ?? null;
+    (parent === null ? top : items.get(parent)!.children).push(item);
+  });
+  return top;
+}
+
+/** What the summary slider leaves of the outline (Step 016, R7). */
+export interface VisibleOutline {
+  items: OutlineItem[];
+  /** The keys of the items whose sections a summary replaces; nothing below them is shown. */
+  summarized: ReadonlySet<string>;
+  /** The whole document is summarized: no item is shown. */
+  whole: boolean;
+}
+
+/**
+ * The items a slider stop leaves visible: a summarized section stays, marked, without what is
+ * below it, as its summary stays in the preview (R7.1, R7.2); the whole document summarized
+ * leaves none (R7.3).
+ */
+export function visibleAt(items: readonly OutlineItem[], summarized: readonly SummarizedSection[]): VisibleOutline {
+  if (summarized.some((section) => section.document)) return { items: [], summarized: new Set(), whole: true };
+  const paths = new Set(summarized.map((section) => section.path));
+  const keys = new Set<string>();
+  const visit = (list: readonly OutlineItem[]): OutlineItem[] =>
+    list.map((item) => {
+      if (item.outlinePath !== null && paths.has(item.outlinePath)) {
+        keys.add(item.key);
+        return { ...item, children: [] };
+      }
+      return item.children.length === 0 ? item : { ...item, children: visit(item.children) };
+    });
+  return { items: paths.size === 0 ? [...items] : visit(items), summarized: keys, whole: false };
+}
+
+/** Where a view's top is: the section there, by UID, and the heading, by outline path. */
+export interface TopPosition {
+  uid: string | null;
+  outlinePath: string | null;
+}
+
+/**
+ * The keys from the top level down to the item at a position, found by UID, else by outline
+ * path; `[]` when none matches. The caller highlights the deepest of them it shows, so a
+ * position inside a summary or a collapsed item lands on that item (R4.5, R7.6).
+ */
+export function itemPathAt(items: readonly OutlineItem[], position: TopPosition): string[] {
+  const search = (list: readonly OutlineItem[], match: (item: OutlineItem) => boolean): string[] => {
+    for (const item of list) {
+      if (match(item)) return [item.key];
+      const below = search(item.children, match);
+      if (below.length > 0) return [item.key, ...below];
+    }
+    return [];
+  };
+  if (position.uid !== null) {
+    const found = search(items, (item) => item.uid === position.uid);
+    if (found.length > 0) return found;
+  }
+  return position.outlinePath === null ? [] : search(items, (item) => item.outlinePath === position.outlinePath);
+}
+
+/** Every key in a tree, for pruning remembered state. */
+export function outlineKeys(items: readonly OutlineItem[]): string[] {
+  const keys: string[] = [];
+  const visit = (list: readonly OutlineItem[]) => {
+    for (const item of list) {
+      keys.push(item.key);
+      visit(item.children);
+    }
+  };
+  visit(items);
+  return keys;
 }

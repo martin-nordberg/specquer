@@ -20,6 +20,9 @@ import {
   setSummaryStop,
   setTreePaneFraction,
   setTreeView,
+  setOutlinePaneFraction,
+  setOutlineCollapsed,
+  pruneOutlineCollapsed,
   setViewType,
   summaryStopOf,
 } from "./uistate.ts";
@@ -28,6 +31,23 @@ describe("parseUiState", () => {
   test("defaults for missing or invalid content", () => {
     expect(parseUiState(undefined)).toEqual(defaultUiState());
     expect(parseUiState("garbage")).toEqual(defaultUiState());
+  });
+
+  test("the Outline pane: its side pane value, width and collapsed items (Step 016)", () => {
+    expect(parseUiState({ sidePane: "outline" }).sidePane).toBe("outline");
+    expect(defaultUiState().outlinePaneFraction).toBe(0.3);
+    expect(parseUiState({ outlinePaneFraction: 0.9 }).outlinePaneFraction).toBe(0.3);
+    expect(setOutlinePaneFraction(defaultUiState(), 0.9).outlinePaneFraction).toBe(0.5);
+    let state = setOutlineCollapsed(defaultUiState(), "a.md", "uid000000001", true);
+    state = setOutlineCollapsed(state, "a.md", "path:0.1", true);
+    expect(state.files["a.md"]?.outlineCollapsed).toEqual(["uid000000001", "path:0.1"]);
+    expect(setOutlineCollapsed(state, "a.md", "path:0.1", true)).toBe(state);
+    expect(parseUiState({ files: { "a.md": { viewType: "split", outlineCollapsed: ["x", 3, "x"] } } }).files["a.md"]?.outlineCollapsed).toEqual(["x"]);
+    state = pruneOutlineCollapsed(state, "a.md", new Set(["path:0.1"]));
+    expect(state.files["a.md"]?.outlineCollapsed).toEqual(["path:0.1"]);
+    state = setOutlineCollapsed(state, "a.md", "path:0.1", false);
+    expect(state.files["a.md"]).toEqual({ viewType: "text" });
+    expect(diffUiState(defaultUiState(), setOutlinePaneFraction(defaultUiState(), 0.4))).toEqual({ outlinePaneFraction: 0.4 });
   });
 
   test("the folder pane's view defaults to specs, and an invalid one becomes specs (Step 014)", () => {

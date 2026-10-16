@@ -28,8 +28,8 @@ export type ViewType = z.infer<typeof viewTypeSchema>;
 
 export const themeSchema = z.enum(["light", "dark"]);
 
-/** What the third pane shows: AI Chat, Comments, or nothing (`null`) (Step 012, R1.3). */
-export const sidePaneSchema = z.enum(["chat", "comments"]);
+/** What the third pane shows: AI Chat, Comments, the Outline (Step 016), or nothing (`null`) (Step 012, R1.3). */
+export const sidePaneSchema = z.enum(["chat", "comments", "outline"]);
 export type SidePane = z.infer<typeof sidePaneSchema>;
 
 /** What the folder pane shows: Markdown files (`specs`) or every file (`all`) (Step 014, R1). */
@@ -43,6 +43,12 @@ export const fileUiStateSchema = z.object({
   frontmatterHeight: z.number().positive().optional().catch(undefined),
   /** The summary slider's position, as steps from the full text (0, or absent, is the full text). */
   summaryStop: z.number().int().min(0).max(MAX_SUMMARY_STEPS).optional().catch(undefined),
+  /** The Outline's collapsed items, by key: section UIDs, or `path:` and an outline path (Step 016, R11.2). */
+  outlineCollapsed: z
+    .array(z.unknown())
+    .transform((keys) => [...new Set(keys.filter((key): key is string => typeof key === "string"))])
+    .optional()
+    .catch(undefined),
 });
 export type FileUiState = z.infer<typeof fileUiStateSchema>;
 
@@ -78,6 +84,12 @@ export const uiStateSchema = z.object({
     .min(MIN_CHAT_PANE_FRACTION)
     .max(MAX_CHAT_PANE_FRACTION)
     .catch(DEFAULT_CHAT_PANE_FRACTION),
+  /** Width of the Outline pane, with the chat pane's limits (Step 016). */
+  outlinePaneFraction: z
+    .number()
+    .min(MIN_CHAT_PANE_FRACTION)
+    .max(MAX_CHAT_PANE_FRACTION)
+    .catch(DEFAULT_CHAT_PANE_FRACTION),
   /** Which comment threads the pane, the pips and F8 show. */
   commentFilter: commentFilterSchema.catch("open"),
   /** The folder pane's view; both views share the expanded folders. */
@@ -108,6 +120,7 @@ export const uiStatePatchSchema = z
     sidePane: sidePaneSchema.nullable(),
     chatPaneFraction: z.number().min(MIN_CHAT_PANE_FRACTION).max(MAX_CHAT_PANE_FRACTION),
     commentsPaneFraction: z.number().min(MIN_CHAT_PANE_FRACTION).max(MAX_CHAT_PANE_FRACTION),
+    outlinePaneFraction: z.number().min(MIN_CHAT_PANE_FRACTION).max(MAX_CHAT_PANE_FRACTION),
     commentFilter: commentFilterSchema,
     treeView: treeViewSchema,
     expandedFolders: z.array(z.string()),
@@ -125,6 +138,7 @@ export function defaultUiState(): UiState {
     sidePane: null,
     chatPaneFraction: DEFAULT_CHAT_PANE_FRACTION,
     commentsPaneFraction: DEFAULT_CHAT_PANE_FRACTION,
+    outlinePaneFraction: DEFAULT_CHAT_PANE_FRACTION,
     commentFilter: "open",
     treeView: "specs",
     expandedFolders: [],
@@ -161,6 +175,7 @@ export function diffUiState(from: UiState, to: UiState): UiStatePatch {
   if (from.sidePane !== to.sidePane) patch.sidePane = to.sidePane;
   if (from.chatPaneFraction !== to.chatPaneFraction) patch.chatPaneFraction = to.chatPaneFraction;
   if (from.commentsPaneFraction !== to.commentsPaneFraction) patch.commentsPaneFraction = to.commentsPaneFraction;
+  if (from.outlinePaneFraction !== to.outlinePaneFraction) patch.outlinePaneFraction = to.outlinePaneFraction;
   if (from.commentFilter !== to.commentFilter) patch.commentFilter = to.commentFilter;
   if (from.treeView !== to.treeView) patch.treeView = to.treeView;
   if (!same(from.expandedFolders, to.expandedFolders)) patch.expandedFolders = to.expandedFolders;
@@ -251,6 +266,27 @@ export function setChatPaneFraction(state: UiState, fraction: number): UiState {
 
 export function setCommentsPaneFraction(state: UiState, fraction: number): UiState {
   return { ...state, commentsPaneFraction: clampChatPaneFraction(fraction) };
+}
+
+export function setOutlinePaneFraction(state: UiState, fraction: number): UiState {
+  return { ...state, outlinePaneFraction: clampChatPaneFraction(fraction) };
+}
+
+/** Collapses or expands an Outline item of a file (Step 016, R4.4); an empty list is dropped. */
+export function setOutlineCollapsed(state: UiState, path: string, key: string, collapsed: boolean): UiState {
+  const { outlineCollapsed = [], ...rest } = fileUiState(state, path);
+  if (outlineCollapsed.includes(key) === collapsed) return state;
+  const next = collapsed ? [...outlineCollapsed, key] : outlineCollapsed.filter((k) => k !== key);
+  return { ...state, files: { ...state.files, [path]: next.length === 0 ? rest : { ...rest, outlineCollapsed: next } } };
+}
+
+/** Drops a file's collapsed Outline items that are no longer in the document (R11.2). */
+export function pruneOutlineCollapsed(state: UiState, path: string, keys: ReadonlySet<string>): UiState {
+  const { outlineCollapsed, ...rest } = fileUiState(state, path);
+  if (outlineCollapsed === undefined) return state;
+  const kept = outlineCollapsed.filter((key) => keys.has(key));
+  if (kept.length === outlineCollapsed.length) return state;
+  return { ...state, files: { ...state.files, [path]: kept.length === 0 ? rest : { ...rest, outlineCollapsed: kept } } };
 }
 
 export function setCommentFilter(state: UiState, filter: CommentFilter): UiState {

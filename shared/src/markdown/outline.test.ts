@@ -1,6 +1,18 @@
 import { describe, expect, test } from "bun:test";
 import type { Element, Root, RootContent } from "hast";
-import { buildOutline, sectionAtPath, summarizedAt, summaryStopCount, summaryStopName, type OutlineSection } from "./outline.ts";
+import {
+  type OutlineItem,
+  type OutlineSection,
+  buildOutline,
+  itemPathAt,
+  outlineKeys,
+  outlineTree,
+  sectionAtPath,
+  summarizedAt,
+  summaryStopCount,
+  summaryStopName,
+  visibleAt,
+} from "./outline.ts";
 import { markdownToHast } from "./preview.ts";
 import { OUTLINE_PATH_PROPERTY, SUMMARY_TAG, summarizeTree } from "./summary-tree.ts";
 
@@ -157,5 +169,83 @@ describe("summarizeTree", () => {
     const bom = "﻿# A\n\nText\n\n## B\n\nMore\n";
     const o = buildOutline(bom);
     expect(topLevel(summarizeTree(markdownToHast(bom), bom, o, summarizedAt(o, 2, bom.length)))).toEqual(["h1:A", "p:Text", "h2:B", "summary:0.0"]);
+  });
+});
+
+describe("the Outline's tree (Step 016)", () => {
+  const anchored = (id: string, uid: string) => `<a id="${id}" data-uid="${uid}"></a>`;
+  const SECTIONED = [
+    anchored("REQ-00001", "rootuid00001"),
+    "",
+    anchored("REQ-00002", "uidintro0001"),
+    "# Intro",
+    "",
+    "Text.",
+    "",
+    anchored("REQ-00003", "uiddetails01"),
+    "## Details",
+    "",
+    `- ${anchored("REQ-00004", "uiditem00001")} The user can reset a password with a link sent by mail`,
+    `- ${anchored("REQ-00006", "uiditem00003")} Short`,
+    "",
+    "### Deep",
+    "",
+    "Setext",
+    "------",
+    "",
+    "# Second",
+    "",
+  ].join("\n");
+
+  const shape = (items: readonly OutlineItem[]): unknown[] => items.map((item) => (item.children.length === 0 ? item.text : [item.text, shape(item.children)]));
+
+  test("a sectioned document: headings and list items (top-level lists only), nested, without the root", () => {
+    const tree = outlineTree(SECTIONED, { sectioned: true });
+    expect(shape(tree)).toEqual([
+      ["Intro", [["Details", ["REQ-00004 The user can reset a password with a …", "REQ-00006 Short", "Deep"]], "Setext"]],
+      "Second",
+    ]);
+    const [intro] = tree;
+    expect(intro).toMatchObject({ key: "uidintro0001", kind: "heading", sectionId: "REQ-00002", uid: "uidintro0001", outlinePath: "0" });
+    const details = intro!.children[0]!;
+    expect(details.outlinePath).toBe("0.0");
+    expect(details.children[0]).toMatchObject({ kind: "item", key: "uiditem00001", outlinePath: null });
+    // A heading without an anchor yet is known by its outline path
+    expect(details.children[2]).toMatchObject({ text: "Deep", key: "path:0.0.0", sectionId: null, uid: null });
+    expect(intro!.children[1]).toMatchObject({ text: "Setext", outlinePath: "0.1" });
+    expect(SECTIONED.slice(intro!.from).startsWith('<a id="REQ-00002"')).toBe(true);
+  });
+
+  test("a document that isn't sectioned: its headings only, by outline path", () => {
+    const tree = outlineTree(SECTIONED, { sectioned: false });
+    expect(shape(tree)).toEqual([["Intro", [["Details", ["Deep"]], "Setext"]], "Second"]);
+    expect(outlineKeys(tree)).toEqual(["path:0", "path:0.0", "path:0.0.0", "path:0.1", "path:1"]);
+    expect(tree[0]).toMatchObject({ sectionId: null, uid: null });
+    expect(outlineTree("Just text.\n", { sectioned: false })).toEqual([]);
+  });
+
+  test("a slider stop leaves the sections it doesn't hide, marking the summarized ones", () => {
+    const tree = outlineTree(SECTIONED, { sectioned: true });
+    const outline = buildOutline(SECTIONED);
+    const at = (stop: number) => visibleAt(tree, summarizedAt(outline, stop, SECTIONED.length));
+    // Levels 1, 2 and 3: stops 0 (the whole document) to 4 (the full text)
+    expect(summaryStopCount(outline)).toBe(5);
+    expect(at(4)).toEqual({ items: tree, summarized: new Set(), whole: false });
+    // Level 3 summarized: "Deep" stays, marked
+    expect(shape(at(3).items)).toEqual(shape(tree));
+    expect([...at(3).summarized]).toEqual(["path:0.0.0"]);
+    // Level 2 summarized: everything below Details and Setext disappears, list items included
+    expect(shape(at(2).items)).toEqual([["Intro", ["Details", "Setext"]], "Second"]);
+    expect([...at(2).summarized]).toEqual(["uiddetails01", "path:0.1"]);
+    expect(shape(at(1).items)).toEqual(["Intro", "Second"]);
+    expect(at(0)).toEqual({ items: [], summarized: new Set(), whole: true });
+  });
+
+  test("the item at a position: by UID, else by outline path, as a path of keys", () => {
+    const tree = outlineTree(SECTIONED, { sectioned: true });
+    expect(itemPathAt(tree, { uid: "uiditem00003", outlinePath: "0.0" })).toEqual(["uidintro0001", "uiddetails01", "uiditem00003"]);
+    expect(itemPathAt(tree, { uid: null, outlinePath: "0.0.0" })).toEqual(["uidintro0001", "uiddetails01", "path:0.0.0"]);
+    expect(itemPathAt(tree, { uid: "unknown00001", outlinePath: "1" })).toEqual(["path:1"]);
+    expect(itemPathAt(tree, { uid: null, outlinePath: null })).toEqual([]);
   });
 });
