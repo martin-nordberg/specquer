@@ -164,6 +164,7 @@ export default defineConfig({
                         {text: 'Ideas', link: '/notes/ideas'},
                         {text: 'Platform Choice', link: '/notes/platform-choice'},
                         {text: 'Database Choice', link: '/notes/database-choice'},
+                        {text: 'PGlite and pgvector', link: '/notes/pglite-pgvector'},
                         {text: 'Traceability Links', link: '/notes/traceability-links'},
                         {text: 'Agent-Delegated Summaries', link: '/notes/agent-delegated-summaries'},
                         {text: 'LangChain or AI SDK (historical)', link: '/notes/langchain-vs-ai-sdk'},
