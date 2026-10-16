@@ -176,7 +176,7 @@ describe("AnchorDialog", () => {
 
   test("says when there are no sectioned files, for a folder and for a file", async () => {
     const { unmount } = render(<AnchorDialog target={notes} onClose={() => {}} loadChanges={async () => ({ files: [], sectioned: 0, agentGuide: true })} onRun={async () => null} />);
-    expect(await screen.findByText(/“notes” holds no sectioned files\. Section anchors are added only in sectioned folders/)).toBeTruthy();
+    expect(await screen.findByText("Folder “notes” holds no sectioned files. Section anchors are added only in sectioned folders; see the folder's Settings….")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Add anchors" })).toBeNull();
     unmount();
     render(<AnchorDialog target={file} onClose={() => {}} loadChanges={async () => ({ files: [], sectioned: 0, agentGuide: true })} onRun={async () => null} />);
@@ -194,7 +194,7 @@ describe("ProblemsDialog for a file or an unsectioned folder (Step 015)", () => 
     unmount();
     const nested: SectionProblem[] = [{ kind: "nested-specquer", folder: "notes/inner" }];
     render(<ProblemsDialog target={notes} onClose={() => {}} loadProblems={async () => ({ problems: nested, sectioned: 0 })} onOpen={() => {}} onRenumber={async () => null} onRenumberDocument={async () => null} />);
-    expect(await screen.findByText("“notes” holds no sectioned files, so it has no section anchors to check.")).toBeTruthy();
+    expect(await screen.findByText("Folder “notes” holds no sectioned files, so it has no section anchors to check.")).toBeTruthy();
     expect(screen.queryByText("No problems found.")).toBeNull();
     expect((await screen.findByRole("list", { name: "Problems" })).textContent).toContain("notes/inner/.specquer/");
   });

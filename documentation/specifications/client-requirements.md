@@ -72,7 +72,7 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 ### 3.4 Add Section Anchors
 
 1. It is opened with **Add section anchors…** in a folder's or a file's menu (§3), for everything in the folder or for that file alone. The open file is saved first.
-2. A modal dialog says how many sectioned files in the folder (or whether the file) will change and lists them, with **Add anchors** and **Cancel** buttons; when none would change it says so and offers only **Close**. When the folder holds no sectioned files, or the file isn't in a sectioned folder, it says so ("“notes” holds no sectioned files. Section anchors are added only in sectioned folders; see the folder's Settings…").
+2. A modal dialog says how many sectioned files in the folder (or whether the file) will change and lists them, with **Add anchors** and **Cancel** buttons; when none would change it says so and offers only **Close**. When the folder holds no sectioned files, or the file isn't in a sectioned folder, it says so ("Folder “notes” holds no sectioned files. Section anchors are added only in sectioned folders; see the folder's Settings…").
 3. Adding the anchors rewrites those files (see [Server Requirements](server-requirements.md) §6). If the open file was among them, it is reloaded.
 4. While the root folder's `AGENTS.md` lacks the section anchor rules for coding agents, the dialog, for a folder, offers to add them with a checkbox, unticked. Ticked, the dialog can run even when no file needs anchors (**Add to AGENTS.md**).
 

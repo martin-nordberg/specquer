@@ -179,7 +179,7 @@ test("a folder that isn't sectioned says so instead of anchoring (Step 015)", as
   await treeItem(page, "notes").click({ button: "right" });
   await page.getByRole("menuitem", { name: "Add section anchors…" }).click();
   const dialog = page.getByRole("dialog", { name: "Add section anchors" });
-  await expect(dialog).toContainText("“notes” holds no sectioned files");
+  await expect(dialog).toContainText("Folder “notes” holds no sectioned files");
   await expect(dialog.getByRole("button", { name: "Add anchors" })).toHaveCount(0);
 });
 

@@ -63,7 +63,7 @@ export function AnchorDialog({ target, onClose, loadChanges, onRun }: AnchorDial
   const isFile = target?.kind === "file";
   const unsectioned = isFile
     ? `${name} isn't in a sectioned folder. Section anchors are added only in sectioned folders; see its folder's Settings….`
-    : `${name} holds no sectioned files. Section anchors are added only in sectioned folders; see the folder's Settings….`;
+    : `${target?.path === "" ? "The root folder" : `Folder ${name}`} holds no sectioned files. Section anchors are added only in sectioned folders; see the folder's Settings….`;
 
   return (
     <Dialog open={target !== null} onOpenChange={(open) => !open && onClose()}>

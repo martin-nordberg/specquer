@@ -174,6 +174,10 @@ export function ProblemsDialog({ target, onClose, loadProblems, onOpen, onRenumb
   };
 
   const name = target === null ? "" : entryName(target);
+  const unsectioned =
+    target?.kind === "file"
+      ? `${name} isn't in a sectioned folder, so it has no section anchors to check.`
+      : `${target?.path === "" ? "The root folder" : `Folder ${name}`} holds no sectioned files, so it has no section anchors to check.`;
 
   return (
     <Dialog open={target !== null} onOpenChange={(isOpen) => !isOpen && onClose()}>
@@ -185,7 +189,7 @@ export function ProblemsDialog({ target, onClose, loadProblems, onOpen, onRenumb
         {/* Problems that need no sectioned files, such as a nested Specquer folder, are still listed */}
         {problems !== null && sectioned === 0 && (
           <p className="text-sm">
-            {target?.kind === "file" ? `${name} isn't in a sectioned folder` : `${name} holds no sectioned files`}, so it has no section anchors to check.
+            {unsectioned}
           </p>
         )}
         {problems !== null && problems.length === 0 && sectioned > 0 && <p className="text-sm">No problems found.</p>}
