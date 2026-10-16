@@ -160,6 +160,14 @@ export default defineConfig({
                     items: [
                       {text: 'Task and Plan', link: '/work-items/step-015-folder-menu/task'},
                     ]
+                  },
+                  {
+                    text: '016-Table of Contents',
+                    collapsed: false,
+                    items: [
+                      {text: 'Notes', link: '/work-items/step-016-right-pane-section-nav/notes'},
+                      {text: 'Requirements', link: '/work-items/step-016-right-pane-section-nav/requirements'},
+                    ]
                   }
                 ]
               }
