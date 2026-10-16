@@ -64,7 +64,7 @@ Step 014 takes precedence over the specifications and earlier steps where they c
    - **`.git`** and **Specquer's protected files**, `.specquer/user/` (the session's `instance.json` with its token, the chat history, approvals, UI state) and `.specquer/cache/`, are never listed, whatever `.gitignore` says.
 2. **Shown in All Files:** everything else, including names starting with "." (`.gitignore`, `.github/`, `.vitepress/`, `.claude/`), `.specquer/` and the committed files in `.specquer/shared/`, `.specquer-config.yaml` files and comment sidecars.
 3. **Only Markdown is changed.** Specquer doesn't edit, rename, copy, move or delete a file that isn't Markdown. That isn't its mission.
-   - **Files other than Markdown** have no context menu, open view-only, and can't be dragged.
+   - **Files other than Markdown** have no context menu, open view-only, and can't be dragged. ([Step 015](/work-items/step-015-folder-menu/task) gives every file and folder the same menu, `.specquer` included; actions that don't apply say why.)
    - **Markdown files** have today's menu and are edited as today, in either view and in any folder, names starting with "." included.
    - **Folders** keep today's menu (**New file…**, **New folder…**, **Settings…**, **Section problems…**, **Rename…**, **Delete…**). **New file…** still creates Markdown files only. Renaming or deleting a folder still takes everything in it along, after the delete dialog has listed it (Client Requirements §3.3), as today.
    - **Specquer's own files** keep changing only through their own paths: **Settings…** writes `.specquer-config.yaml`, the Comments pane writes sidecars, and the server writes the section data files.

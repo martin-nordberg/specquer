@@ -22,7 +22,7 @@ This document describes what Specquer works with and how its screen is organized
 | Section anchor and ID | An invisible HTML anchor that marks a section with a permanent ID such as `REQ-00257`, used in links to the section, and its UID (`data-uid`), the section's identity. The root anchor's UID is the document ID. |
 | Folder configuration | A folder's `.specquer-config.yaml`: its type (Baseline, Change, Auxiliary or Non-sectioned) and default prefix, each inherited by the folders in it unless they set their own. Edited in the folder settings dialog; shown, view-only, in **All Files**. |
 | Shared data | The section data files in `.specquer/shared/`, committed to Git: per prefix, `sections.yaml` (live and retired sections, the root sections keyed by the document ID), written by Specquer, and optionally `prefix.config.yaml` (the prefix's allowed statuses), edited by hand. |
-| Agent guide | Optional section anchor rules for coding agents in the root folder's `AGENTS.md`, added on request by **Add section anchors** (in a folder's settings). |
+| Agent guide | Optional section anchor rules for coding agents in the root folder's `AGENTS.md`, added on request by **Add section anchors** (in a folder's menu). |
 | Summary | An AI-generated summary of a heading section, or of the whole document, shown in the preview in place of the section's content by the summary slider. Made from the saved file by the model named in the agent configuration, and cached until unused for 60 days. See [Data Architecture](data-architecture.md) §4. |
 | Agent configuration | `.specquer/shared/agent.config.yaml` (committed) names the model for agent features and the environment variable holding its key; an optional `.specquer/user/agent.config.yaml` overrides it for one user. Without it, Specquer makes no network calls. |
 | Summary cache | `.specquer/cache/summaries.db`, per user and ignored by Git. |
@@ -82,7 +82,7 @@ Specquer has one view: a header and two or three panes side by side. The third p
 | Region | Contents |
 | ------ | -------- |
 | Header | App icon and application name; the chat toggle, the light/dark switch and the settings gear button |
-| Left pane | The **Specs** / **All Files** selector above the folder tree; context menu on each folder (New file, New folder, Settings, Section problems, Rename, Delete), each Markdown file (Rename, Delete) and the empty space below the last entry (New file, New folder, Settings, Section problems for the root); none on other files or in `.specquer` |
+| Left pane | The **Specs** / **All Files** selector above the folder tree; the same context menu on every folder (New file, New folder / Rename, Delete / Add section anchors, Settings, Section problems), every file (Rename, Delete / Add section anchors, Section problems) and the empty space below the last entry (the folder's, without Rename and Delete, for the root); an action that doesn't apply says why |
 | Right pane, row 1 | File path breadcrumb (a drop-down of recent files once there are any), save status, view-type switch |
 | Right pane, row 2 | Front matter editor with a drag bar below it |
 | Right pane, row 3 | Markdown content in one of four views |

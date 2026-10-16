@@ -31,7 +31,12 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 2. Folders come before files; names sort naturally, ignoring case.
 3. Clicking a folder expands or collapses it. Expanded folders persist in the UI state, shared by both views.
 4. Single-clicking a file opens it in the file pane (§13 for files other than Markdown). The open file is highlighted with the navigation color; switching views keeps it open.
-5. Right-clicking a folder or a Markdown file opens a context menu with **Rename…** and **Delete…**. For a folder, the menu starts with **New file…**, **New folder…**, **Settings…** (with a gear icon, §3.6) and **Section problems…**. Right-clicking the empty space below the last entry (or in an empty tree) offers the same four for the root folder. Specquer changes only Markdown files: other files, and everything in `.specquer`, have no menu. Renaming or deleting a folder still takes everything in it along.
+5. Right-clicking a folder or a file opens its context menu ([Step 015](/work-items/step-015-folder-menu/task)), the same for every folder and every file, Markdown or not, in either view:
+   - **A folder:** **New file…**, **New folder…**, separator, **Rename…**, **Delete…**, separator, **Add section anchors…** (§3.4), **Settings…** (with a gear icon, §3.6), **Section problems…** (§3.5).
+   - **The root folder** (the empty space below the last entry, or an empty tree): the same without **Rename…** and **Delete…**.
+   - **A file:** **Rename…**, **Delete…**, separator, **Add section anchors…**, **Section problems…**.
+
+   When an action doesn't apply to an entry, a dialog says why instead, with **Close** only, and nothing is sent: Specquer renames and deletes only Markdown files ("Rename “build.ts” outside Specquer."), only Markdown files have sections, and everything in `.specquer` is Specquer's own data, which Specquer changes itself. Renaming or deleting a folder still takes everything in it along.
 6. Each file has an icon for its kind, from its name alone: Markdown (a page with lines), text (a page with code brackets), image, and other files (a blank page).
 
 <a id="SPEC-00044" data-uid="u5s5qfu4wurh"></a>
@@ -66,16 +71,16 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 <a id="SPEC-00047" data-uid="w748uemplxzf"></a>
 ### 3.4 Add Section Anchors
 
-1. It is opened with **Add section anchors…** in a folder's settings (§3.6). The open file is saved first.
-2. A modal dialog says how many sectioned files in the folder will change and lists them, with **Add anchors** and **Cancel** buttons; when none would change it says so and offers only **Close**.
+1. It is opened with **Add section anchors…** in a folder's or a file's menu (§3), for everything in the folder or for that file alone. The open file is saved first.
+2. A modal dialog says how many sectioned files in the folder (or whether the file) will change and lists them, with **Add anchors** and **Cancel** buttons; when none would change it says so and offers only **Close**. When the folder holds no sectioned files, or the file isn't in a sectioned folder, it says so ("“notes” holds no sectioned files. Section anchors are added only in sectioned folders; see the folder's Settings…").
 3. Adding the anchors rewrites those files (see [Server Requirements](server-requirements.md) §6). If the open file was among them, it is reloaded.
-4. While the root folder's `AGENTS.md` lacks the section anchor rules for coding agents, the dialog offers to add them with a checkbox, unticked. Ticked, the dialog can run even when no file needs anchors (**Add to AGENTS.md**).
+4. While the root folder's `AGENTS.md` lacks the section anchor rules for coding agents, the dialog, for a folder, offers to add them with a checkbox, unticked. Ticked, the dialog can run even when no file needs anchors (**Add to AGENTS.md**).
 
 <a id="SPEC-00048" data-uid="v328rz9e2tip"></a>
 ### 3.5 Section Problems
 
-1. The open file is saved first.
-2. A modal dialog lists the problems in the folder's sectioned files: folders below the root with a `.specquer/` of their own (another Specquer's data, ignored here, to check and delete), whole files copied when Specquer can't tell the original from the copy, IDs used by copies of one section in several documents, IDs used by different sections (two branches issued one number), stray anchors (with their line), files with merge conflict markers, statuses that aren't allowed for their section's prefix (with their line), and unusable `prefix.config.yaml` files of the prefixes the folder holds (the prefix then uses the default statuses).
+1. It is opened with **Section problems…** in a folder's or a file's menu (§3). The open file is saved first.
+2. A modal dialog lists the problems in the folder's sectioned files, or those involving the file (with their other side: a duplicate ID's occurrences in other files, both copies of a copied document). When the folder holds no sectioned files, or the file isn't in a sectioned folder, it says so, and still lists the problems that need none, such as a nested Specquer folder. The problems are: folders below the root with a `.specquer/` of their own (another Specquer's data, ignored here, to check and delete), whole files copied when Specquer can't tell the original from the copy, IDs used by copies of one section in several documents, IDs used by different sections (two branches issued one number), stray anchors (with their line), files with merge conflict markers, statuses that aren't allowed for their section's prefix (with their line), and unusable `prefix.config.yaml` files of the prefixes the folder holds (the prefix then uses the default statuses).
 3. Each occurrence opens its file, at the section. Each occurrence of a duplicate or colliding ID that doesn't keep the ID has **Renumber**, which gives it a new number; each file of a copied document has **Renumber this copy**, which renumbers all its sections (the open file is saved first and reloaded after). The list then reloads.
 
 <a id="SPEC-00108" data-uid="szimo5b2q5wk"></a>
@@ -85,7 +90,7 @@ Requirements for the browser user interface (`client/`). They come from [Step 00
 2. **Folder type** has five choices: **Inherited** (no type of its own; the dialog says where the type comes from and what it is, e.g. "from documentation: Baseline", or "non-sectioned" when no folder above sets one), **Baseline**, **Change**, **Auxiliary** and **Non-sectioned**, each with a one-line description.
 3. **Default prefix** shows for a sectioned type, starting from the folder's own prefix or else the inherited one, which the help text names. It is typed in upper case and checked as the section ID prefix (an upper-case letter and 1 to 4 upper-case letters or digits); an invalid prefix, or none for a sectioned type, is reported under the field. A prefix equal to the inherited one is saved as inherited. Several folders may share a prefix.
 4. Saving writes only the values that differ from the inherited ones; a file left with nothing is deleted. The type and prefix fields are shared with the new folder dialog.
-5. **Add section anchors…** opens **Add section anchors** (§3.4) for the folder, closing this dialog. It is enabled while the folder is sectioned with the saved settings.
+5. **Add section anchors** is in the folder's menu (§3), not in this dialog ([Step 015](/work-items/step-015-folder-menu/task)).
 6. **Save** is enabled once the setting changed and is valid. When the save makes the folder sectioned, the dialog says so and offers **Add section anchors…** and **Close**; when it stops being sectioned, it says the anchors stay in the files and the sections keep their IDs if it is sectioned again.
 7. If the file changed on disk since the dialog read it, the save is refused, the dialog reloads the settings and says so. A file that isn't valid YAML is reported and can't be saved to until it is fixed by hand.
 
@@ -248,7 +253,7 @@ From [Step 012](/work-items/step-012-comment-threads/requirements).
 <a id="SPEC-00127" data-uid="r2pvk6k274nm"></a>
 ## 13. Files Other Than Markdown
 
-From [Step 014](/work-items/step-014-all-files/requirements). Specquer edits Markdown files only; every other file is shown view-only.
+From [Step 014](/work-items/step-014-all-files/requirements). Specquer edits Markdown files only; every other file is shown view-only. Such files have the same menu as any file (§3), whose **Rename…**, **Delete…**, **Add section anchors…** and **Section problems…** say why they don't apply.
 
 1. **Opening.** A file other than Markdown opens as a Markdown file does, after the open document is saved (staying put on a conflict or a failed save). The file pane then shows its path with the recent files, and no save status, view selector, front matter editor, summary slider or comment pips. It joins the recent files, and opens again at start-up when it was open last.
 2. **Text files** (UTF-8 without NUL bytes, at most 5 MB) are shown as the preview shows one fenced code block holding the whole file, built from the text directly, so nothing in the file is read as Markdown or HTML. The language comes from the file name (`index.ts` is TypeScript, `Makefile` is Make); a file of another kind is plain text. A gutter numbers the lines; it stays in place when the code scrolls sideways, isn't copied with the text and is hidden from assistive technology. A file with a line over 10,000 characters isn't highlighted. A file changed on disk shows its new content when it is next opened.

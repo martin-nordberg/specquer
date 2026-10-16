@@ -129,3 +129,15 @@ One commit per phase.
 | Options that do nothing for an entry are offered anyway | Each says why at once, with **Close**, and changes nothing; the messages name where to go instead (outside Specquer, or the folder's **Settings…**) |
 | A client check missed lets a request through | The server's refusals stay as they are: a file other than Markdown can't be renamed or deleted, and `.specquer` is out of reach of every route that writes |
 | End-to-end tests that click **Add section anchors…** in the settings dialog | Updated in phase 2; the component tests catch the dialog's change first |
+
+<a id=""></a>
+## Implementation Status
+
+Phases 1 to 3 were carried out in October 2026, one commit each. What differs from the plan, or was learned doing it:
+
+1. **The dialogs don't check what applies; `App.tsx` does.** Before opening any dialog from the tree's menu, `fromMenu` asks `notApplicable`, and on a message opens one shared `NotApplicableDialog` (the action's title, the message, **Close**) instead. The rename, delete, create and folder settings dialogs are unchanged, and nothing reaches the server.
+2. **The `.specquer` message** is one for every action: "Everything in .specquer is Specquer's own data, which Specquer changes itself." **Add section anchors…** and **Section problems…** use it too, since the server's path rules refuse `.specquer`.
+3. **The counts** come from `SectionIndex`: `anchorFolder` returns `{ changed, sectioned }`, and `sectionedCount(path)` answers the problems route after its scan. Both count the sectioned documents the index holds under the path.
+4. **The folder settings dialog** kept its paragraph explaining sectioned folders; only the button row went.
+5. **Section problems for a file** was tested with a copied section in another file (a duplicate ID): without Git, a whole file copied is renumbered rather than left waiting, since the session remembers the original.
+6. **Tests:** `bun run typecheck` and `bun test` (740) pass. The end-to-end suite passes on Chrome and WebKit (190). One WebKit run failed `comments.spec.ts`'s reply-and-resolve test under the full suite's load; it passed on two reruns and doesn't involve the menus.
