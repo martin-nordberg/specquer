@@ -27,7 +27,7 @@ import { hiddenCounts, markSections, shownAnchorUids } from "@/components/commen
 import { CONFLICT_MARKERS_REASON } from "@/components/SectionMenu";
 import { SectionSummary } from "@/components/SectionSummary";
 import { SummaryControl } from "@/components/SummaryControl";
-import { type PreviewRenderer, createPreviewRenderer } from "@/preview/renderer";
+import { sharedPreviewRenderer } from "@/preview/renderer";
 import { cn } from "@/lib/utils";
 
 const noSubscribe = () => () => {};
@@ -37,10 +37,7 @@ const noEntries = () => emptyEntries;
 /** Split view renders wait this long after the last keystroke. */
 export const PREVIEW_DEBOUNCE = 250;
 
-let sharedRenderer: PreviewRenderer | null = null;
-function renderer(): PreviewRenderer {
-  return (sharedRenderer ??= createPreviewRenderer());
-}
+const renderer = sharedPreviewRenderer;
 
 /** Resolves a relative link to another Markdown file, or returns `undefined`. */
 export function resolveDocumentLink(href: string, currentFile: string): { path: string; hash: string } | undefined {

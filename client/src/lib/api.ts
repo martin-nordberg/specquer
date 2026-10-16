@@ -8,6 +8,7 @@ import type {
   CreateOptions,
   DeletePreview,
   FileContent,
+  FileView,
   FolderSettings,
   ModelTestResult,
   SectionInfo,
@@ -131,6 +132,8 @@ export type FolderSaveOutcome = { kind: "saved"; version: string; sectioned: boo
 export interface Api {
   getTree(): Promise<Tree>;
   readFile(path: string): Promise<FileContent>;
+  /** A file other than Markdown, to show it (Step 014). */
+  readView(path: string): Promise<FileView>;
   saveFile(path: string, text: string, baseVersion: string, options?: { keepalive?: boolean }): Promise<SaveOutcome>;
   create(parent: string, name: string, kind: "file" | "folder", options?: CreateOptions): Promise<CreateOutcome>;
   rename(path: string, newName: string): Promise<RenameOutcome>;
@@ -242,6 +245,9 @@ export const httpApi: Api = {
   },
   async readFile(path) {
     return json<FileContent>(await client.api.file.$get({ query: { path } }));
+  },
+  async readView(path) {
+    return json<FileView>(await client.api.view.$get({ query: { path } }));
   },
   async saveFile(path, text, baseVersion, options) {
     const body = { text, baseVersion };

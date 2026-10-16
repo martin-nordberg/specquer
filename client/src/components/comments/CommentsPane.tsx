@@ -31,6 +31,8 @@ export interface CommentsPaneProps {
   store: CommentStore;
   /** The open document's body as it is being edited, or `null` when none is open. */
   body: string | null;
+  /** A file other than Markdown is open, which can't have threads (Step 014, R3.7). */
+  viewOnly?: boolean;
   lists?: SectionStatusLists;
   filter: CommentFilter;
   onFilterChange: (filter: CommentFilter) => void;
@@ -42,7 +44,7 @@ export interface CommentsPaneProps {
  * The Comments pane (Step 012, R7): the open document's threads, grouped by section in document
  * order, filtered by status, with the threads whose section is gone last, as **Detached**.
  */
-export function CommentsPane({ state, store, body, lists, filter, onFilterChange, onGoToSection }: CommentsPaneProps) {
+export function CommentsPane({ state, store, body, viewOnly = false, lists, filter, onFilterChange, onGoToSection }: CommentsPaneProps) {
   const include = state.editing?.kind === "new-thread" ? state.editing.sectionUid : undefined;
   const grouped = useMemo(
     () => (body === null ? null : groupThreads(body, state.threads, filter, lists, include)),
@@ -69,7 +71,7 @@ export function CommentsPane({ state, store, body, lists, filter, onFilterChange
 
   const empty = (message: string) => <p className="p-4 text-sm text-muted-foreground">{message}</p>;
   let content: ReactNode;
-  if (body === null) content = empty("Open a document to see its comment threads.");
+  if (body === null) content = empty(viewOnly ? "Comments are available for Markdown files in sectioned folders." : "Open a document to see its comment threads.");
   else if (!state.loaded) content = empty("Loading…");
   else if (state.loadError !== null) content = empty(`The comments couldn't be loaded: ${state.loadError}`);
   else if (!state.available) content = empty("This file can't have comment threads: it isn't in a sectioned folder.");

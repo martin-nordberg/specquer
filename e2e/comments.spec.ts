@@ -104,7 +104,7 @@ test("pips show in every view and follow the filter; a pip opens the pane at its
   await expect(page.getByRole("region", { name: "Threads on SPEC-00003 Details" })).toBeVisible();
   await page.getByRole("radio", { name: "Resolved" }).click();
   await expect(page.getByTestId("preview").getByRole("button", { name: /comment thread/ })).toHaveCount(0);
-  await page.getByRole("radio", { name: "All" }).click();
+  await page.getByRole("radio", { name: "All", exact: true }).click();
   await expect(page.getByTestId("preview").getByRole("button", { name: "1 comment thread" })).toBeVisible();
 });
 
@@ -170,7 +170,7 @@ test("a reply is edited, the thread resolved and reopened, and it all survives a
   await page.getByRole("heading", { name: "Comments" }).click();
   await expect(pane(page).getByText("Yes. Checked.")).toBeVisible();
   await expect(pane(page).getByText("· edited")).toBeVisible();
-  await page.getByRole("radio", { name: "All" }).click();
+  await page.getByRole("radio", { name: "All", exact: true }).click();
   await pane(page).getByRole("button", { name: "Resolve" }).click();
   await expect(pane(page).getByRole("button", { name: "Reply", exact: true })).toHaveCount(0);
   await expect(pane(page).getByText(/^Resolved by E2E Tester/)).toBeVisible();
@@ -179,7 +179,7 @@ test("a reply is edited, the thread resolved and reopened, and it all survives a
   expect(sidecar).toContain("updatedBy: E2E Tester");
   await page.reload();
   // The filter was kept
-  await expect(page.getByRole("radio", { name: "All" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("radio", { name: "All", exact: true })).toHaveAttribute("aria-checked", "true");
   await pane(page).getByRole("button", { name: /^Is this right\?/ }).click();
   await expect(pane(page).getByText("Yes. Checked.")).toBeVisible();
   await pane(page).getByRole("button", { name: "Reopen" }).click();

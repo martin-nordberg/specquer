@@ -69,3 +69,10 @@ export function createPreviewRenderer(): PreviewRenderer {
     },
   };
 }
+
+let shared: PreviewRenderer | null = null;
+
+/** The one renderer (and worker) the preview and the text view share. */
+export function sharedPreviewRenderer(): PreviewRenderer {
+  return (shared ??= createPreviewRenderer());
+}

@@ -110,3 +110,58 @@ describe("FileTree", () => {
     expect(screen.getByText("No Markdown files in this folder.")).toBeTruthy();
   });
 });
+
+describe("FileTree in All Files (Step 014)", () => {
+  const all: TreeFolder = {
+    kind: "folder",
+    name: "",
+    path: "",
+    children: [
+      {
+        kind: "folder",
+        name: ".specquer",
+        path: ".specquer",
+        children: [{ kind: "folder", name: "shared", path: ".specquer/shared", children: [{ kind: "file", name: "agent.config.yaml", path: ".specquer/shared/agent.config.yaml" }] }],
+      },
+      { kind: "folder", name: "src", path: "src", children: [{ kind: "file", name: "index.ts", path: "src/index.ts" }] },
+      { kind: "file", name: "a.md", path: "a.md" },
+      { kind: "file", name: "logo.png", path: "logo.png" },
+      { kind: "file", name: "manual.pdf", path: "manual.pdf" },
+    ],
+  };
+  const handlers = () => ({
+    onToggleFolder: mock(() => {}),
+    onOpenFile: mock(() => {}),
+    onNewFile: mock(() => {}),
+    onNewFolder: mock(() => {}),
+    onRename: mock(() => {}),
+    onDelete: mock(() => {}),
+  });
+
+  test("each kind of file has its icon", () => {
+    render(<FileTree root={all} expanded={new Set(["src"])} currentFile={undefined} {...handlers()} />);
+    const icon = (name: string) => screen.getByRole("treeitem", { name }).querySelector("svg:nth-of-type(1)")!.getAttribute("class");
+    expect(icon("a.md")).toContain("lucide-file-text");
+    expect(icon("index.ts")).toContain("lucide-file-code");
+    expect(icon("logo.png")).toContain("lucide-file-image");
+    expect(icon("manual.pdf")).toMatch(/lucide-file(?!-)/);
+  });
+
+  test("files other than Markdown, and everything in .specquer, have no context menu; they still open", async () => {
+    const props = handlers();
+    render(<FileTree root={all} expanded={new Set(["src", ".specquer", ".specquer/shared"])} currentFile={undefined} {...props} />);
+    for (const name of ["index.ts", "logo.png", ".specquer", "shared", "agent.config.yaml"]) {
+      fireEvent.contextMenu(screen.getByText(name));
+      expect([name, screen.queryByRole("menuitem", { name: "Rename…" })]).toEqual([name, null]);
+    }
+    fireEvent.click(screen.getByText("index.ts"));
+    expect(props.onOpenFile).toHaveBeenCalledWith("src/index.ts");
+    fireEvent.contextMenu(screen.getByText("src"));
+    expect(await screen.findByRole("menuitem", { name: "Rename…" })).toBeTruthy();
+  });
+
+  test("an empty tree says what the view shows", () => {
+    render(<FileTree root={{ kind: "folder", name: "", path: "", children: [] }} emptyMessage="No files in this folder." expanded={new Set()} currentFile={undefined} {...handlers()} />);
+    expect(screen.getByText("No files in this folder.")).toBeTruthy();
+  });
+});

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import type { CreateOptions, SectionStatusLists, SummaryStatus, Tree, TreeFolder, TreeNode } from "@specquer/shared/api";
+import type { CreateOptions, FileView, SectionStatusLists, SummaryStatus, Tree, TreeFolder, TreeNode } from "@specquer/shared/api";
 import type { Citation } from "@specquer/shared/chat";
 import { firstLine, shownBy } from "@specquer/shared/comments";
 import { analyzeBody } from "@specquer/shared/markdown";
 import { descendantsOf, sectionParents } from "@specquer/shared/sections";
-import { isSameOrInside, renamedPath } from "@specquer/shared/paths";
+import { isMarkdownFile, isSameOrInside, renamedPath } from "@specquer/shared/paths";
 import {
   type UiState,
   closeFile,
@@ -20,6 +20,7 @@ import {
   setSummaryStop,
   setTheme,
   setTreePaneFraction,
+  setTreeView,
   setViewType,
 } from "@specquer/shared/uistate";
 import { AnchorDialog } from "@/components/AnchorDialog";
@@ -33,6 +34,10 @@ import { ContentView, ViewSwitcher } from "@/components/ContentView";
 import { CreateDialog, type CreateRequest, DeleteDialog, RenameDialog } from "@/components/EntryDialogs";
 import { FilePath } from "@/components/FilePath";
 import { FileTree } from "@/components/FileTree";
+import { CodeFileView } from "@/components/files/CodeFileView";
+import { FilePlaceholder } from "@/components/files/FilePlaceholder";
+import { ImageView } from "@/components/files/ImageView";
+import { TreeViewSwitcher } from "@/components/TreeViewSwitcher";
 import { FrontmatterEditor, initialFrontmatterHeight } from "@/components/FrontmatterEditor";
 import type { PreviewSummaries, ScrollTarget } from "@/components/Preview";
 import { ProblemsDialog } from "@/components/ProblemsDialog";
@@ -120,6 +125,10 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
   const commentStore = useMemo(() => new CommentStore(api), [api]);
   const comments = useSyncExternalStore(commentStore.subscribe, commentStore.get);
   const [openError, setOpenError] = useState<string | null>(null);
+  // A file other than Markdown, open view-only instead of a document (Step 014)
+  const [viewed, setViewed] = useState<FileView | null>(null);
+  const viewedRef = useRef<FileView | null>(null);
+  viewedRef.current = viewed;
 
   const systemTheme = useSystemTheme();
   const theme = ui.theme ?? systemTheme;
@@ -163,26 +172,35 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
     async (path: string, place?: string | { outlinePath: string }) => {
       if (typeof place === "string") setScrollTarget({ path, sectionId: place, request: Date.now() });
       else if (place !== undefined) setScrollTarget({ path, outlinePath: place.outlinePath, request: Date.now() });
-      if (docStore.get().document?.path === path) return;
+      if (docStore.get().document?.path === path || viewedRef.current?.path === path) return;
       const saved = await docStore.save();
       if (saved === "conflict" || saved === "error") return;
       try {
-        await docStore.open(path);
+        if (isMarkdownFile(path)) {
+          await docStore.open(path);
+          setViewed(null);
+        } else {
+          // Shown view-only; the document was saved above (Step 014, R3, R5, R6)
+          const view = await api.readView(path);
+          docStore.close();
+          setViewed(view);
+        }
         setOpenError(null);
         uiStore.update((state) => openFile(state, path));
       } catch (err) {
         setOpenError(`Couldn't open ${path}: ${(err as Error).message}`);
       }
     },
-    [docStore, uiStore],
+    [api, docStore, uiStore],
   );
 
   // Reopen the file that was open last time
   useEffect(() => {
     const path = initialUiState.currentFile;
     if (path === undefined) return;
-    docStore.open(path).catch(() => uiStore.update(closeFile));
-  }, [docStore, uiStore, initialUiState]);
+    if (isMarkdownFile(path)) docStore.open(path).catch(() => uiStore.update(closeFile));
+    else api.readView(path).then(setViewed, () => uiStore.update(closeFile));
+  }, [api, docStore, uiStore, initialUiState]);
 
   // Autosave: when the window loses focus (switching applications often leaves the tab visible),
   // when the tab is hidden or the page closes, and every minute while there are changes
@@ -249,6 +267,10 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
           const moved = renamedPath(current, node.path, result.path);
           if (moved !== undefined) docStore.moved(moved);
         }
+        setViewed((view) => {
+          const moved = view === null ? undefined : renamedPath(view.path, node.path, result.path);
+          return view === null || moved === undefined ? view : { ...view, path: moved };
+        });
         uiStore.reset(result.uiState);
         await refreshTree();
         return null;
@@ -266,6 +288,7 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
         const uiState = await api.deleteEntry(node.path);
         const current = docStore.get().document?.path;
         if (current !== undefined && isSameOrInside(current, node.path)) docStore.close();
+        setViewed((view) => (view !== null && isSameOrInside(view.path, node.path) ? null : view));
         uiStore.reset(uiState);
         await refreshTree();
         return null;
@@ -277,6 +300,8 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
   );
 
   const document_ = doc.document;
+  const openPath = document_?.path ?? viewed?.path;
+  const shownTree = tree[ui.treeView];
   const fileState = document_ === null ? null : fileUiState(ui, document_.path);
   const expanded = useMemo(() => new Set(ui.expandedFolders), [ui.expandedFolders]);
   const openFromUi = useCallback((path: string, sectionId?: string) => void open(path, sectionId), [open]);
@@ -573,10 +598,13 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
 
   const left = (
     <nav aria-label="Folders" className="flex h-full flex-col overflow-auto">
+      {/* Both views come with every tree load, so switching asks the server nothing (R1.7) */}
+      <TreeViewSwitcher value={ui.treeView} onChange={(view) => uiStore.update((s) => setTreeView(s, view))} />
       <FileTree
-        root={tree.specs.root}
+        root={shownTree.root}
+        emptyMessage={ui.treeView === "all" ? "No files in this folder." : undefined}
         expanded={expanded}
-        currentFile={document_?.path}
+        currentFile={openPath}
         onToggleFolder={(path, isExpanded) => uiStore.update((s) => setFolderExpanded(s, path, isExpanded))}
         onOpenFile={openFromUi}
         onNewFile={(folder) => setCreating({ parent: folder, kind: "file" })}
@@ -586,12 +614,28 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
         onRename={setRenaming}
         onDelete={setDeleting}
       />
-      {tree.specs.truncated && <p className="shrink-0 p-2 text-xs text-muted-foreground">Too many files: the list is incomplete.</p>}
+      {shownTree.truncated && <p className="shrink-0 p-2 text-xs text-muted-foreground">Too many files: the list is incomplete.</p>}
     </nav>
   );
 
   const right =
-    document_ === null || fileState === null ? (
+    viewed !== null ? (
+      <>
+        <div className="flex shrink-0 items-center gap-3 border-b px-3 py-2">
+          <FilePath path={viewed.path} recentFiles={ui.recentFiles} onOpenFile={openFromUi} />
+        </div>
+        {openError !== null && <p className="border-b px-3 py-1 text-sm text-error-text">{openError}</p>}
+        <div className="min-h-0 flex-1">
+          {viewed.kind === "text" ? (
+            <CodeFileView path={viewed.path} text={viewed.text} />
+          ) : viewed.kind === "image" ? (
+            <ImageView key={viewed.path} path={viewed.path} size={viewed.size} version={viewed.version} />
+          ) : (
+            <FilePlaceholder reason={viewed.reason} size={viewed.size} />
+          )}
+        </div>
+      </>
+    ) : document_ === null || fileState === null ? (
       <div className="flex h-full items-center justify-center text-muted-foreground">
         {openError ?? "Select a file in the folder pane."}
       </div>
@@ -696,6 +740,7 @@ function Workspace({ api, initialUiState, initialTree }: { api: Api; initialUiSt
                 state={comments}
                 store={commentStore}
                 body={document_?.body ?? null}
+                viewOnly={viewed !== null}
                 lists={statusLists !== null && statusLists.path === document_?.path ? statusLists.lists : undefined}
                 filter={ui.commentFilter}
                 onFilterChange={(filter) => uiStore.update((s) => setCommentFilter(s, filter))}
